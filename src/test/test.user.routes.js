@@ -1,12 +1,14 @@
 const router = require("express").Router();
-const connectDB = require("../config/database");
+const connectDB = require("../config/database"); 
 const User = require("../models/User");
 
 router.get("/", async (req, res) => {
   try {
+   
     await connectDB();
 
-    const users = await User.find().select("-__v");
+    
+    const users = await User.find().lean();
 
     res.json({
       success: true,
@@ -14,10 +16,11 @@ router.get("/", async (req, res) => {
       data: users
     });
   } catch (error) {
-    console.error(error);
+    console.error("❌ ERROR REAL:", error);
+
     res.status(500).json({
       success: false,
-      message: "Error al obtener usuarios"
+      error: error.message
     });
   }
 });
