@@ -10,4 +10,7 @@ app.get("/ping", (req, res) => {
   res.json({ ok: true });
 });
 
+// 👇 AGREGA SOLO ESTA
+app.use("/test", require("./test/test.routes"));
+
 module.exports = app;
