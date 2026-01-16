@@ -11,6 +11,6 @@ app.use(express.json());
 
 app.use("/test", require("./test/test-db.js"));
 app.use("/test-users", require("./test/test.user.routes.js"));
-app.use("/test-chatbots", require("./test/test-chatbot.routes.js"));
+app.use("/test-chatbots", require("./test/test.chatbot.routes.js"));
 
 module.exports = app;
