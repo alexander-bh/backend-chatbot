@@ -2,9 +2,6 @@ const router = require("express").Router();
 
 const controller = require("../controllers/chatbots.controller");
 
-const auth = require("../middlewares/auth");
-
-router.use(auth);
 
 // ---> Crear chatbot
 router.post("/", controller.create);

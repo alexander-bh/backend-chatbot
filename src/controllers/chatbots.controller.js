@@ -19,7 +19,10 @@ exports.create = async (req, res) => {
 // Obtener todos los chatbots
 exports.findAll = async (req, res) => {
   try {
+    await connectDB();
+
     const chatbots = await Chatbot.find().lean();
+
     res.json({
       success: true,
       total: chatbots.length,
@@ -33,7 +36,6 @@ exports.findAll = async (req, res) => {
     });
   }
 };
-
 
 // Obtener uno
 exports.findOne = async (req, res) => {
