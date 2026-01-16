@@ -5,21 +5,13 @@ const { v4: uuidv4 } = require("uuid");
 // Crear chatbot
 exports.create = async (req, res) => {
   try {
-    await connectDB();
-
-    if (!req.user || !req.user.account_id) {
-      return res.status(401).json({ message: "No autorizado" });
-    }
-
     const chatbot = await Chatbot.create({
-      account_id: req.user.account_id,
       public_id: uuidv4(),
       ...req.body
     });
 
     res.status(201).json(chatbot);
   } catch (error) {
-    console.error("CREATE CHATBOT ERROR:", error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -27,22 +19,21 @@ exports.create = async (req, res) => {
 // Obtener todos los chatbots
 exports.findAll = async (req, res) => {
   try {
-    await connectDB();
-
-    if (!req.user || !req.user.account_id) {
-      return res.status(401).json({ message: "No autorizado" });
-    }
-
-    const chatbots = await Chatbot.find({
-      account_id: req.user.account_id
+    const chatbots = await Chatbot.find().lean();
+    res.json({
+      success: true,
+      total: chatbots.length,
+      data: chatbots
     });
-
-    res.json(chatbots);
   } catch (error) {
-    console.error("FIND ALL CHATBOTS ERROR:", error);
-    res.status(500).json({ error: error.message });
+    console.error("ERROR CHATBOTS:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 };
+
 
 // Obtener uno
 exports.findOne = async (req, res) => {
