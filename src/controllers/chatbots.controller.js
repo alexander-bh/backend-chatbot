@@ -5,32 +5,35 @@ const { v4: uuidv4 } = require("uuid");
 // Crear chatbot
 exports.create = async (req, res) => {
   try {
+    await connectDB(); // 🔑 FALTABA ESTO
+
     const chatbot = await Chatbot.create({
       public_id: uuidv4(),
       ...req.body
     });
 
-    res.status(201).json(chatbot);
+    return res.status(201).json(chatbot);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("CREATE CHATBOT ERROR:", error.message);
+    return res.status(500).json({ error: error.message });
   }
 };
 
-// Obtener todos los chatbots
+// Obtener todos
 exports.findAll = async (req, res) => {
   try {
     await connectDB();
 
     const chatbots = await Chatbot.find().lean();
 
-    res.json({
+    return res.json({
       success: true,
       total: chatbots.length,
       data: chatbots
     });
   } catch (error) {
-    console.error("ERROR CHATBOTS:", error);
-    res.status(500).json({
+    console.error("ERROR CHATBOTS:", error.message);
+    return res.status(500).json({
       success: false,
       error: error.message
     });
@@ -51,10 +54,10 @@ exports.findOne = async (req, res) => {
       return res.status(404).json({ message: "No encontrado" });
     }
 
-    res.json(chatbot);
+    return res.json(chatbot);
   } catch (error) {
-    console.error("FIND ONE CHATBOT ERROR:", error);
-    res.status(500).json({ error: error.message });
+    console.error("FIND ONE CHATBOT ERROR:", error.message);
+    return res.status(500).json({ error: error.message });
   }
 };
 
@@ -73,10 +76,10 @@ exports.update = async (req, res) => {
       return res.status(404).json({ message: "No encontrado" });
     }
 
-    res.json(chatbot);
+    return res.json(chatbot);
   } catch (error) {
-    console.error("UPDATE CHATBOT ERROR:", error);
-    res.status(500).json({ error: error.message });
+    console.error("UPDATE CHATBOT ERROR:", error.message);
+    return res.status(500).json({ error: error.message });
   }
 };
 
@@ -94,9 +97,9 @@ exports.remove = async (req, res) => {
       return res.status(404).json({ message: "No encontrado" });
     }
 
-    res.json({ message: "Chatbot eliminado" });
+    return res.json({ message: "Chatbot eliminado" });
   } catch (error) {
-    console.error("DELETE CHATBOT ERROR:", error);
-    res.status(500).json({ error: error.message });
+    console.error("DELETE CHATBOT ERROR:", error.message);
+    return res.status(500).json({ error: error.message });
   }
 };
