@@ -1,7 +1,7 @@
 const router = require("express").Router();
 
 router.get("/", (req, res) => {
-  res.json({ status: "alive" });
+  res.json({ ok: true });
 });
 
 module.exports = router;
