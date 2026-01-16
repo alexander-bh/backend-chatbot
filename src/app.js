@@ -11,5 +11,6 @@ app.get("/ping", (req, res) => {
 });
 
 app.use("/test", require("./test/test-db.js"));
+app.use("/test-chatbot", require("./test/test.chatbot.routes.js"));
 
 module.exports = app;
