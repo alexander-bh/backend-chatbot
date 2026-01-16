@@ -1,4 +1,4 @@
-const { Schema, model } = require("mongoose");
+const { Schema, model, models } = require("mongoose");
 
 const ChatbotSchema = new Schema({
   account_id: {
@@ -7,10 +7,10 @@ const ChatbotSchema = new Schema({
     required: true
   },
   public_id: { type: String, unique: true },
-  name: String,
+  name: { type: String, required: true },
   welcome_message: String,
   status: { type: String, default: "active" },
   created_at: { type: Date, default: Date.now }
 });
 
-module.exports = model("Chatbot", ChatbotSchema);
+module.exports = models.Chatbot || model("Chatbot", ChatbotSchema);
