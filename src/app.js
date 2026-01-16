@@ -10,6 +10,6 @@ app.get("/ping", (req, res) => {
   res.json({ ok: true });
 });
 
-app.use("/test", require("./test/test.routes.js"));
+app.use("/test", require("./test/test-db.js"));
 
 module.exports = app;

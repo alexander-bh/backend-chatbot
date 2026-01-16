@@ -1,15 +1,17 @@
-require("dotenv").config();
-const mongoose = require("mongoose");
+const router = require("express").Router();
+const connectDB = require("../config/database");
 
-console.log("URI:", process.env.MONGO_URI);
-
-(async () => {
+router.get("/", async (req, res) => {
   try {
-    await mongoose.connect(process.env.MONGO_URI);
-    console.log("MongoDB conectado correctamente");
-    process.exit(0);
+    await connectDB();
+    return res.json({ status: "alive" });
   } catch (error) {
-    console.error("Error de conexión:", error.message);
-    process.exit(1);
+    console.error("ERROR EN /test:", error.message);
+    return res.status(500).json({
+      error: "DB connection failed",
+      message: error.message
+    });
   }
-})();
+});
+
+module.exports = router;
