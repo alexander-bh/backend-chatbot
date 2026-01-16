@@ -4,19 +4,19 @@ const controller = require("../controllers/flow-nodes.controller");
 
 router.use(auth);
 
-// Crear nodo
+//---> Crear nodo
 router.post("/:flowId", controller.create);
 
-// Listar nodos de un flujo
+//---> Listar nodos de un flujo
 router.get("/:flowId", controller.findAll);
 
-// Obtener nodo
+//---> Obtener nodo
 router.get("/single/:id", controller.findOne);
 
-// Actualizar nodo
+//---> Actualizar nodo
 router.put("/:id", controller.update);
 
-// Eliminar nodo
+//---> Eliminar nodo
 router.delete("/:id", controller.remove);
 
 module.exports = router;
