@@ -1,8 +1,12 @@
 const express = require("express");
+const cors = require("cors");
+
 const app = express();
 
-app.get("/api/test", (req, res) => {
-  res.json({ ok: true });
-});
+app.use(cors());
+app.use(express.json());
+
+app.use("/api/test", require("./test/test.routes"));
 
 module.exports = app;
+
