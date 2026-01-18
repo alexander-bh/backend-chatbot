@@ -1,5 +1,5 @@
 const Chatbot = require("../models/Chatbot");
-const { v4: uuidv4 } = require("uuid");
+const crypto = require("crypto");
 const ChatbotSettings = require("../models/ChatbotSettings");
 
 
@@ -15,7 +15,7 @@ exports.createChatbot = async (req, res) => {
       account_id: req.user.account_id,
       name,
       welcome_message: welcome_message || "Hola 👋 ¿en qué puedo ayudarte?",
-      public_id:uuidv4()
+      public_id: crypto.randomUUID()
     });
 
     await ChatbotSettings.create({
