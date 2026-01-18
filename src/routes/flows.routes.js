@@ -1,22 +1,20 @@
-const router = require("express").Router();
+const express = require("express");
+const router = express.Router();
+
 const auth = require("../middlewares/auth.middleware");
-const controller = require("../controllers/flows.controller");
+const role = require("../middlewares/role.middleware");
+const flowController = require("../controllers/flows.controller");
 
-router.use(auth);
+// Crear flujo
+router.post("/", auth, role("ADMIN","CLIENT"), flowController.createFlow);
+// Listar flujos por chatbot
+router.get("/chatbot/:chatbotId", auth, flowController.getFlowsByChatbot);
+// Actualizar flujo
+router.put("/:id", auth, role("ADMIN","CLIENT"), flowController.updateFlow);
+// Eliminar flujo
+router.delete("/:id", auth, role("ADMIN", "CLIENT"), flowController.deleteFlow);
+// Publicar flujo
+router.post("/:id/publish", auth, role("ADMIN","CLIENT"), flowController.publishFlow);
 
-// ---> Crear flujo
-router.post("/:chatbotId", controller.create);
-
-// ---> Listar flujos de un chatbot
-router.get("/:chatbotId", controller.findAll);
-
-// ---> Obtener un flujo
-router.get("/single/:id", controller.findOne);
-
-// ---> Actualizar flujo
-router.put("/:id", controller.update);
-
-// ---> Eliminar flujo
-router.delete("/:id", controller.remove);
 
 module.exports = router;

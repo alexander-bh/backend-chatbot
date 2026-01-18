@@ -1,20 +1,17 @@
-const router = require("express").Router();
-const controller = require("../controllers/chatbots.controller");
+const express = require("express");
+const router = express.Router();
+const chatbotController = require("../controllers/chatbots.controller");
+const auth = require("../middlewares/auth.middleware");
+const role = require("../middlewares/role.middleware");
 
 
-// ---> Crear chatbot
-router.post("/", controller.create);
-
-// ---> Obtener todos los chatbots de la cuenta
-router.get("/", controller.findAll);
-
-// ---> Obtener un chatbot
-router.get("/:id", controller.findOne);
-
-// ---> Actualizar chatbot
-router.put("/:id", controller.update);
-
-// ---> Eliminar chatbot
-router.delete("/:id", controller.remove);
+//crear chatbot
+router.post("/", auth, role("ADMIN", "CLIENT"), chatbotController.createChatbot);
+//listar chatbots
+router.get("/", auth, role("ADMIN", "CLIENT"), chatbotController.listChatbots);
+//actualizar chatbot
+router.put("/:id", auth, role("ADMIN","CLIENT"), chatbotController.updateChatbot);
+//eliminar chatbot
+router.delete("/:id", auth, role("ADMIN", "CLIENT"), chatbotController.deleteChatbot);
 
 module.exports = router;

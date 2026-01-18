@@ -1,10 +1,5 @@
 const { Schema, model } = require("mongoose");
 
-const OptionSchema = new Schema({
-  label: String,
-  next_node_id: { type: Schema.Types.ObjectId, ref: "FlowNode" }
-}, { _id: false });
-
 const FlowNodeSchema = new Schema({
   flow_id: {
     type: Schema.Types.ObjectId,
@@ -20,17 +15,24 @@ const FlowNodeSchema = new Schema({
 
   content: String,
 
-  options: [OptionSchema], // solo para "options"
-
-  metadata: {
-    type: Object,
-    default: {}
-  },
+  options: [{
+    label: String,
+    next_node_id: {
+      type: Schema.Types.ObjectId,
+      ref: "FlowNode",
+      default: null // 👈 CLAVE
+    }
+  }],
 
   next_node_id: {
     type: Schema.Types.ObjectId,
     ref: "FlowNode",
-    default: null
+    default: null 
+  },
+
+  is_draft: {
+    type: Boolean,
+    default: true 
   },
 
   position: {
@@ -43,5 +45,6 @@ const FlowNodeSchema = new Schema({
     default: Date.now
   }
 });
+
 
 module.exports = model("FlowNode", FlowNodeSchema);

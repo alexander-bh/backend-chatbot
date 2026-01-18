@@ -6,9 +6,23 @@ const FlowSchema = new Schema({
     ref: "Chatbot",
     required: true
   },
-  name: { type: String, required: true },
-  is_active: { type: Boolean, default: true },
-  created_at: { type: Date, default: Date.now }
+
+  name: String,
+
+  is_active: {
+    type: Boolean,
+    default: false 
+  },
+
+  is_draft: {
+    type: Boolean,
+    default: true 
+  },
+
+  created_at: {
+    type: Date,
+    default: Date.now
+  }
 });
 
 module.exports = model("Flow", FlowSchema);
