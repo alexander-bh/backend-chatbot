@@ -15,7 +15,7 @@ app.get("/ping", (req, res) => {
 //middleware para conectar a mongoDB
 //middleware para manejar errores de multer
 app.use(require("./middlewares/multerError.middleware"));
-app.use(require("./middlewares/mongo.middleware"));
+app.use(require("./middlewares/mongo.middleware.js"));
 
 
 //rutas principales
