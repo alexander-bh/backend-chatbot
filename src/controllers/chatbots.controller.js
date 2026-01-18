@@ -2,7 +2,6 @@ const Chatbot = require("../models/Chatbot");
 const crypto = require("crypto");
 const ChatbotSettings = require("../models/ChatbotSettings");
 
-
 exports.createChatbot = async (req, res) => {
   try {
     const { name, welcome_message } = req.body;
@@ -18,8 +17,21 @@ exports.createChatbot = async (req, res) => {
       public_id: crypto.randomUUID()
     });
 
+    // Crear settings iniciales del chatbot
     await ChatbotSettings.create({
-      chatbot_id: chatbot._id
+      chatbot_id: chatbot._id,
+      avatar: process.env.DEFAULT_CHATBOT_AVATAR,
+      primary_color: "#2563eb",
+      secondary_color: "#111827",
+      launcher_text: "¿Te ayudo?",
+      bubble_style: "rounded",
+      font: "inter",
+      position: {
+        type: "bottom-right",
+        offset_x: 24,
+        offset_y: 24
+      },
+      is_enabled: true
     });
 
     res.status(201).json(chatbot);
@@ -29,8 +41,6 @@ exports.createChatbot = async (req, res) => {
   }
 };
 
-
-
 exports.listChatbots = async (req, res) => {
   const chatbots = await Chatbot.find({
     account_id: req.user.account_id
@@ -38,7 +48,6 @@ exports.listChatbots = async (req, res) => {
 
   res.json(chatbots);
 };
-
 
 exports.updateChatbot = async (req, res) => {
   try {
