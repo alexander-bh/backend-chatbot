@@ -5,19 +5,15 @@ let isConnected = false;
 module.exports = async function connectDB() {
   if (isConnected) return;
 
-  if (!process.env.MONGO_URI) {
-    throw new Error("MONGO_URI no definida");
-  }
+  const uri = process.env.MONGO_URI;
+  if (!uri) throw new Error("MONGO_URI no definida");
 
-  try {
-    const db = await mongoose.connect(process.env.MONGO_URI, {
-      bufferCommands: false,
-    });
+  const db = await mongoose.connect(uri, {
+    bufferCommands: false,
+    dbName: "dbchatbot",
+    serverSelectionTimeoutMS: 5000,
+  });
 
-    isConnected = db.connections[0].readyState;
-    console.log("MongoDB conectado");
-  } catch (error) {
-    console.error("ERROR CONEXIÓN MONGO:", error);
-    throw error;
-  }
+  isConnected = db.connections[0].readyState;
+  console.log("MongoDB conectado");
 };
