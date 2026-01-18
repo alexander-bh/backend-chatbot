@@ -74,3 +74,49 @@ exports.getSettings = async (req, res) => {
     res.status(500).json({ message: "Error al obtener settings" });
   }
 };
+
+
+exports.updateSettings = async (req, res) => {
+  try {
+    const chatbot = await Chatbot.findOne({
+      _id: req.params.id,
+      account_id: req.user.account_id
+    });
+
+    if (!chatbot) {
+      return res.status(404).json({ message: "Chatbot no encontrado" });
+    }
+
+    const settings = await ChatbotSettings.findOne({
+      chatbot_id: chatbot._id
+    });
+
+    if (!settings) {
+      return res.status(404).json({ message: "Settings no encontrados" });
+    }
+
+    // Campos permitidos para actualizar
+    const allowedFields = [
+      "primary_color",
+      "secondary_color",
+      "launcher_text",
+      "bubble_style",
+      "font",
+      "is_enabled",
+      "position"
+    ];
+
+    allowedFields.forEach(field => {
+      if (req.body[field] !== undefined) {
+        settings[field] = req.body[field];
+      }
+    });
+
+    await settings.save();
+
+    res.json(settings);
+  } catch (error) {
+    console.error("UPDATE SETTINGS ERROR:", error);
+    res.status(500).json({ message: "Error al actualizar settings" });
+  }
+};

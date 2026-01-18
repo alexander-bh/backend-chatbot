@@ -17,7 +17,6 @@ exports.createChatbot = async (req, res) => {
       public_id: crypto.randomUUID()
     });
 
-    // Crear settings iniciales del chatbot
     await ChatbotSettings.create({
       chatbot_id: chatbot._id,
       avatar: process.env.DEFAULT_CHATBOT_AVATAR,

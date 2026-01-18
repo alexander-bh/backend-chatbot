@@ -40,7 +40,7 @@ exports.registerFirst = async (req, res) => {
       name,
       email,
       password: hashedPassword,
-      role: "ADMIN",
+      role: "CLIENT",
       onboarding
     });
 
