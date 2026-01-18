@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 let isConnected = false;
 
-module.exports = async function connectDB() {
+const connectDB = async () => {
   if (isConnected) return;
 
   const uri = process.env.MONGO_URI;
@@ -17,3 +17,6 @@ module.exports = async function connectDB() {
   isConnected = db.connections[0].readyState;
   console.log("MongoDB conectado");
 };
+
+module.exports = connectDB;
+

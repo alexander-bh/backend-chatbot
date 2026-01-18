@@ -12,12 +12,11 @@ app.get("/ping", (req, res) => {
   res.json({ ok: true });
 });
 
-
-//prueba de rutas
-//app.use("/test", require("./test/test-db.js"));
-//app.use("/test-chatbot", require("./test/test.chatbot.routes.js"));
-//app.use("/test-user", require("./test/test.user.routes.js"));
+//middleware para conectar a mongoDB
+//middleware para manejar errores de multer
 app.use(require("./middlewares/multerError.middleware"));
+app.use(require("./middlewares/mongo.middleware"));
+
 
 //rutas principales
 app.use("/api/chatbots", require("./routes/chatbots.routes.js"));
