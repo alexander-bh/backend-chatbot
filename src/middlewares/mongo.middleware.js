@@ -1,4 +1,4 @@
-const connectDB = require("../config/connectDB");
+const connectDB = require("../config/database");
 
 module.exports = async function mongoMiddleware(req, res, next) {
   try {
