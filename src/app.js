@@ -26,5 +26,6 @@ app.use("/api/auth", require("./routes/auth.routes.js"));
 app.use("/api/admin", require("./routes/admin.routes.js"));
 app.use("/api/flows", require("./routes/flows.routes.js"));
 app.use("/api/flownodes", require("./routes/flow.nodes.routes.js"));  
+app.use("/api/accounts", require("./routes/account.routes.js"));
 
 module.exports = app;
