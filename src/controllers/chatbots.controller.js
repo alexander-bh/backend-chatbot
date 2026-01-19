@@ -5,8 +5,10 @@ const FlowNode = require("../models/FlowNode");
 const mongoose = require("mongoose");
 const crypto = require("crypto");
 
-
 exports.createChatbot = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const { name, welcome_message } = req.body;
 
@@ -14,31 +16,76 @@ exports.createChatbot = async (req, res) => {
       return res.status(400).json({ message: "El nombre es obligatorio" });
     }
 
-    const chatbot = await Chatbot.create({
-      account_id: req.user.account_id,
-      name,
-      welcome_message: welcome_message || "Hola 👋 ¿en qué puedo ayudarte?",
-      public_id: crypto.randomUUID()
+    const welcomeText =
+      welcome_message || "Hola 👋 ¿en qué puedo ayudarte?";
+
+    // 1️⃣ Crear Chatbot
+    const chatbot = await Chatbot.create(
+      [{
+        account_id: req.user.account_id,
+        name,
+        welcome_message: welcomeText, // opcional mantenerlo
+        public_id: crypto.randomUUID()
+      }],
+      { session }
+    );
+
+    // 2️⃣ Crear Settings
+    await ChatbotSettings.create(
+      [{
+        chatbot_id: chatbot[0]._id,
+        avatar: process.env.DEFAULT_CHATBOT_AVATAR,
+        primary_color: "#2563eb",
+        secondary_color: "#111827",
+        launcher_text: "¿Te ayudo?",
+        bubble_style: "rounded",
+        font: "inter",
+        position: {
+          type: "bottom-right",
+          offset_x: 24,
+          offset_y: 24
+        },
+        is_enabled: true
+      }],
+      { session }
+    );
+
+    // 3️⃣ Crear Flow inicial
+    const flow = await Flow.create(
+      [{
+        chatbot_id: chatbot[0]._id,
+        name: "Flujo principal",
+        is_default: true
+      }],
+      { session }
+    );
+
+    // 4️⃣ Crear nodo inicial usando welcome_message
+    const startNode = await FlowNode.create(
+      [{
+        flow_id: flow[0]._id,
+        node_type: "text",
+        content: welcomeText,
+        next_node_id: null,
+        position: { x: 100, y: 100 },
+        is_draft: false
+      }],
+      { session }
+    );
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.status(201).json({
+      chatbot: chatbot[0],
+      flow: flow[0],
+      start_node: startNode[0]
     });
 
-    await ChatbotSettings.create({
-      chatbot_id: chatbot._id,
-      avatar: process.env.DEFAULT_CHATBOT_AVATAR,
-      primary_color: "#2563eb",
-      secondary_color: "#111827",
-      launcher_text: "¿Te ayudo?",
-      bubble_style: "rounded",
-      font: "inter",
-      position: {
-        type: "bottom-right",
-        offset_x: 24,
-        offset_y: 24
-      },
-      is_enabled: true
-    });
-
-    res.status(201).json(chatbot);
   } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+
     console.error("CREATE CHATBOT ERROR:", error);
     res.status(500).json({ message: "Error al crear chatbot" });
   }

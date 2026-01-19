@@ -1,13 +1,20 @@
+const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
+const mongoose = require("mongoose");
 const User = require("../models/User");
 const Token = require("../models/Token");
 const Chatbot = require("../models/Chatbot");
 const Account = require("../models/Account");
-const bcrypt = require("bcryptjs");
-const crypto = require("crypto");
-const { generateToken } = require("../utils/jwt");
+const Flow = require("../models/Flow");
+const FlowNode = require("../models/FlowNode");
 const ChatbotSettings = require("../models/ChatbotSettings");
+const { generateToken } = require("../utils/jwt");
+
 
 exports.registerFirst = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const { account_name, name, email, password, onboarding } = req.body;
 
@@ -27,71 +34,119 @@ exports.registerFirst = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Crear cuenta
-    const account = await Account.create({
-      name: account_name,
-      plan: "free",
-      status: "active"
-    });
+    const welcomeText = `Hola 👋 soy el bot de ${name}, ¿en qué puedo ayudarte?`;
 
-    // Crear usuario ADMIN
-    const user = await User.create({
-      account_id: account._id,
-      name,
-      email,
-      password: hashedPassword,
-      role: "CLIENT",
-      onboarding
-    });
+    // 1️⃣ Crear cuenta
+    const account = await Account.create(
+      [{
+        name: account_name,
+        plan: "free",
+        status: "active"
+      }],
+      { session }
+    );
 
-    // Crear chatbot inicial
-    const chatbot = await Chatbot.create({
-      account_id: account._id,
-      name: `Bot de ${name}`,
-      public_id: crypto.randomUUID(),
-      welcome_message: `Hola 👋 soy el bot de ${name}, ¿en qué puedo ayudarte?`,
-      status: "active"
-    });
+    // 2️⃣ Crear usuario
+    const user = await User.create(
+      [{
+        account_id: account[0]._id,
+        name,
+        email,
+        password: hashedPassword,
+        role: "CLIENT",
+        onboarding
+      }],
+      { session }
+    );
 
-    // Crear settings iniciales del chatbot
-    const settings = await ChatbotSettings.create({
-      chatbot_id: chatbot._id,
-      avatar: process.env.DEFAULT_CHATBOT_AVATAR,
-      primary_color: "#2563eb",
-      secondary_color: "#111827",
-      launcher_text: "¿Te ayudo?",
-      bubble_style: "rounded",
-      font: "inter",
-      position: {
-        type: "bottom-right",
-        offset_x: 24,
-        offset_y: 24
-      },
-      is_enabled: true
-    });
+    // 3️⃣ Crear chatbot
+    const chatbot = await Chatbot.create(
+      [{
+        account_id: account[0]._id,
+        name: `Bot de ${name}`,
+        public_id: crypto.randomUUID(),
+        welcome_message: welcomeText, // opcional mantenerlo
+        status: "active"
+      }],
+      { session }
+    );
 
-    // Crear token
+    // 4️⃣ Crear settings
+    const settings = await ChatbotSettings.create(
+      [{
+        chatbot_id: chatbot[0]._id,
+        avatar: process.env.DEFAULT_CHATBOT_AVATAR,
+        primary_color: "#2563eb",
+        secondary_color: "#111827",
+        launcher_text: "¿Te ayudo?",
+        bubble_style: "rounded",
+        font: "inter",
+        position: {
+          type: "bottom-right",
+          offset_x: 24,
+          offset_y: 24
+        },
+        is_enabled: true
+      }],
+      { session }
+    );
+
+    // 5️⃣ Crear flow inicial
+    const flow = await Flow.create(
+      [{
+        chatbot_id: chatbot[0]._id,
+        name: "Flujo principal",
+        is_default: true
+      }],
+      { session }
+    );
+
+    // 6️⃣ Crear nodo inicial usando welcome_message
+    const startNode = await FlowNode.create(
+      [{
+        flow_id: flow[0]._id,
+        node_type: "text",
+        content: welcomeText,
+        next_node_id: null,
+        position: { x: 100, y: 100 },
+        is_draft: false
+      }],
+      { session }
+    );
+
+    // 7️⃣ Crear token
     const token = generateToken({
-      id: user._id,
-      role: user.role,
-      account_id: account._id
+      id: user[0]._id,
+      role: user[0].role,
+      account_id: account[0]._id
     });
 
-    await Token.create({
-      user_id: user._id,
-      token,
-      expires_at: new Date(Date.now() + 86400000)
-    });
+    await Token.create(
+      [{
+        user_id: user[0]._id,
+        token,
+        expires_at: new Date(Date.now() + 86400000)
+      }],
+      { session }
+    );
+
+    await session.commitTransaction();
+    session.endSession();
 
     return res.status(201).json({
       token,
-      account,
-      user,
-      chatbot,
-      settings
+      account: account[0],
+      user: user[0],
+      chatbot: chatbot[0],
+      flow: flow[0],
+      start_node: startNode[0],
+      settings: settings[0]
     });
 
   } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+
     console.error("REGISTER FIRST ERROR:", error);
     return res.status(500).json({
       message: "Error al registrar cuenta inicial"
@@ -100,97 +155,89 @@ exports.registerFirst = async (req, res) => {
 };
 
 
-
 exports.register = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const {
       account_id,
       name,
       email,
       password,
-      role,
+      role = "AGENT",
       onboarding
     } = req.body;
 
     // Validaciones básicas
     if (!account_id || !name || !email || !password) {
-      return res
-        .status(400)
-        .json({ message: "Datos obligatorios incompletos" });
+      return res.status(400).json({
+        message: "Datos obligatorios incompletos"
+      });
     }
 
     // Verificar cuenta
     const accountExists = await Account.findById(account_id);
     if (!accountExists) {
-      return res.status(404).json({ message: "Cuenta no encontrada" });
+      return res.status(404).json({
+        message: "Cuenta no encontrada"
+      });
     }
 
-    // Usuario duplicado (por cuenta)
+    // Usuario duplicado en la cuenta
     const userExists = await User.findOne({ account_id, email });
     if (userExists) {
-      return res
-        .status(409)
-        .json({ message: "El usuario ya existe en esta cuenta" });
+      return res.status(409).json({
+        message: "El usuario ya existe en esta cuenta"
+      });
     }
 
-    // Hash de password
+    // Validar rol permitido
+    const allowedRoles = ["ADMIN", "AGENT"];
+    if (!allowedRoles.includes(role)) {
+      return res.status(400).json({
+        message: "Rol no permitido"
+      });
+    }
+
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-     // Crear cuenta
-    const account = await Account.create({
-      name: account_name,
-      plan: "free",
-      status: "active"
-    });
+    // Crear usuario
+    const user = await User.create(
+      [{
+        account_id,
+        name,
+        email,
+        password: hashedPassword,
+        role,
+        onboarding
+      }],
+      { session }
+    );
 
-    // Crear usuario ADMIN
-    const user = await User.create({
-      account_id: account._id,
-      name,
-      email,
-      password: hashedPassword,
-      role: "ADMIN",
-      onboarding
-    });
-
-    // Crear chatbot inicial
-    const chatbot = await Chatbot.create({
-      account_id: account._id,
-      name: `Bot de ${name}`,
-      public_id: crypto.randomUUID(),
-      welcome_message: `Hola 👋 soy el bot de ${name}, ¿en qué puedo ayudarte?`,
-      status: "active"
-    });
-
-    // Crear settings iniciales del chatbot
-    const settings = await ChatbotSettings.create({
-      chatbot_id: chatbot._id,
-      avatar: process.env.DEFAULT_CHATBOT_AVATAR,
-      primary_color: "#2563eb",
-      secondary_color: "#111827",
-      launcher_text: "¿Te ayudo?",
-      bubble_style: "rounded",
-      font: "inter",
-      position: {
-        type: "bottom-right",
-        offset_x: 24,
-        offset_y: 24
-      },
-      is_enabled: true
-    });
+    await session.commitTransaction();
+    session.endSession();
 
     return res.status(201).json({
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      account_id: user.account_id
+      id: user[0]._id,
+      name: user[0].name,
+      email: user[0].email,
+      role: user[0].role,
+      account_id: user[0].account_id
     });
+
   } catch (error) {
-    console.error("REGISTER ERROR:", error.message);
-    return res.status(500).json({ message: "Error al registrar usuario" });
+    await session.abortTransaction();
+    session.endSession();
+
+    console.error("REGISTER ERROR:", error);
+    return res.status(500).json({
+      message: "Error al registrar usuario"
+    });
   }
 };
+
 
 exports.login = async (req, res) => {
   const { email, password } = req.body;
