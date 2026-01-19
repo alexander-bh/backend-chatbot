@@ -16,4 +16,9 @@ router.delete("/:id", auth, role("ADMIN", "CLIENT"), chatbotController.deleteCha
 //duplicar chatbot con todo su contenido
 router.post("/:id/duplicate-full",auth,role("ADMIN", "CLIENT"),chatbotController.duplicateChatbotFull);
 
+// obtener chatbot por id
+router.get("/:id",auth,role("ADMIN", "CLIENT"),chatbotController.getChatbotById);
+// obtener datos completos del editor
+router.get("/:id/editor",auth,role("ADMIN", "CLIENT"),chatbotController.getChatbotEditorData);
+
 module.exports = router;

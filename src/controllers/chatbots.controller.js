@@ -19,7 +19,7 @@ exports.createChatbot = async (req, res) => {
     const welcomeText =
       welcome_message || "Hola 👋 ¿en qué puedo ayudarte?";
 
-    // 1️⃣ Crear Chatbot
+    // Crear Chatbot
     const chatbot = await Chatbot.create(
       [{
         account_id: req.user.account_id,
@@ -30,7 +30,7 @@ exports.createChatbot = async (req, res) => {
       { session }
     );
 
-    // 2️⃣ Crear Settings
+    // Crear Settings
     await ChatbotSettings.create(
       [{
         chatbot_id: chatbot[0]._id,
@@ -50,7 +50,7 @@ exports.createChatbot = async (req, res) => {
       { session }
     );
 
-    // 3️⃣ Crear Flow inicial
+    // Crear Flow inicial
     const flow = await Flow.create(
       [{
         chatbot_id: chatbot[0]._id,
@@ -60,7 +60,7 @@ exports.createChatbot = async (req, res) => {
       { session }
     );
 
-    // 4️⃣ Crear nodo inicial usando welcome_message
+    // Crear nodo inicial usando welcome_message
     const startNode = await FlowNode.create(
       [{
         flow_id: flow[0]._id,
@@ -91,6 +91,7 @@ exports.createChatbot = async (req, res) => {
   }
 };
 
+//Listar los chatbot 
 exports.listChatbots = async (req, res) => {
   const chatbots = await Chatbot.find({
     account_id: req.user.account_id
@@ -99,6 +100,75 @@ exports.listChatbots = async (req, res) => {
   res.json(chatbots);
 };
 
+// Obtener chatbot por ID
+exports.getChatbotById = async (req, res) => {
+  try {
+    const chatbot = await Chatbot.findOne({
+      _id: req.params.id,
+      account_id: req.user.account_id
+    });
+
+    if (!chatbot) {
+      return res.status(404).json({
+        message: "Chatbot no encontrado"
+      });
+    }
+
+    res.json(chatbot);
+  } catch (error) {
+    console.error("GET CHATBOT ERROR:", error);
+    res.status(500).json({
+      message: "Error al obtener chatbot"
+    });
+  }
+};
+
+
+// Obtener datos completos para el editor
+exports.getChatbotEditorData = async (req, res) => {
+  try {
+    const chatbot = await Chatbot.findOne({
+      _id: req.params.id,
+      account_id: req.user.account_id
+    });
+
+    if (!chatbot) {
+      return res.status(404).json({
+        message: "Chatbot no encontrado"
+      });
+    }
+
+    const flows = await Flow.find({
+      chatbot_id: chatbot._id
+    }).sort({ created_at: 1 });
+
+    const flowsWithNodes = await Promise.all(
+      flows.map(async flow => {
+        const nodes = await FlowNode.find({
+          flow_id: flow._id
+        });
+
+        return {
+          ...flow.toObject(),
+          nodes
+        };
+      })
+    );
+
+    res.json({
+      chatbot,
+      flows: flowsWithNodes
+    });
+
+  } catch (error) {
+    console.error("EDITOR DATA ERROR:", error);
+    res.status(500).json({
+      message: "Error al cargar editor"
+    });
+  }
+};
+
+//Actalizar chatbot 
 exports.updateChatbot = async (req, res) => {
   try {
     const { id } = req.params;
@@ -128,6 +198,7 @@ exports.updateChatbot = async (req, res) => {
 };
 
 
+// Eliminar chatbot
 exports.deleteChatbot = async (req, res) => {
   try {
     const { id } = req.params;
@@ -151,6 +222,8 @@ exports.deleteChatbot = async (req, res) => {
   }
 };
 
+
+// Duplicar chatbot con todo su contenido
 exports.duplicateChatbotFull = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
