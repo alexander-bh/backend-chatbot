@@ -37,17 +37,18 @@ const OnboardingSchema = new Schema(
 
 const UserSchema = new Schema({
   account_id: {
-    type: Schema.Types.ObjectId, // ✅ CORRECTO
+    type: Schema.Types.ObjectId, // ✅ AQUÍ ESTÁ LA CLAVE
     ref: "Account",
     required: true
   },
-  name: String,
-  email: String,
-  password: String,
-  role: String,
+
+  name: { type: String, trim: true },
+  email: { type: String, trim: true, lowercase: true },
+  password: { type: String },
+  role: { type: String },
 
   onboarding: {
-    type: Schema.Types.Mixed, // ✅ Flexible
+    type: Schema.Types.Mixed, // ✅ NO mongoose
     default: {}
   },
 
