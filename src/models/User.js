@@ -37,25 +37,24 @@ const OnboardingSchema = new Schema(
 
 const UserSchema = new Schema({
   account_id: {
-    type: Schema.Types.ObjectId, // ✅ AQUÍ ESTÁ LA CLAVE
+    type: mongoose.Schema.Types.ObjectId,
     ref: "Account",
     required: true
   },
-
-  name: { type: String, trim: true },
-  email: { type: String, trim: true, lowercase: true },
-  password: { type: String },
-  role: { type: String },
-
-  onboarding: {
-    type: Schema.Types.Mixed, // ✅ NO mongoose
-    default: {}
+  name: {
+    type: String,
+    required: true,
+    trim: true
   },
-
-  created_at: {
-    type: Date,
-    default: Date.now
-  }
+  email: { type: String, required: true },
+  password: { type: String, required: true, select: false },
+  role: {
+    type: String,
+    enum: ["ADMIN", "CLIENT"],
+    required: true
+  },
+  onboarding: OnboardingSchema,
+  created_at: { type: Date, default: Date.now }
 });
 
 // email único por cuenta
