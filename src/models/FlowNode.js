@@ -39,6 +39,21 @@ const FlowNodeSchema = new Schema(
       }
     ],
 
+    typing_time: {
+      type: Number,
+      default: 2
+    },
+
+    validation: {
+      type: Object,
+      default: null
+    },
+
+    crm_field_key: {
+      type: String,
+      default: null
+    },
+
     next_node_id: {
       type: Schema.Types.ObjectId,
       ref: "FlowNode",

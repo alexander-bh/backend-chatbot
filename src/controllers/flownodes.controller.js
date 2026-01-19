@@ -2,8 +2,9 @@ const FlowNode = require("../models/FlowNode");
 const Flow = require("../models/Flow");
 
 const INPUT_NODES = ["question", "email", "phone", "number"];
+const VARIABLE_KEY_REGEX = /^[a-z0-9_]+$/;
 
-//crear nodo
+// CREAR NODO
 exports.createNode = async (req, res) => {
   try {
     const {
@@ -25,6 +26,28 @@ exports.createNode = async (req, res) => {
     const flow = await Flow.findById(flow_id);
     if (!flow) {
       return res.status(404).json({ message: "Flow no encontrado" });
+    }
+
+    // Validar variable_key para nodos input
+    if (INPUT_NODES.includes(node_type)) {
+      if (!content || !variable_key) {
+        return res.status(400).json({
+          message: `content y variable_key son requeridos para nodos tipo ${node_type}`
+        });
+      }
+
+      if (!VARIABLE_KEY_REGEX.test(variable_key)) {
+        return res.status(400).json({
+          message: "variable_key solo puede contener letras minúsculas, números y _"
+        });
+      }
+
+      const exists = await FlowNode.findOne({ flow_id, variable_key });
+      if (exists) {
+        return res.status(400).json({
+          message: "variable_key ya existe en este flow"
+        });
+      }
     }
 
     const nodeData = {
@@ -66,13 +89,10 @@ exports.createNode = async (req, res) => {
         }));
         break;
 
-      case "question":
-      case "email":
-      case "phone":
-      case "number":
-        if (!content || !variable_key) {
+      default:
+        if (!INPUT_NODES.includes(node_type)) {
           return res.status(400).json({
-            message: `content y variable_key son requeridos para nodos tipo ${node_type}`
+            message: "node_type no soportado"
           });
         }
 
@@ -80,9 +100,6 @@ exports.createNode = async (req, res) => {
         nodeData.variable_key = variable_key;
         nodeData.next_node_id = next_node_id || null;
         break;
-
-      default:
-        return res.status(400).json({ message: "node_type no soportado" });
     }
 
     const node = await FlowNode.create(nodeData);
@@ -94,7 +111,7 @@ exports.createNode = async (req, res) => {
   }
 };
 
-//obterner nodos por flow
+// OBTENER NODOS POR FLOW
 exports.getNodesByFlow = async (req, res) => {
   try {
     const nodes = await FlowNode.find({
@@ -107,7 +124,7 @@ exports.getNodesByFlow = async (req, res) => {
   }
 };
 
-//actualizar nodo
+// ACTUALIZAR NODO
 exports.updateNode = async (req, res) => {
   try {
     const node = await FlowNode.findById(req.params.id);
@@ -123,13 +140,42 @@ exports.updateNode = async (req, res) => {
 
     const allowedFields = ["content", "options", "variable_key"];
 
-    allowedFields.forEach(field => {
+    for (const field of allowedFields) {
       if (req.body[field] !== undefined) {
+        if (
+          field === "variable_key" &&
+          INPUT_NODES.includes(node.node_type)
+        ) {
+          if (!req.body.variable_key) {
+            return res.status(400).json({
+              message: "variable_key no puede quedar vacío"
+            });
+          }
+
+          if (!VARIABLE_KEY_REGEX.test(req.body.variable_key)) {
+            return res.status(400).json({
+              message: "variable_key solo puede contener letras minúsculas, números y _"
+            });
+          }
+
+          const exists = await FlowNode.findOne({
+            flow_id: node.flow_id,
+            variable_key: req.body.variable_key,
+            _id: { $ne: node._id }
+          });
+
+          if (exists) {
+            return res.status(400).json({
+              message: "variable_key ya existe en este flow"
+            });
+          }
+        }
+
         node[field] = req.body[field];
       }
-    });
+    }
 
-    // Validaciones
+    // Validaciones finales
     if (node.node_type === "options") {
       if (!Array.isArray(node.options) || node.options.length === 0) {
         return res.status(400).json({
@@ -164,7 +210,7 @@ exports.updateNode = async (req, res) => {
   }
 };
 
-//eliminar nodo
+// ELIMINAR NODO
 exports.deleteNode = async (req, res) => {
   try {
     const node = await FlowNode.findById(req.params.id);
@@ -172,26 +218,38 @@ exports.deleteNode = async (req, res) => {
       return res.status(404).json({ message: "Nodo no encontrado" });
     }
 
+    // Limpiar next_node_id directos
     await FlowNode.updateMany(
       { flow_id: node.flow_id, next_node_id: node._id },
       { $set: { next_node_id: null } }
     );
 
+    // Limpiar opciones que apunten al nodo (CORRECTO)
     await FlowNode.updateMany(
-      { flow_id: node.flow_id, "options.next_node_id": node._id },
-      { $set: { "options.$[].next_node_id": null } }
+      {
+        flow_id: node.flow_id,
+        "options.next_node_id": node._id
+      },
+      {
+        $set: {
+          "options.$[opt].next_node_id": null
+        }
+      },
+      {
+        arrayFilters: [{ "opt.next_node_id": node._id }]
+      }
     );
 
     await node.deleteOne();
-
     res.json({ message: "Nodo eliminado y conexiones limpiadas" });
 
   } catch (error) {
+    console.error("deleteNode error:", error);
     res.status(500).json({ message: "Error al eliminar nodo" });
   }
 };
 
-//actualizar canvas
+// ACTUALIZAR CANVAS
 exports.updateCanvas = async (req, res) => {
   try {
     const { flow_id, nodes } = req.body;
@@ -207,16 +265,21 @@ exports.updateCanvas = async (req, res) => {
       return res.status(404).json({ message: "Flow no encontrado" });
     }
 
-    const operations = nodes.map(n =>
-      FlowNode.findOneAndUpdate(
+    const operations = nodes.map(n => {
+      if (
+        typeof n.position?.x !== "number" ||
+        typeof n.position?.y !== "number"
+      ) {
+        return null;
+      }
+
+      return FlowNode.findOneAndUpdate(
         { _id: n._id, flow_id },
-        { position: n.position },
-        { new: true }
-      )
-    );
+        { position: n.position }
+      );
+    }).filter(Boolean);
 
     await Promise.all(operations);
-
     res.json({ message: "Canvas actualizado correctamente" });
 
   } catch (error) {
@@ -225,14 +288,15 @@ exports.updateCanvas = async (req, res) => {
   }
 };
 
-
-//conectar nodos
+// CONECTAR NODOS
 exports.connectNode = async (req, res) => {
   try {
     const node = await FlowNode.findById(req.params.id);
     if (!node) {
       return res.status(404).json({ message: "Nodo no encontrado" });
     }
+
+    let targetId;
 
     if (node.node_type === "options") {
       const { option_index, target_node_id } = req.body;
@@ -249,10 +313,10 @@ exports.connectNode = async (req, res) => {
       }
 
       node.options[option_index].next_node_id = target_node_id;
+      targetId = target_node_id;
 
     } else {
       const { next_node_id } = req.body;
-
       if (!next_node_id) {
         return res.status(400).json({
           message: "next_node_id requerido"
@@ -260,12 +324,8 @@ exports.connectNode = async (req, res) => {
       }
 
       node.next_node_id = next_node_id;
+      targetId = next_node_id;
     }
-
-    const targetId =
-      node.node_type === "options"
-        ? req.body.target_node_id
-        : req.body.next_node_id;
 
     if (String(targetId) === String(node._id)) {
       return res.status(400).json({
@@ -282,7 +342,6 @@ exports.connectNode = async (req, res) => {
 
     node.is_draft = false;
     await node.save();
-
     res.json(node);
 
   } catch (error) {
@@ -291,11 +350,10 @@ exports.connectNode = async (req, res) => {
   }
 };
 
-// duplicar nodo
+// DUPLICAR NODO
 exports.duplicateNode = async (req, res) => {
   try {
     const originalNode = await FlowNode.findById(req.params.id);
-
     if (!originalNode) {
       return res.status(404).json({ message: "Nodo no encontrado" });
     }
@@ -304,7 +362,10 @@ exports.duplicateNode = async (req, res) => {
       flow_id: originalNode.flow_id,
       node_type: originalNode.node_type,
       content: originalNode.content,
-      options: originalNode.options,
+      options: originalNode.options?.map(opt => ({
+        label: opt.label,
+        next_node_id: null
+      })),
       variable_key: originalNode.variable_key,
       next_node_id: null,
       position: {
@@ -321,4 +382,3 @@ exports.duplicateNode = async (req, res) => {
     res.status(500).json({ message: "Error al duplicar nodo" });
   }
 };
-

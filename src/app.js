@@ -17,7 +17,6 @@ app.get("/ping", (req, res) => {
 app.use(require("./middlewares/multerError.middleware"));
 app.use(require("./middlewares/mongo.middleware.js"));
 
-
 //rutas principales
 app.use("/api/chatbots", require("./routes/chatbots.routes.js"));
 app.use("/api/chatbot-settings", require("./routes/chatbotSettings.routes.js"));
@@ -28,6 +27,7 @@ app.use("/api/flows", require("./routes/flows.routes.js"));
 app.use("/api/flownodes", require("./routes/flow.nodes.routes.js"));  
 app.use("/api/accounts", require("./routes/account.routes.js"));
 app.use("/api/conversations",require("./routes/conversationSession.routes.js"));
+app.use("/api/crm-fields", require("./routes/crmfields.routes"));
 
 
 
