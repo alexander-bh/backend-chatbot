@@ -37,7 +37,7 @@ const OnboardingSchema = new Schema(
 
 const UserSchema = new Schema({
   account_id: {
-    type: mongoose.Schema.Types.ObjectId,
+    type: Schema.Types.ObjectId, // ✅ CORRECTO
     ref: "Account",
     required: true
   },
@@ -47,10 +47,14 @@ const UserSchema = new Schema({
   role: String,
 
   onboarding: {
-    type: mongoose.Schema.Types.Mixed,
+    type: Schema.Types.Mixed, // ✅ Flexible
     default: {}
   },
-  created_at: { type: Date, default: Date.now }
+
+  created_at: {
+    type: Date,
+    default: Date.now
+  }
 });
 
 // email único por cuenta
