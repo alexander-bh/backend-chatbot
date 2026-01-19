@@ -14,6 +14,10 @@ router.put("/:id", auth, role("ADMIN", "CLIENT"), nodeController.updateNode);
 router.delete("/:id", auth, role("ADMIN", "CLIENT"), nodeController.deleteNode);
 // conectar nodos
 router.post("/:id/connect", auth, role("ADMIN", "CLIENT"), nodeController.connectNode);
+// Actualizar canvas
+router.post("/:id/update-canvas", auth, role("ADMIN", "CLIENT"), nodeController.updateCanvas);
+// Duplicar nodo
+router.post("/:id/duplicate", auth, role("ADMIN", "CLIENT"), nodeController.duplicateNode);
 
 
 module.exports = router;

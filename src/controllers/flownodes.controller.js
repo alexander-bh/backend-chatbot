@@ -94,7 +94,6 @@ exports.createNode = async (req, res) => {
   }
 };
 
-
 //obterner nodos por flow
 exports.getNodesByFlow = async (req, res) => {
   try {
@@ -191,7 +190,6 @@ exports.deleteNode = async (req, res) => {
     res.status(500).json({ message: "Error al eliminar nodo" });
   }
 };
-
 
 //actualizar canvas
 exports.updateCanvas = async (req, res) => {
@@ -292,3 +290,35 @@ exports.connectNode = async (req, res) => {
     res.status(500).json({ message: "Error al conectar nodos" });
   }
 };
+
+// duplicar nodo
+exports.duplicateNode = async (req, res) => {
+  try {
+    const originalNode = await FlowNode.findById(req.params.id);
+
+    if (!originalNode) {
+      return res.status(404).json({ message: "Nodo no encontrado" });
+    }
+
+    const duplicatedNode = await FlowNode.create({
+      flow_id: originalNode.flow_id,
+      node_type: originalNode.node_type,
+      content: originalNode.content,
+      options: originalNode.options,
+      variable_key: originalNode.variable_key,
+      next_node_id: null,
+      position: {
+        x: originalNode.position.x + 40,
+        y: originalNode.position.y + 40
+      },
+      is_draft: true
+    });
+
+    res.status(201).json(duplicatedNode);
+
+  } catch (error) {
+    console.error("duplicateNode error:", error);
+    res.status(500).json({ message: "Error al duplicar nodo" });
+  }
+};
+
