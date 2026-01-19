@@ -13,5 +13,7 @@ router.get("/", auth, role("ADMIN", "CLIENT"), chatbotController.listChatbots);
 router.put("/:id", auth, role("ADMIN","CLIENT"), chatbotController.updateChatbot);
 //eliminar chatbot
 router.delete("/:id", auth, role("ADMIN", "CLIENT"), chatbotController.deleteChatbot);
+//duplicar chatbot con todo su contenido
+router.post("/:id/duplicate-full",auth,role("ADMIN", "CLIENT"),chatbotController.duplicateChatbotFull);
 
 module.exports = router;
