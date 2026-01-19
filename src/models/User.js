@@ -37,24 +37,19 @@ const OnboardingSchema = new Schema(
 
 const UserSchema = new Schema({
   account_id: {
-    type: Schema.Types.ObjectId,
+    type: mongoose.Schema.Types.ObjectId,
     ref: "Account",
-    required: true,
-    index: true
-  },
-  name: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  email: { type: String, required: true },
-  password: { type: String, required: true, select: false },
-  role: {
-    type: String,
-    enum: ["ADMIN", "CLIENT"],
     required: true
   },
-  onboarding: OnboardingSchema,
+  name: String,
+  email: String,
+  password: String,
+  role: String,
+
+  onboarding: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
+  },
   created_at: { type: Date, default: Date.now }
 });
 
