@@ -1,5 +1,8 @@
 const router = require("express").Router();
-const { USO_HERRAMIENTA, OBJETIVO } = require("../shared/enum/onboarding.enums");
+const {
+  USO_HERRAMIENTA,
+  OBJETIVO
+} = require("../shared/enum/onboarding.enums");
 
 router.get("/enums/onboarding", (req, res) => {
   res.json({

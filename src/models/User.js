@@ -1,5 +1,7 @@
 const { Schema, model } = require("mongoose");
-const { USO_HERRAMIENTA, OBJETIVO } = require("../shared/enum/onboarding.enums");
+const { USO_HERRAMIENTA_KEYS, OBJETIVO_KEYS } = require("../shared/enum/onboarding.enums");
+
+
 
 const OnboardingSchema = new Schema(
   {
@@ -8,11 +10,11 @@ const OnboardingSchema = new Schema(
     telefono: String,
     uso_herramienta: {
       type: String,
-      enum: Object.values(USO_HERRAMIENTA)
+      enum: USO_HERRAMIENTA_KEYS
     },
     objetivo: {
       type: String,
-      enum: Object.values(OBJETIVO)
+      enum: OBJETIVO_KEYS
     },
     situacion_diaria: String
   },

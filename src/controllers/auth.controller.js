@@ -154,7 +154,6 @@ exports.registerFirst = async (req, res) => {
   }
 };
 
-
 exports.register = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -237,7 +236,6 @@ exports.register = async (req, res) => {
     });
   }
 };
-
 
 exports.login = async (req, res) => {
   const { email, password } = req.body;
