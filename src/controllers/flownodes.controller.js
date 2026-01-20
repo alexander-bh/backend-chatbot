@@ -419,3 +419,37 @@ const normalizeLinkAction = (link) => {
 
   return result;
 };
+
+// ACTUALIZAR CANVAS (POSICIONES)
+exports.updateCanvas = async (req, res) => {
+  try {
+    const { nodes } = req.body;
+
+    if (!Array.isArray(nodes)) {
+      return res.status(400).json({
+        message: "nodes debe ser un arreglo"
+      });
+    }
+
+    const bulk = nodes.map(node => ({
+      updateOne: {
+        filter: { _id: node.id },
+        update: {
+          position: node.position
+        }
+      }
+    }));
+
+    if (bulk.length > 0) {
+      await FlowNode.bulkWrite(bulk);
+    }
+
+    res.json({ message: "Canvas actualizado correctamente" });
+
+  } catch (error) {
+    console.error("updateCanvas error:", error.message);
+    res.status(500).json({
+      message: "Error al actualizar canvas"
+    });
+  }
+};
