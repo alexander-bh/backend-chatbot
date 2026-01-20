@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const FlowNode = require("../models/FlowNode");
 const Flow = require("../models/Flow");
 
@@ -14,7 +15,11 @@ exports.createNode = async (req, res) => {
       options,
       next_node_id,
       position,
-      variable_key
+      variable_key,
+      typing_time,
+      link_action,
+      crm_field_key,
+      validation
     } = req.body;
 
     if (!flow_id || !node_type) {
@@ -23,22 +28,31 @@ exports.createNode = async (req, res) => {
       });
     }
 
+    if (
+      typing_time !== undefined &&
+      (typeof typing_time !== "number" || typing_time < 0)
+    ) {
+      return res.status(400).json({
+        message: "typing_time debe ser un número >= 0"
+      });
+    }
+
     const flow = await Flow.findById(flow_id);
     if (!flow) {
       return res.status(404).json({ message: "Flow no encontrado" });
     }
 
-    // Validar variable_key para nodos input
+    // 🔐 Validar variable_key para inputs
     if (INPUT_NODES.includes(node_type)) {
       if (!content || !variable_key) {
         return res.status(400).json({
-          message: `content y variable_key son requeridos para nodos tipo ${node_type}`
+          message: `content y variable_key son requeridos para ${node_type}`
         });
       }
 
       if (!VARIABLE_KEY_REGEX.test(variable_key)) {
         return res.status(400).json({
-          message: "variable_key solo puede contener letras minúsculas, números y _"
+          message: "variable_key solo puede contener minúsculas, números y _"
         });
       }
 
@@ -53,83 +67,94 @@ exports.createNode = async (req, res) => {
     const nodeData = {
       flow_id,
       node_type,
-      position: position || { x: 0, y: 0 }
+      position: position || { x: 0, y: 0 },
+      typing_time,
+      is_draft: true
     };
 
-    if (INPUT_NODES.includes(node_type)) {
-      nodeData.variable_key = variable_key;
-    }
-
+    // TIPOS DE NODO
     switch (node_type) {
       case "text":
         if (!content) {
           return res.status(400).json({
-            message: "content es requerido para nodos tipo text"
+            message: "content es requerido para text"
           });
         }
         nodeData.content = content;
+        nodeData.next_node_id = next_node_id || null;
+        break;
+
+      case "question":
+      case "email":
+      case "phone":
+      case "number":
+        nodeData.content = content;
+        nodeData.variable_key = variable_key;
+        nodeData.crm_field_key = crm_field_key ?? null;
+        nodeData.validation = validation ?? null;
         nodeData.next_node_id = next_node_id || null;
         break;
 
       case "options":
         if (!Array.isArray(options) || options.length === 0) {
           return res.status(400).json({
-            message: "options debe ser un arreglo con al menos una opción"
+            message: "options debe tener al menos una opción"
           });
         }
 
-        for (const opt of options) {
+        nodeData.options = options.map(opt => {
           if (!opt.label) {
-            return res.status(400).json({
-              message: "Cada opción debe tener label"
-            });
+            throw new Error("Cada opción debe tener label");
           }
-        }
 
+          return {
+            label: opt.label,
+            next_node_id: opt.next_node_id || null
+          };
+        });
         nodeData.content = content || null;
-        nodeData.options = options.map(opt => ({
-          label: opt.label,
-          next_node_id: opt.next_node_id || null
-        }));
         break;
-      case "phone":
-      case "number":
-        if (!content) {
+
+      case "jump":
+        if (!next_node_id) {
           return res.status(400).json({
-            message: `content es requerido para nodos tipo ${node_type}`
+            message: "next_node_id es requerido para jump"
           });
         }
-
-        nodeData.content = content;
-
-        // 👉 Valor por defecto
-        nodeData.crm_field_key = req.body.crm_field_key ?? "cellphone";
-
-        nodeData.next_node_id = next_node_id || null;
-        break;
-      case "jump":
         nodeData.next_node_id = next_node_id;
         break;
 
-      default:
-        if (!INPUT_NODES.includes(node_type)) {
+      // 🟢 NODO LINK
+      case "link":
+        if (!content || !link_action) {
           return res.status(400).json({
-            message: "node_type no soportado"
+            message: "content y link_action son requeridos"
+          });
+        }
+
+        if (!link_action.type || !link_action.title || !link_action.value) {
+          return res.status(400).json({
+            message: "link_action incompleto"
           });
         }
 
         nodeData.content = content;
-        nodeData.variable_key = variable_key;
+        nodeData.link_action = normalizeLinkAction(link_action);
         nodeData.next_node_id = next_node_id || null;
         break;
+
+      default:
+        return res.status(400).json({
+          message: "node_type no soportado"
+        });
     }
 
     const node = await FlowNode.create(nodeData);
     res.status(201).json(node);
 
   } catch (error) {
-    console.error("createNode error:", error);
-    res.status(500).json({ message: "Error al crear nodo" });
+    console.error("createNode error:", error.message);
+    res.status(500).json({ message: error.message || "Error al crear nodo" });
   }
 };
 
@@ -154,18 +179,32 @@ exports.updateNode = async (req, res) => {
       return res.status(404).json({ message: "Nodo no encontrado" });
     }
 
-    if (req.body.options && node.node_type !== "options") {
-      return res.status(400).json({
-        message: "Solo nodos tipo options pueden tener opciones"
-      });
-    }
-
     const allowedFields = [
       "content",
       "options",
+      "typing_time",
+      "link_action",
       "variable_key",
-      "crm_field_key"
+      "crm_field_key",
+      "validation"
     ];
+
+    if (
+      req.body.typing_time !== undefined &&
+      (typeof req.body.typing_time !== "number" || req.body.typing_time < 0)
+    ) {
+      return res.status(400).json({
+        message: "typing_time inválido"
+      });
+    }
+
+    if (req.body.validation) {
+      if (!Array.isArray(req.body.validation.rules)) {
+        return res.status(400).json({
+          message: "validation.rules debe ser un arreglo"
+        });
+      }
+    }
 
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) {
@@ -173,15 +212,9 @@ exports.updateNode = async (req, res) => {
           field === "variable_key" &&
           INPUT_NODES.includes(node.node_type)
         ) {
-          if (!req.body.variable_key) {
-            return res.status(400).json({
-              message: "variable_key no puede quedar vacío"
-            });
-          }
-
           if (!VARIABLE_KEY_REGEX.test(req.body.variable_key)) {
             return res.status(400).json({
-              message: "variable_key solo puede contener letras minúsculas, números y _"
+              message: "variable_key inválido"
             });
           }
 
@@ -193,51 +226,33 @@ exports.updateNode = async (req, res) => {
 
           if (exists) {
             return res.status(400).json({
-              message: "variable_key ya existe en este flow"
+              message: "variable_key ya existe"
             });
           }
         }
 
-        node[field] = req.body[field];
+        node[field] = field === "link_action"
+          ? normalizeLinkAction(req.body.link_action)
+          : req.body[field];
       }
     }
 
-    // Validaciones finales
-    if (node.node_type === "options") {
-      if (!Array.isArray(node.options) || node.options.length === 0) {
+    // Validación final link
+    if (node.node_type === "link") {
+      const la = node.link_action;
+      if (!la?.type || !la?.title || !la?.value) {
         return res.status(400).json({
-          message: "Un nodo de opciones debe tener al menos una opción"
+          message: "link_action inválido"
         });
       }
-
-      for (const opt of node.options) {
-        if (!opt.label) {
-          return res.status(400).json({
-            message: "Cada opción debe tener label"
-          });
-        }
-      }
-    }
-
-    if (
-      INPUT_NODES.includes(node.node_type) &&
-      !node.variable_key
-    ) {
-      return res.status(400).json({
-        message: `variable_key es requerido para nodos tipo ${node.node_type}`
-      });
-    }
-
-    if (!INPUT_NODES.includes(node.node_type)) {
-      node.variable_key = undefined;
     }
 
     await node.save();
     res.json(node);
 
   } catch (error) {
-    console.error("updateNode error:", error);
-    res.status(500).json({ message: "Error al actualizar nodo" });
+    console.error("updateNode error:", error.message);
+    res.status(500).json({ message: error.message || "Error al actualizar nodo" });
   }
 };
 
@@ -249,13 +264,11 @@ exports.deleteNode = async (req, res) => {
       return res.status(404).json({ message: "Nodo no encontrado" });
     }
 
-    // Limpiar next_node_id directos
     await FlowNode.updateMany(
       { flow_id: node.flow_id, next_node_id: node._id },
       { $set: { next_node_id: null } }
     );
 
-    // Limpiar opciones que apunten al nodo (CORRECTO)
     await FlowNode.updateMany(
       {
         flow_id: node.flow_id,
@@ -275,47 +288,8 @@ exports.deleteNode = async (req, res) => {
     res.json({ message: "Nodo eliminado y conexiones limpiadas" });
 
   } catch (error) {
-    console.error("deleteNode error:", error);
+    console.error("deleteNode error:", error.message);
     res.status(500).json({ message: "Error al eliminar nodo" });
-  }
-};
-
-// ACTUALIZAR CANVAS
-exports.updateCanvas = async (req, res) => {
-  try {
-    const { flow_id, nodes } = req.body;
-
-    if (!flow_id || !Array.isArray(nodes)) {
-      return res.status(400).json({
-        message: "flow_id y nodes son requeridos"
-      });
-    }
-
-    const flow = await Flow.findById(flow_id);
-    if (!flow) {
-      return res.status(404).json({ message: "Flow no encontrado" });
-    }
-
-    const operations = nodes.map(n => {
-      if (
-        typeof n.position?.x !== "number" ||
-        typeof n.position?.y !== "number"
-      ) {
-        return null;
-      }
-
-      return FlowNode.findOneAndUpdate(
-        { _id: n._id, flow_id },
-        { position: n.position }
-      );
-    }).filter(Boolean);
-
-    await Promise.all(operations);
-    res.json({ message: "Canvas actualizado correctamente" });
-
-  } catch (error) {
-    console.error("updateCanvas error:", error);
-    res.status(500).json({ message: "Error al actualizar canvas" });
   }
 };
 
@@ -336,7 +310,8 @@ exports.connectNode = async (req, res) => {
         !Number.isInteger(option_index) ||
         option_index < 0 ||
         !node.options?.[option_index] ||
-        !target_node_id
+        !target_node_id ||
+        !mongoose.Types.ObjectId.isValid(target_node_id)
       ) {
         return res.status(400).json({
           message: "option_index o target_node_id inválidos"
@@ -348,9 +323,13 @@ exports.connectNode = async (req, res) => {
 
     } else {
       const { next_node_id } = req.body;
-      if (!next_node_id) {
+
+      if (
+        !next_node_id ||
+        !mongoose.Types.ObjectId.isValid(next_node_id)
+      ) {
         return res.status(400).json({
-          message: "next_node_id requerido"
+          message: "next_node_id inválido"
         });
       }
 
@@ -376,7 +355,7 @@ exports.connectNode = async (req, res) => {
     res.json(node);
 
   } catch (error) {
-    console.error("connectNode error:", error);
+    console.error("connectNode error:", error.message);
     res.status(500).json({ message: "Error al conectar nodos" });
   }
 };
@@ -384,34 +363,59 @@ exports.connectNode = async (req, res) => {
 // DUPLICAR NODO
 exports.duplicateNode = async (req, res) => {
   try {
-    const originalNode = await FlowNode.findById(req.params.id);
-    if (!originalNode) {
+    const original = await FlowNode.findById(req.params.id);
+    if (!original) {
       return res.status(404).json({ message: "Nodo no encontrado" });
     }
 
-    const duplicatedNode = await FlowNode.create({
-      flow_id: originalNode.flow_id,
-      node_type: originalNode.node_type,
-      content: originalNode.content,
-      options: originalNode.options?.map(opt => ({
+    const duplicated = await FlowNode.create({
+      flow_id: original.flow_id,
+      node_type: original.node_type,
+      content: original.content,
+      options: original.options?.map(opt => ({
         label: opt.label,
         next_node_id: null
       })),
-      variable_key: originalNode.variable_key,
-      crm_field_key: originalNode.crm_field_key, // 👈 AÑADIR
+      variable_key: original.variable_key,
+      crm_field_key: original.crm_field_key,
+      validation: original.validation
+        ? JSON.parse(JSON.stringify(original.validation))
+        : null,
+      typing_time: original.typing_time,
+      link_action: original.link_action
+        ? { ...original.link_action }
+        : null,
       next_node_id: null,
       position: {
-        x: originalNode.position.x + 40,
-        y: originalNode.position.y + 40
+        x: original.position.x + 40,
+        y: original.position.y + 40
       },
       is_draft: true
     });
 
-
-    res.status(201).json(duplicatedNode);
+    res.status(201).json(duplicated);
 
   } catch (error) {
-    console.error("duplicateNode error:", error);
+    console.error("duplicateNode error:", error.message);
     res.status(500).json({ message: "Error al duplicar nodo" });
   }
+};
+
+// NORMALIZAR LINK ACTION
+const normalizeLinkAction = (link) => {
+  const result = { ...link };
+
+  if (result.type === "whatsapp" && !result.value.startsWith("https://")) {
+    result.value = `https://wa.me/${result.value}`;
+  }
+
+  if (result.type === "phone" && !result.value.startsWith("tel:")) {
+    result.value = `tel:${result.value}`;
+  }
+
+  if (result.type === "email" && !result.value.startsWith("mailto:")) {
+    result.value = `mailto:${result.value}`;
+  }
+
+  return result;
 };
