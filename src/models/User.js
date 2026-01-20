@@ -1,4 +1,5 @@
 const { Schema, model } = require("mongoose");
+const { USO_HERRAMIENTA, OBJETIVO } = require("../shared/enum/onboarding.enums");
 
 const OnboardingSchema = new Schema(
   {
@@ -7,21 +8,11 @@ const OnboardingSchema = new Schema(
     telefono: String,
     uso_herramienta: {
       type: String,
-      enum: [
-        "NEGOCIO",
-        "EQUIPO_COMERCIAL",
-        "APRENDER",
-        "PROYECTO_PERSONAL"
-      ]
+      enum: Object.values(USO_HERRAMIENTA)
     },
     objetivo: {
       type: String,
-      enum: [
-        "AUMENTAR_VENTAS",
-        "AUTOMATIZAR_RESPUESTAS",
-        "ORGANIZAR_CONTACTOS_O_IDEAS",
-        "SOLO_VER_FUNCIONAMIENTO"
-      ]
+      enum: Object.values(OBJETIVO)
     },
     situacion_diaria: String
   },
@@ -30,7 +21,7 @@ const OnboardingSchema = new Schema(
 
 const UserSchema = new Schema({
   account_id: {
-    type: Schema.Types.ObjectId, 
+    type: Schema.Types.ObjectId,
     ref: "Account",
     required: true
   },

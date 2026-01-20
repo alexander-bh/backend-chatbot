@@ -32,6 +32,7 @@ app.use("/api/flownodes", require("./routes/flow.nodes.routes.js"));
 
 // Nueva ruta para CRM Fields
 app.use("/api/crm-fields", require("./routes/crmfields.routes"));
+app.use("/api/meta", require("./routes/meta.routes.js"));
 
 // Rutas de conversación
 app.use("/api/conversations",require("./routes/conversationSession.routes.js"));
