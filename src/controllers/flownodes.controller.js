@@ -56,6 +56,10 @@ exports.createNode = async (req, res) => {
       position: position || { x: 0, y: 0 }
     };
 
+    if (INPUT_NODES.includes(node_type)) {
+      nodeData.variable_key = variable_key;
+    }
+
     switch (node_type) {
       case "text":
         if (!content) {
@@ -87,6 +91,24 @@ exports.createNode = async (req, res) => {
           label: opt.label,
           next_node_id: opt.next_node_id || null
         }));
+        break;
+      case "phone":
+      case "number":
+        if (!content) {
+          return res.status(400).json({
+            message: `content es requerido para nodos tipo ${node_type}`
+          });
+        }
+
+        nodeData.content = content;
+
+        // 👉 Valor por defecto
+        nodeData.crm_field_key = req.body.crm_field_key ?? "cellphone";
+
+        nodeData.next_node_id = next_node_id || null;
+        break;
+      case "jump":
+        nodeData.next_node_id = next_node_id;
         break;
 
       default:
@@ -138,7 +160,12 @@ exports.updateNode = async (req, res) => {
       });
     }
 
-    const allowedFields = ["content", "options", "variable_key"];
+    const allowedFields = [
+      "content",
+      "options",
+      "variable_key",
+      "crm_field_key"
+    ];
 
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) {
@@ -199,6 +226,10 @@ exports.updateNode = async (req, res) => {
       return res.status(400).json({
         message: `variable_key es requerido para nodos tipo ${node.node_type}`
       });
+    }
+
+    if (!INPUT_NODES.includes(node.node_type)) {
+      node.variable_key = undefined;
     }
 
     await node.save();
@@ -367,6 +398,7 @@ exports.duplicateNode = async (req, res) => {
         next_node_id: null
       })),
       variable_key: originalNode.variable_key,
+      crm_field_key: originalNode.crm_field_key, // 👈 AÑADIR
       next_node_id: null,
       position: {
         x: originalNode.position.x + 40,
@@ -374,6 +406,7 @@ exports.duplicateNode = async (req, res) => {
       },
       is_draft: true
     });
+
 
     res.status(201).json(duplicatedNode);
 

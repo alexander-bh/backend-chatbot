@@ -51,7 +51,7 @@ const FlowNodeSchema = new Schema(
 
     crm_field_key: {
       type: String,
-      default: null
+      default: null // null = no guardar
     },
 
     next_node_id: {

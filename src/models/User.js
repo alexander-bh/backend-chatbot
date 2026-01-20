@@ -11,7 +11,7 @@ const OnboardingSchema = new Schema(
     },
     objetivo: {
       type: String,
-      enum: ["AUMENTAR_VENTAS", "AUTOMATIZAR_RESPUESTAS", "ORGANIZAR_CONTACTOS","ORGANIZAR_CONTACTOS_O_IDEAS"]
+      enum: ["AUMENTAR_VENTAS", "AUTOMATIZAR_RESPUESTAS", "ORGANIZAR_CONTACTOS","ORGANIZAR_CONTACTOS_O_IDEAS","AUTAMATIZAR_VENTAS"]
     },
     situacion_diaria: String
   },
