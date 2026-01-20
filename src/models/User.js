@@ -7,11 +7,21 @@ const OnboardingSchema = new Schema(
     telefono: String,
     uso_herramienta: {
       type: String,
-      enum: ["NEGOCIO", "EQUIPO_COMERCIAL", "APRENDER", "PROYECTO_PERSONAL"]
+      enum: [
+        "NEGOCIO",
+        "EQUIPO_COMERCIAL",
+        "APRENDER",
+        "PROYECTO_PERSONAL"
+      ]
     },
     objetivo: {
       type: String,
-      enum: ["AUMENTAR_VENTAS", "AUTOMATIZAR_RESPUESTAS", "ORGANIZAR_CONTACTOS","ORGANIZAR_CONTACTOS_O_IDEAS","AUTAMATIZAR_VENTAS"]
+      enum: [
+        "AUMENTAR_VENTAS",
+        "AUTOMATIZAR_RESPUESTAS",
+        "ORGANIZAR_CONTACTOS_O_IDEAS",
+        "SOLO_VER_FUNCIONAMIENTO"
+      ]
     },
     situacion_diaria: String
   },
@@ -20,7 +30,7 @@ const OnboardingSchema = new Schema(
 
 const UserSchema = new Schema({
   account_id: {
-    type: Schema.Types.ObjectId, // ✅ AQUÍ ESTÁ LA CLAVE
+    type: Schema.Types.ObjectId, 
     ref: "Account",
     required: true
   },
