@@ -5,6 +5,7 @@ const FlowNode = require("../models/FlowNode");
 const mongoose = require("mongoose");
 const crypto = require("crypto");
 
+// Crear un nuevo chatbot
 exports.createChatbot = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();

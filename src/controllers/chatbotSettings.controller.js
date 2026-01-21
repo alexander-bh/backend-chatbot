@@ -143,6 +143,31 @@ exports.updateChatbotSettings = async (req, res) => {
       "show_branding"
     ];
 
+
+    const allowedPositions = [
+      "bottom-right",
+      "bottom-left",
+      "middle-right",
+      "middle-left",
+      "top-right",
+      "top-left"
+    ];
+
+    if (
+      incomingSettings.position?.type &&
+      !allowedPositions.includes(incomingSettings.position.type)
+    ) {
+      return res.status(400).json({
+        message: "position.type no válido"
+      });
+    }
+
+
+    if (incomingSettings.position && !settings.position) {
+      settings.position = {};
+    }
+
+
     /* ─────────────── APLICAR CAMBIOS ─────────────── */
     Object.keys(incomingSettings).forEach(key => {
       if (!allowedFields.includes(key)) return;
