@@ -2,26 +2,32 @@ const multer = require("multer");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("../config/cloudinary");
 
-
+/* ─────────────── FILTRO ─────────────── */
 const fileFilter = (req, file, cb) => {
   if (!file.mimetype.startsWith("image/")) {
-    cb(new Error("Solo se permiten imágenes"), false);
-  } else {
-    cb(null, true);
+    return cb(new Error("Solo se permiten imágenes"), false);
   }
+  cb(null, true);
 };
 
+/* ─────────────── STORAGE ─────────────── */
 const storage = new CloudinaryStorage({
   cloudinary,
-  params: {
+  params: async () => ({
     folder: "chatbots/avatars",
-    allowed_formats: ["jpg", "jpeg", "png", "webp"],
+    resource_type: "image", // ✅ acepta cualquier imagen
     transformation: [
-      { width: 256, height: 256, crop: "fill", gravity: "face" }
+      {
+        width: 256,
+        height: 256,
+        crop: "fill",
+        gravity: "auto" // mejor que face para logos / iconos
+      }
     ]
-  }
+  })
 });
 
+/* ─────────────── MULTER ─────────────── */
 const uploadAvatar = multer({
   storage,
   fileFilter,
@@ -31,4 +37,3 @@ const uploadAvatar = multer({
 });
 
 module.exports = uploadAvatar;
-
