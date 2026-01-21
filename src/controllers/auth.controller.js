@@ -88,7 +88,7 @@ exports.registerFirst = async (req, res) => {
 
     const flow = await Flow.create(
       [{
-        account_id: req.user.account_id,   
+        account_id: account[0]._id,   // ✅ OBLIGATORIO
         chatbot_id: chatbot[0]._id,
         name: "Flujo principal",
         is_default: true,
@@ -98,6 +98,7 @@ exports.registerFirst = async (req, res) => {
       }],
       { session }
     );
+
 
     const startNode = await FlowNode.create(
       [{
