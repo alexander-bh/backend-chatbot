@@ -131,6 +131,7 @@ exports.createFlow = async (req, res) => {
   const flow = await Flow.create({
     chatbot_id,
     name,
+    account_id: req.user.account_id,
     is_active: false,
     is_draft: true,
     start_node_id: null,
