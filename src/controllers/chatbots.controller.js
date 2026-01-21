@@ -112,7 +112,7 @@ exports.listChatbots = async (req, res) => {
     settings.forEach(s => {
       settingsMap[s.chatbot_id.toString()] = s;
     });
-    
+
     const result = chatbots.map(bot => ({
       ...bot,
       settings: settingsMap[bot._id.toString()] || {
@@ -126,30 +126,6 @@ exports.listChatbots = async (req, res) => {
     console.error("LIST CHATBOTS ERROR:", error);
     res.status(500).json({
       message: "Error al listar chatbots"
-    });
-  }
-};
-
-
-// Obtener chatbot por ID
-exports.getChatbotById = async (req, res) => {
-  try {
-    const chatbot = await Chatbot.findOne({
-      _id: req.params.id,
-      account_id: req.user.account_id
-    });
-
-    if (!chatbot) {
-      return res.status(404).json({
-        message: "Chatbot no encontrado"
-      });
-    }
-
-    res.json(chatbot);
-  } catch (error) {
-    console.error("GET CHATBOT ERROR:", error);
-    res.status(500).json({
-      message: "Error al obtener chatbot"
     });
   }
 };
@@ -188,8 +164,6 @@ exports.getChatbotById = async (req, res) => {
     });
   }
 };
-
-
 
 // Obtener datos completos para el editor
 exports.getChatbotEditorData = async (req, res) => {
@@ -288,6 +262,7 @@ exports.deleteChatbot = async (req, res) => {
   }
 };
 
+// Duplicar chatbot completamente
 exports.duplicateChatbotFull = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
