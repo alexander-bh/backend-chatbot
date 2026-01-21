@@ -125,6 +125,43 @@ exports.getChatbotById = async (req, res) => {
   }
 };
 
+// Obtener chatbot por ID con settings básicos
+exports.getChatbotById = async (req, res) => {
+  try {
+    const chatbot = await Chatbot.findOne({
+      _id: req.params.id,
+      account_id: req.user.account_id
+    }).lean();
+
+    if (!chatbot) {
+      return res.status(404).json({
+        message: "Chatbot no encontrado"
+      });
+    }
+
+    // 🔹 Buscar settings
+    const settings = await ChatbotSettings.findOne({
+      chatbot_id: chatbot._id
+    }).select("avatar welcome_message -_id");
+
+    res.json({
+      ...chatbot,
+      settings: settings || {
+        avatar: process.env.DEFAULT_CHATBOT_AVATAR,
+        welcome_message: "¡Hola! ¿Cómo puedo ayudarte?"
+      }
+    });
+
+  } catch (error) {
+    console.error("GET CHATBOT ERROR:", error);
+    res.status(500).json({
+      message: "Error al obtener chatbot"
+    });
+  }
+};
+
+
+
 // Obtener datos completos para el editor
 exports.getChatbotEditorData = async (req, res) => {
   try {
