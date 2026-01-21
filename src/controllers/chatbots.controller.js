@@ -95,12 +95,41 @@ exports.createChatbot = async (req, res) => {
 
 //Listar los chatbot 
 exports.listChatbots = async (req, res) => {
-  const chatbots = await Chatbot.find({
-    account_id: req.user.account_id
-  }).sort({ created_at: -1 });
+  try {
+    const chatbots = await Chatbot.find({
+      account_id: req.user.account_id
+    })
+      .sort({ created_at: -1 })
+      .lean();
 
-  res.json(chatbots);
+    const chatbotIds = chatbots.map(bot => bot._id);
+
+    const settings = await ChatbotSettings.find({
+      chatbot_id: { $in: chatbotIds }
+    }).select("chatbot_id avatar");
+
+    const settingsMap = {};
+    settings.forEach(s => {
+      settingsMap[s.chatbot_id.toString()] = s;
+    });
+    
+    const result = chatbots.map(bot => ({
+      ...bot,
+      settings: settingsMap[bot._id.toString()] || {
+        avatar: process.env.DEFAULT_CHATBOT_AVATAR
+      }
+    }));
+
+    res.json(result);
+
+  } catch (error) {
+    console.error("LIST CHATBOTS ERROR:", error);
+    res.status(500).json({
+      message: "Error al listar chatbots"
+    });
+  }
 };
+
 
 // Obtener chatbot por ID
 exports.getChatbotById = async (req, res) => {
