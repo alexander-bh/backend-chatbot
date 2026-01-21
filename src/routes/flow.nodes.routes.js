@@ -5,25 +5,93 @@ const auth = require("../middlewares/auth.middleware");
 const role = require("../middlewares/role.middleware");
 const nodeController = require("../controllers/flownodes.controller");
 
-// Crear nodo
-router.post("/",auth,role("ADMIN", "CLIENT"),nodeController.createNode);
-
-// Obtener nodos por flow
-router.get("/flow/:flowId",auth,nodeController.getNodesByFlow);
-
-// Actualizar nodo (PATCH)
-router.patch("/:id",auth,role("ADMIN", "CLIENT"),nodeController.updateNode);
-
-// Eliminar nodo
-router.delete("/:id",auth,role("ADMIN", "CLIENT"),nodeController.deleteNode);
-
-// Conectar nodos
-router.post("/:id/connect",auth,role("ADMIN", "CLIENT"),nodeController.connectNode);
 
 // Actualizar canvas (posiciones)
-router.post("/update-canvas",auth,role("ADMIN", "CLIENT"),nodeController.updateCanvas);
+router.patch(
+  "/update-canvas",
+  auth,
+  role("ADMIN", "CLIENT"),
+  nodeController.updateCanvas
+);
+
+// Obtener nodos por flow
+router.get(
+  "/flow/:flowId",
+  auth,
+  nodeController.getNodesByFlow
+);
+
+/* =========================
+   CRUD DE NODOS
+========================= */
+
+// Crear nodo
+router.post(
+  "/",
+  auth,
+  role("ADMIN", "CLIENT"),
+  nodeController.createNode
+);
+
+// Actualizar nodo
+router.patch(
+  "/:id",
+  auth,
+  role("ADMIN", "CLIENT"),
+  nodeController.updateNode
+);
+
+// Eliminar nodo
+router.delete(
+  "/:id",
+  auth,
+  role("ADMIN", "CLIENT"),
+  nodeController.deleteNode
+);
+
+/* =========================
+   OPERACIONES AVANZADAS
+========================= */
+
+// Conectar nodos
+router.post(
+  "/:id/connect",
+  auth,
+  role("ADMIN", "CLIENT"),
+  nodeController.connectNode
+);
+
+// Insertar nodo después
+router.post(
+  "/:id/insert-after",
+  auth,
+  role("ADMIN", "CLIENT"),
+  nodeController.insertAfterNode
+);
 
 // Duplicar nodo
-router.post("/:id/duplicate",auth,role("ADMIN", "CLIENT"),nodeController.duplicateNode);
+router.post(
+  "/:id/duplicate",
+  auth,
+  role("ADMIN", "CLIENT"),
+  nodeController.duplicateNode
+);
+
+// Reordenar nodos
+router.patch(
+  "/reorder",
+  auth,
+  role("ADMIN", "CLIENT"),
+  nodeController.reorderNodes
+);
+
+// Reordenar subárbol
+router.patch(
+  "/reorder-subtree",
+  auth,
+  role("ADMIN", "CLIENT"),
+  nodeController.reorderSubtree
+);
+
 
 module.exports = router;

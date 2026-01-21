@@ -8,6 +8,17 @@ const FlowNodeSchema = new Schema(
       required: true
     },
 
+    parent_node_id: {
+      type: Schema.Types.ObjectId,
+      ref: "FlowNode",
+      default: null
+    },
+
+    order: {
+      type: Number,
+      required: true
+    },
+
     node_type: {
       type: String,
       enum: [
@@ -93,11 +104,6 @@ const FlowNodeSchema = new Schema(
       type: Boolean,
       default: true
     },
-
-    position: {
-      x: Number,
-      y: Number
-    }
   },
   { timestamps: true }
 );

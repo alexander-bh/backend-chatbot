@@ -2,6 +2,7 @@ const ChatbotSettings = require("../models/ChatbotSettings");
 const Chatbot = require("../models/Chatbot");
 const cloudinary = require("cloudinary").v2;
 
+// Subir avatar del chatbot
 exports.uploadAvatar = async (req, res) => {
   try {
     if (!req.file) {
@@ -48,7 +49,7 @@ exports.uploadAvatar = async (req, res) => {
     res.status(500).json({ message: "Error al subir avatar" });
   }
 };
-
+// Obtener settings del chatbot
 exports.getSettings = async (req, res) => {
   try {
     const chatbot = await Chatbot.findOne({
@@ -74,8 +75,7 @@ exports.getSettings = async (req, res) => {
     res.status(500).json({ message: "Error al obtener settings" });
   }
 };
-
-
+// Actualizar settings del chatbot
 exports.updateSettings = async (req, res) => {
   try {
     const chatbot = await Chatbot.findOne({
@@ -118,5 +118,55 @@ exports.updateSettings = async (req, res) => {
   } catch (error) {
     console.error("UPDATE SETTINGS ERROR:", error);
     res.status(500).json({ message: "Error al actualizar settings" });
+  }
+};
+// Guardar toda la configuración del chatbot
+exports.saveAllSettings = async (req, res) => {
+  try {
+    const chatbot = await Chatbot.findOne({
+      _id: req.params.id,
+      account_id: req.user.account_id
+    });
+
+    if (!chatbot) {
+      return res.status(404).json({ message: "Chatbot no encontrado" });
+    }
+
+    let settings = await ChatbotSettings.findOne({
+      chatbot_id: chatbot._id
+    });
+
+    // Si no existen settings → los crea
+    if (!settings) {
+      settings = new ChatbotSettings({
+        chatbot_id: chatbot._id
+      });
+    }
+
+    Object.keys(req.body).forEach(key => {
+      if (
+        typeof req.body[key] === "object" &&
+        !Array.isArray(req.body[key]) &&
+        settings[key]
+      ) {
+        // merge profundo (ej: position)
+        settings[key] = {
+          ...settings[key],
+          ...req.body[key]
+        };
+      } else {
+        settings[key] = req.body[key];
+      }
+    });
+
+    await settings.save();
+
+    res.json({
+      message: "Configuración actualizada correctamente",
+      settings
+    });
+  } catch (error) {
+    console.error("SAVE SETTINGS ERROR:", error);
+    res.status(500).json({ message: "Error al guardar configuración" });
   }
 };

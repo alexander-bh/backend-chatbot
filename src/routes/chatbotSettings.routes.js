@@ -19,4 +19,18 @@ router.get(
   settingsController.getSettings
 );
 
+// Actualizar configuración de chatbot
+router.put(
+  "/chatbots/:id/settings",
+  auth,
+  settingsController.updateSettings
+);
+
+//Cuardar configuración de chatbot
+router.post(
+  "/chatbots/:id/settings",
+  auth,
+  settingsController.saveAllSettings
+);
+
 module.exports = router;
