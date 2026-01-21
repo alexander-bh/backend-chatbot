@@ -1,8 +1,13 @@
 const ChatbotSettings = require("../models/ChatbotSettings");
 const Chatbot = require("../models/Chatbot");
+const avatars = require("../config/chatbotAvatars");
 const cloudinary = require("cloudinary").v2;
 
-// Subir avatar del chatbot
+/* ─────────────── HELPERS ─────────────── */
+const isUploadedAvatar = avatar =>
+  avatar && avatar.includes("/chatbots/avatars/");
+
+/* ─────────────── SUBIR AVATAR ─────────────── */
 exports.uploadAvatar = async (req, res) => {
   try {
     if (!req.file) {
@@ -18,21 +23,20 @@ exports.uploadAvatar = async (req, res) => {
       return res.status(404).json({ message: "Chatbot no encontrado" });
     }
 
-    const settings = await ChatbotSettings.findOne({
+    let settings = await ChatbotSettings.findOne({
       chatbot_id: chatbot._id
     });
 
     if (!settings) {
-      return res.status(404).json({ message: "Settings no encontrados" });
+      settings = new ChatbotSettings({
+        chatbot_id: chatbot._id
+      });
     }
 
-    if (
-      settings.avatar &&
-      !settings.avatar.includes("Captura_de_pantalla_2025")
-    ) {
+    // Borrar avatar anterior SOLO si fue subido
+    if (isUploadedAvatar(settings.avatar)) {
       const publicId = settings.avatar
-        .split("/")
-        .pop()
+        .split("/upload/")[1]
         .split(".")[0];
 
       await cloudinary.uploader.destroy(publicId);
@@ -41,15 +45,15 @@ exports.uploadAvatar = async (req, res) => {
     settings.avatar = req.file.path;
     await settings.save();
 
-    res.json({
-      avatar: settings.avatar
-    });
+    res.json({ avatar: settings.avatar });
+
   } catch (error) {
     console.error("UPLOAD AVATAR ERROR:", error);
     res.status(500).json({ message: "Error al subir avatar" });
   }
 };
-// Obtener settings del chatbot
+
+/* ─────────────── OBTENER SETTINGS ─────────────── */
 exports.getSettings = async (req, res) => {
   try {
     const chatbot = await Chatbot.findOne({
@@ -61,23 +65,28 @@ exports.getSettings = async (req, res) => {
       return res.status(404).json({ message: "Chatbot no encontrado" });
     }
 
-    const settings = await ChatbotSettings.findOne({
+    let settings = await ChatbotSettings.findOne({
       chatbot_id: chatbot._id
     });
 
     if (!settings) {
-      return res.status(404).json({ message: "Settings no encontrados" });
+      settings = await ChatbotSettings.create({
+        chatbot_id: chatbot._id
+      });
     }
 
     res.json(settings);
+
   } catch (error) {
     console.error("GET SETTINGS ERROR:", error);
     res.status(500).json({ message: "Error al obtener settings" });
   }
 };
-// Actualizar settings del chatbot
-exports.updateSettings = async (req, res) => {
+
+/* ─────────────── ACTUALIZAR SETTINGS (UNIFICADO) ─────────────── */
+exports.updateChatbotSettings = async (req, res) => {
   try {
+    /* ─────────────── CHATBOT ─────────────── */
     const chatbot = await Chatbot.findOne({
       _id: req.params.id,
       account_id: req.user.account_id
@@ -87,75 +96,81 @@ exports.updateSettings = async (req, res) => {
       return res.status(404).json({ message: "Chatbot no encontrado" });
     }
 
-    const settings = await ChatbotSettings.findOne({
-      chatbot_id: chatbot._id
-    });
-
-    if (!settings) {
-      return res.status(404).json({ message: "Settings no encontrados" });
-    }
-
-    // Campos permitidos para actualizar
-    const allowedFields = [
-      "primary_color",
-      "secondary_color",
-      "launcher_text",
-      "bubble_style",
-      "font",
-      "is_enabled",
-      "position"
-    ];
-
-    allowedFields.forEach(field => {
-      if (req.body[field] !== undefined) {
-        settings[field] = req.body[field];
-      }
-    });
-
-    await settings.save();
-
-    res.json(settings);
-  } catch (error) {
-    console.error("UPDATE SETTINGS ERROR:", error);
-    res.status(500).json({ message: "Error al actualizar settings" });
-  }
-};
-// Guardar toda la configuración del chatbot
-exports.saveAllSettings = async (req, res) => {
-  try {
-    const chatbot = await Chatbot.findOne({
-      _id: req.params.id,
-      account_id: req.user.account_id
-    });
-
-    if (!chatbot) {
-      return res.status(404).json({ message: "Chatbot no encontrado" });
-    }
-
+    /* ─────────────── SETTINGS ─────────────── */
     let settings = await ChatbotSettings.findOne({
       chatbot_id: chatbot._id
     });
 
-    // Si no existen settings → los crea
     if (!settings) {
       settings = new ChatbotSettings({
         chatbot_id: chatbot._id
       });
     }
 
-    Object.keys(req.body).forEach(key => {
+    /* ─────────────── AVATAR (UPLOAD) ─────────────── */
+    if (req.file) {
+      if (isUploadedAvatar(settings.avatar)) {
+        const publicId = settings.avatar
+          .split("/upload/")[1]
+          .split(".")[0];
+
+        await cloudinary.uploader.destroy(publicId);
+      }
+
+      settings.avatar = req.file.path;
+    }
+
+    /* ─────────────── DATA ─────────────── */
+    let incomingSettings = req.body;
+    if (req.body.settings) {
+      incomingSettings = JSON.parse(req.body.settings);
+    }
+
+    /* ─────────────── CAMPOS PERMITIDOS ─────────────── */
+    const allowedFields = [
+      "avatar",
+      "primary_color",
+      "secondary_color",
+      "launcher_text",
+      "bubble_style",
+      "font",
+      "is_enabled",
+      "position",
+      "welcome_message",
+      "welcome_delay",
+      "input_placeholder",
+      "show_welcome_on_mobile",
+      "show_branding"
+    ];
+
+    /* ─────────────── APLICAR CAMBIOS ─────────────── */
+    Object.keys(incomingSettings).forEach(key => {
+      if (!allowedFields.includes(key)) return;
+
+      // Avatar por URL (SOLO catálogo)
+      if (key === "avatar" && !req.file) {
+        const isValidAvatar = avatars.some(
+          a => a.url === incomingSettings.avatar
+        );
+
+        if (!isValidAvatar) return;
+
+        settings.avatar = incomingSettings.avatar;
+        return;
+      }
+
+      // Merge profundo
       if (
-        typeof req.body[key] === "object" &&
-        !Array.isArray(req.body[key]) &&
+        typeof incomingSettings[key] === "object" &&
+        !Array.isArray(incomingSettings[key]) &&
         settings[key]
       ) {
-        // merge profundo (ej: position)
         settings[key] = {
           ...settings[key],
-          ...req.body[key]
+          ...incomingSettings[key]
         };
       } else {
-        settings[key] = req.body[key];
+        settings[key] = incomingSettings[key];
       }
     });
 
@@ -165,73 +180,16 @@ exports.saveAllSettings = async (req, res) => {
       message: "Configuración actualizada correctamente",
       settings
     });
+
   } catch (error) {
-    console.error("SAVE SETTINGS ERROR:", error);
-    res.status(500).json({ message: "Error al guardar configuración" });
+    console.error("UPDATE CHATBOT SETTINGS ERROR:", error);
+    res.status(500).json({
+      message: "Error al actualizar configuración"
+    });
   }
 };
-// Guardar toda la configuración del chatbot
-exports.saveAllSettingsWithAvatar = async (req, res) => {
-  try {
-    const chatbot = await Chatbot.findOne({
-      _id: req.params.id,
-      account_id: req.user.account_id
-    });
 
-    if (!chatbot) {
-      return res.status(404).json({ message: "Chatbot no encontrado" });
-    }
-
-    let settings = await ChatbotSettings.findOne({
-      chatbot_id: chatbot._id
-    });
-
-    if (!settings) {
-      settings = new ChatbotSettings({
-        chatbot_id: chatbot._id
-      });
-    }
-
-    // Avatar (si viene archivo)
-    if (req.file) {
-      if (
-        settings.avatar &&
-        !settings.avatar.includes("Captura_de_pantalla_2025")
-      ) {
-        const publicId = settings.avatar.split("/").pop().split(".")[0];
-        await cloudinary.uploader.destroy(publicId);
-      }
-
-      settings.avatar = req.file.path;
-    }
-
-    if (req.body.settings) {
-      const parsedSettings = JSON.parse(req.body.settings);
-
-      Object.keys(parsedSettings).forEach(key => {
-        if (
-          typeof parsedSettings[key] === "object" &&
-          !Array.isArray(parsedSettings[key]) &&
-          settings[key]
-        ) {
-          settings[key] = {
-            ...settings[key],
-            ...parsedSettings[key]
-          };
-        } else {
-          settings[key] = parsedSettings[key];
-        }
-      });
-    }
-
-    await settings.save();
-
-    res.json({
-      message: "Configuración completa guardada",
-      settings
-    });
-  } catch (error) {
-    console.error("SAVE ALL SETTINGS ERROR:", error);
-    res.status(500).json({ message: "Error al guardar configuración" });
-  }
+/* ─────────────── AVATARES DISPONIBLES ─────────────── */
+exports.getAvailableAvatars = (req, res) => {
+  res.json(avatars);
 };
