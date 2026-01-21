@@ -26,6 +26,7 @@ app.use("/api/auth", require("./routes/auth.routes.js"));
 app.use("/api/admin", require("./routes/admin.routes.js"));
 
 //rutas de configuracion de chatbots
+app.use("/api/chatbots", require("./routes/chatbots.routes.js"));
 app.use("/api/chatbot-settings", require("./routes/chatbotSettings.routes.js"));
 app.use("/api/flows", require("./routes/flows.routes.js"));
 app.use("/api/flownodes", require("./routes/flow.nodes.routes.js"));  
