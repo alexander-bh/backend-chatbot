@@ -19,18 +19,16 @@ exports.createChatbot = async (req, res) => {
     const welcomeText =
       welcome_message || "Hola 👋 ¿en qué puedo ayudarte?";
 
-    // Crear Chatbot
     const chatbot = await Chatbot.create(
       [{
         account_id: req.user.account_id,
         name,
-        welcome_message: welcomeText, // opcional mantenerlo
+        welcome_message: welcomeText,
         public_id: crypto.randomUUID()
       }],
       { session }
     );
 
-    // Crear Settings
     await ChatbotSettings.create(
       [{
         chatbot_id: chatbot[0]._id,
@@ -50,17 +48,19 @@ exports.createChatbot = async (req, res) => {
       { session }
     );
 
-    // Crear Flow inicial
     const flow = await Flow.create(
       [{
+        account_id: req.user.account_id,   // ✅ OBLIGATORIO
         chatbot_id: chatbot[0]._id,
         name: "Flujo principal",
-        is_default: true
+        is_default: true,
+        is_active: false,
+        is_draft: true,
+        version: 1
       }],
       { session }
     );
 
-    // Crear nodo inicial usando welcome_message
     const startNode = await FlowNode.create(
       [{
         flow_id: flow[0]._id,
@@ -122,7 +122,6 @@ exports.getChatbotById = async (req, res) => {
     });
   }
 };
-
 
 // Obtener datos completos para el editor
 exports.getChatbotEditorData = async (req, res) => {
@@ -197,7 +196,6 @@ exports.updateChatbot = async (req, res) => {
   }
 };
 
-
 // Eliminar chatbot
 exports.deleteChatbot = async (req, res) => {
   try {
@@ -222,8 +220,6 @@ exports.deleteChatbot = async (req, res) => {
   }
 };
 
-
-// Duplicar chatbot con todo su contenido
 exports.duplicateChatbotFull = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -232,7 +228,7 @@ exports.duplicateChatbotFull = async (req, res) => {
     const { id } = req.params;
     const accountId = req.user.account_id;
 
-    // Chatbot original
+    /* ─────────────── CHATBOT ORIGINAL ─────────────── */
     const originalChatbot = await Chatbot.findOne({
       _id: id,
       account_id: accountId
@@ -242,37 +238,41 @@ exports.duplicateChatbotFull = async (req, res) => {
       throw new Error("Chatbot no encontrado");
     }
 
-    // Crear nuevo chatbot
-    const newChatbot = await Chatbot.create([{
-      account_id: accountId,
-      name: `${originalChatbot.name} (Copia)`,
-      welcome_message: originalChatbot.welcome_message,
-      status: "draft",
-      public_id: crypto.randomUUID()
-    }], { session });
+    /* ─────────────── NUEVO CHATBOT ─────────────── */
+    const [newChatbot] = await Chatbot.create(
+      [{
+        account_id: accountId,
+        name: `${originalChatbot.name} (Copia)`,
+        welcome_message: originalChatbot.welcome_message,
+        status: "draft",
+        public_id: crypto.randomUUID()
+      }],
+      { session }
+    );
 
-    const newChatbotId = newChatbot[0]._id;
-
-    // Copiar settings
+    /* ─────────────── SETTINGS ─────────────── */
     const settings = await ChatbotSettings.findOne({
       chatbot_id: originalChatbot._id
     }).session(session);
 
     if (settings) {
-      await ChatbotSettings.create([{
-        chatbot_id: newChatbotId,
-        avatar: settings.avatar,
-        primary_color: settings.primary_color,
-        secondary_color: settings.secondary_color,
-        launcher_text: settings.launcher_text,
-        bubble_style: settings.bubble_style,
-        font: settings.font,
-        position: settings.position,
-        is_enabled: settings.is_enabled
-      }], { session });
+      await ChatbotSettings.create(
+        [{
+          chatbot_id: newChatbot._id,
+          avatar: settings.avatar,
+          primary_color: settings.primary_color,
+          secondary_color: settings.secondary_color,
+          launcher_text: settings.launcher_text,
+          bubble_style: settings.bubble_style,
+          font: settings.font,
+          position: settings.position,
+          is_enabled: settings.is_enabled
+        }],
+        { session }
+      );
     }
 
-    // Copiar flows
+    /* ─────────────── FLOWS ─────────────── */
     const flows = await Flow.find({
       chatbot_id: originalChatbot._id
     }).session(session);
@@ -280,17 +280,24 @@ exports.duplicateChatbotFull = async (req, res) => {
     const flowIdMap = new Map();
 
     for (const flow of flows) {
-      const newFlow = await Flow.create([{
-        chatbot_id: newChatbotId,
-        name: flow.name,
-        description: flow.description,
-        is_active: false
-      }], { session });
+      const [newFlow] = await Flow.create(
+        [{
+          account_id: accountId,
+          chatbot_id: newChatbot._id,
+          name: flow.name,
+          description: flow.description,
+          is_active: false,
+          is_draft: true,
+          start_node_id: null,
+          version: flow.version ?? 1
+        }],
+        { session }
+      );
 
-      flowIdMap.set(String(flow._id), newFlow[0]._id);
+      flowIdMap.set(String(flow._id), newFlow._id);
     }
 
-    // Copiar nodos SIN conexiones
+    /* ─────────────── NODOS (SIN CONEXIONES) ─────────────── */
     const nodes = await FlowNode.find({
       flow_id: { $in: [...flowIdMap.keys()] }
     }).session(session);
@@ -298,34 +305,42 @@ exports.duplicateChatbotFull = async (req, res) => {
     const nodeIdMap = new Map();
 
     for (const node of nodes) {
-      const newNode = await FlowNode.create([{
-        flow_id: flowIdMap.get(String(node.flow_id)),
-        node_type: node.node_type,
-        content: node.content,
-        variable_key: node.variable_key,
-        position: node.position,
-        options: node.options?.map(opt => ({
-          label: opt.label,
-          next_node_id: null
-        })) || [],
-        next_node_id: null,
-        is_draft: true
-      }], { session });
+      const [newNode] = await FlowNode.create(
+        [{
+          account_id: accountId,
+          chatbot_id: newChatbot._id,
+          flow_id: flowIdMap.get(String(node.flow_id)),
+          node_type: node.node_type,
+          content: node.content,
+          variable_key: node.variable_key,
+          crm_field_key: node.crm_field_key,
+          validation: node.validation,
+          link_action: node.link_action,
+          typing_time: node.typing_time,
+          position: node.position,
+          options: node.options?.map(opt => ({
+            label: opt.label,
+            next_node_id: null
+          })) || [],
+          next_node_id: null,
+          is_draft: true
+        }],
+        { session }
+      );
 
-      nodeIdMap.set(String(node._id), newNode[0]._id);
+      nodeIdMap.set(String(node._id), newNode._id);
     }
 
-    // Reconstruir conexiones
+    /* ─────────────── RECONSTRUIR CONEXIONES ─────────────── */
     for (const node of nodes) {
       const newNodeId = nodeIdMap.get(String(node._id));
       const newNode = await FlowNode.findById(newNodeId).session(session);
 
-      // conexiones lineales
       if (node.next_node_id) {
-        newNode.next_node_id = nodeIdMap.get(String(node.next_node_id)) || null;
+        newNode.next_node_id =
+          nodeIdMap.get(String(node.next_node_id)) || null;
       }
 
-      // opciones
       if (node.options?.length) {
         newNode.options = node.options.map(opt => ({
           label: opt.label,
@@ -338,12 +353,13 @@ exports.duplicateChatbotFull = async (req, res) => {
       await newNode.save({ session });
     }
 
+    /* ─────────────── COMMIT ─────────────── */
     await session.commitTransaction();
     session.endSession();
 
     res.status(201).json({
       message: "Chatbot duplicado completamente",
-      chatbot_id: newChatbotId
+      chatbot_id: newChatbot._id
     });
 
   } catch (error) {

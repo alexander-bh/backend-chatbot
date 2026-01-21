@@ -170,8 +170,7 @@ exports.saveAllSettings = async (req, res) => {
     res.status(500).json({ message: "Error al guardar configuración" });
   }
 };
-
-// Guardar toda la configuración del chatbot (incluyendo avatar)
+// Guardar toda la configuración del chatbot
 exports.saveAllSettingsWithAvatar = async (req, res) => {
   try {
     const chatbot = await Chatbot.findOne({

@@ -24,7 +24,6 @@ exports.registerFirst = async (req, res) => {
       });
     }
 
-    // 🔒 Usuario global duplicado
     const userExists = await User.findOne({ email });
     if (userExists) {
       return res.status(409).json({
@@ -36,7 +35,6 @@ exports.registerFirst = async (req, res) => {
 
     const welcomeText = `Hola 👋 soy el bot de ${name}, ¿en qué puedo ayudarte?`;
 
-    // 1️⃣ Crear cuenta
     const account = await Account.create(
       [{
         name: account_name,
@@ -46,7 +44,6 @@ exports.registerFirst = async (req, res) => {
       { session }
     );
 
-    // 2️⃣ Crear usuario
     const user = await User.create(
       [{
         account_id: account[0]._id,
@@ -59,7 +56,6 @@ exports.registerFirst = async (req, res) => {
       { session }
     );
 
-    // 3️⃣ Crear chatbot
     const chatbot = await Chatbot.create(
       [{
         account_id: account[0]._id,
@@ -71,7 +67,6 @@ exports.registerFirst = async (req, res) => {
       { session }
     );
 
-    // 4️⃣ Crear settings
     const settings = await ChatbotSettings.create(
       [{
         chatbot_id: chatbot[0]._id,
@@ -91,7 +86,6 @@ exports.registerFirst = async (req, res) => {
       { session }
     );
 
-    // 5️⃣ Crear flow inicial
     const flow = await Flow.create(
       [{
         chatbot_id: chatbot[0]._id,
@@ -101,7 +95,6 @@ exports.registerFirst = async (req, res) => {
       { session }
     );
 
-    // 6️⃣ Crear nodo inicial usando welcome_message
     const startNode = await FlowNode.create(
       [{
         flow_id: flow[0]._id,
@@ -114,7 +107,6 @@ exports.registerFirst = async (req, res) => {
       { session }
     );
 
-    // 7️⃣ Crear token
     const token = generateToken({
       id: user[0]._id,
       role: user[0].role,

@@ -2,10 +2,18 @@ const { Schema, model } = require("mongoose");
 
 const FlowNodeSchema = new Schema(
   {
+    account_id: {
+      type: Schema.Types.ObjectId,
+      ref: "Account",
+      required: true,
+      index: true
+    },
+
     flow_id: {
       type: Schema.Types.ObjectId,
       ref: "Flow",
-      required: true
+      required: true,
+      index: true
     },
 
     parent_node_id: {
@@ -16,7 +24,7 @@ const FlowNodeSchema = new Schema(
 
     order: {
       type: Number,
-      required: true
+      default: 0
     },
 
     node_type: {
@@ -38,19 +46,24 @@ const FlowNodeSchema = new Schema(
 
     variable_key: String,
 
-    options: [
-      {
-        label: String,
-        next_node_id: {
-          type: Schema.Types.ObjectId,
-          ref: "FlowNode"
+    options: {
+      type: [
+        {
+          label: String,
+          next_node_id: {
+            type: Schema.Types.ObjectId,
+            ref: "FlowNode",
+            default: null
+          }
         }
-      }
-    ],
+      ],
+      default: null
+    },
 
     next_node_id: {
       type: Schema.Types.ObjectId,
-      ref: "FlowNode"
+      ref: "FlowNode",
+      default: null
     },
 
     link_action: {
@@ -64,7 +77,9 @@ const FlowNodeSchema = new Schema(
 
     typing_time: {
       type: Number,
-      default: 2
+      default: 2,
+      min: 0,
+      max: 10
     },
 
     validation: {
@@ -104,10 +119,16 @@ const FlowNodeSchema = new Schema(
       type: Boolean,
       default: true
     },
+    
+    position: {
+      x: { type: Number, default: 0 },
+      y: { type: Number, default: 0 }
+    }
   },
   { timestamps: true }
 );
 
-FlowNodeSchema.index({ flow_id: 1 });
+FlowNodeSchema.index({ flow_id: 1, parent_node_id: 1, order: 1 });
+FlowNodeSchema.index({ flow_id: 1, next_node_id: 1 });
 
 module.exports = model("FlowNode", FlowNodeSchema);
