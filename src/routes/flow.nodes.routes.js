@@ -18,6 +18,7 @@ router.patch(
 router.get(
   "/flow/:flowId",
   auth,
+  role("ADMIN", "CLIENT"),
   nodeController.getNodesByFlow
 );
 
