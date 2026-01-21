@@ -189,6 +189,130 @@ exports.connectNode = async (req, res) => {
   }
 };
 
+// Obtener nodos por flow
+exports.getNodesByFlow = async (req, res) => {
+  try {
+    const { flowId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(flowId)) {
+      return res.status(400).json({ message: "flowId inválido" });
+    }
+
+    const flow = await Flow.findOne({
+      _id: flowId,
+      account_id: req.user.account_id
+    });
+
+    if (!flow) {
+      return res.status(403).json({ message: "No autorizado" });
+    }
+
+    const nodes = await FlowNode.find({ flow_id: flowId })
+      .sort({ parent_node_id: 1, order: 1 });
+
+    res.json(nodes);
+  } catch (error) {
+    console.error("getNodesByFlow error:", error);
+    res.status(500).json({ message: "Error al obtener nodos" });
+  }
+};
+
+// Actualizar nodo
+exports.updateNode = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "ID inválido" });
+    }
+
+    const node = await FlowNode.findById(id);
+    if (!node) {
+      return res.status(404).json({ message: "Nodo no encontrado" });
+    }
+
+    const flow = await Flow.findOne({
+      _id: node.flow_id,
+      account_id: req.user.account_id
+    });
+
+    if (!flow || flow.is_active) {
+      return res.status(400).json({
+        message: "No puedes modificar este flow"
+      });
+    }
+
+    const allowed = [
+      "content",
+      "options",
+      "variable_key",
+      "crm_field_key",
+      "validation",
+      "typing_time",
+      "link_action"
+    ];
+
+    allowed.forEach(field => {
+      if (req.body[field] !== undefined) {
+        node[field] = field === "link_action"
+          ? normalizeLinkAction(req.body[field])
+          : req.body[field];
+      }
+    });
+
+    node.is_draft = true;
+    await node.save();
+
+    res.json(node);
+  } catch (error) {
+    console.error("updateNode error:", error);
+    res.status(500).json({ message: "Error al actualizar nodo" });
+  }
+};
+
+// Duplicar nodo
+exports.duplicateNode = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const node = await FlowNode.findById(id);
+    if (!node) {
+      return res.status(404).json({ message: "Nodo no encontrado" });
+    }
+
+    const flow = await Flow.findOne({
+      _id: node.flow_id,
+      account_id: req.user.account_id
+    });
+
+    if (!flow || flow.is_active) {
+      return res.status(400).json({
+        message: "No puedes modificar este flow"
+      });
+    }
+
+    const clone = node.toObject();
+    delete clone._id;
+
+    const count = await FlowNode.countDocuments({
+      flow_id: node.flow_id,
+      parent_node_id: node.parent_node_id
+    });
+
+    const newNode = await FlowNode.create({
+      ...clone,
+      order: count,
+      is_draft: true
+    });
+
+    res.status(201).json(newNode);
+  } catch (error) {
+    console.error("duplicateNode error:", error);
+    res.status(500).json({ message: "Error al duplicar nodo" });
+  }
+};
+
+
 /* =========================
    INSERTAR DESPUÉS
 ========================= */
@@ -383,7 +507,6 @@ exports.reorderNodes = async (req, res) => {
   }
 };
 
-
 exports.reorderSubtree = async (req, res) => {
   const session = await mongoose.startSession();
 
@@ -441,3 +564,6 @@ exports.reorderSubtree = async (req, res) => {
     session.endSession();
   }
 };
+
+
+
