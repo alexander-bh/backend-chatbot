@@ -53,4 +53,12 @@ router.post(
   flowController.publishFlow
 );
 
+// Obtener flujo por ID
+router.get(
+  "/:id",
+  auth,
+  role("ADMIN", "CLIENT"),
+  flowController.getFlowById
+);
+
 module.exports = router;

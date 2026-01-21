@@ -140,6 +140,43 @@ exports.createFlow = async (req, res) => {
   res.status(201).json(flow);
 };
 
+//Obtener flow por ID
+exports.getFlowById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "ID inválido" });
+    }
+
+    // 1️⃣ Validar flow + account
+    const flow = await Flow.findOne({
+      _id: id,
+      account_id: req.user.account_id
+    });
+
+    if (!flow) {
+      return res.status(404).json({ message: "Flow no encontrado" });
+    }
+
+    // 2️⃣ Obtener nodos del flow
+    const nodes = await FlowNode.find({ flow_id: id })
+      .sort({ parent_node_id: 1, order: 1 })
+      .lean();
+
+    // 3️⃣ Respuesta estructurada
+    res.json({
+      flow,
+      nodes
+    });
+
+  } catch (error) {
+    console.error("getFlowById error:", error);
+    res.status(500).json({ message: "Error al obtener el flow" });
+  }
+};
+
+
 /* ======================================================
    GET FLOWS
 ====================================================== */

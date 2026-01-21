@@ -4,9 +4,7 @@ const FlowNode = require("../models/FlowNode");
 const { validateCreateNode } = require("../validators/flowNode.validator");
 const normalizeLinkAction = require("../utils/normalizeLinkAction");
 
-/* =========================
-   CREAR NODO
-========================= */
+// Crear nodo
 exports.createNode = async (req, res) => {
   const session = await mongoose.startSession();
 
@@ -102,9 +100,7 @@ exports.createNode = async (req, res) => {
   }
 };
 
-/* =========================
-   CONECTAR NODOS
-========================= */
+// Conectar nodos
 exports.connectNode = async (req, res) => {
   try {
     const { id } = req.params;
@@ -312,9 +308,7 @@ exports.duplicateNode = async (req, res) => {
   }
 };
 
-/* =========================
-   INSERTAR DESPUÉS
-========================= */
+// Insertar nodo después de otro
 exports.insertAfterNode = async (req, res) => {
   try {
     const { id } = req.params;
@@ -377,9 +371,7 @@ exports.insertAfterNode = async (req, res) => {
   }
 };
 
-/* =========================
-   ELIMINAR NODO
-========================= */
+// Eliminar nodo
 exports.deleteNode = async (req, res) => {
   try {
     const { id } = req.params;
@@ -422,9 +414,7 @@ exports.deleteNode = async (req, res) => {
   }
 };
 
-/* =========================
-   ACTUALIZAR CANVAS
-========================= */
+// Actualizar posiciones del canvas
 exports.updateCanvas = async (req, res) => {
   try {
     if (!Array.isArray(req.body.nodes)) {
@@ -450,9 +440,7 @@ exports.updateCanvas = async (req, res) => {
   }
 };
 
-/* =========================
-   REORDENAR NODOS
-========================= */
+// Reordenar nodos
 exports.reorderNodes = async (req, res) => {
   const session = await mongoose.startSession();
 
@@ -506,6 +494,7 @@ exports.reorderNodes = async (req, res) => {
   }
 };
 
+// Reordenar subárbol
 exports.reorderSubtree = async (req, res) => {
   const session = await mongoose.startSession();
 
