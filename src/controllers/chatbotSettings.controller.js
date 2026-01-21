@@ -86,7 +86,7 @@ exports.getSettings = async (req, res) => {
 /* ─────────────── ACTUALIZAR SETTINGS (UNIFICADO) ─────────────── */
 exports.updateChatbotSettings = async (req, res) => {
   try {
-    /* ─────────────── CHATBOT ─────────────── */
+    /* Chatbot */
     const chatbot = await Chatbot.findOne({
       _id: req.params.id,
       account_id: req.user.account_id
@@ -96,7 +96,7 @@ exports.updateChatbotSettings = async (req, res) => {
       return res.status(404).json({ message: "Chatbot no encontrado" });
     }
 
-    /* ─────────────── SETTINGS ─────────────── */
+    /* Settings */
     let settings = await ChatbotSettings.findOne({
       chatbot_id: chatbot._id
     });
@@ -107,7 +107,7 @@ exports.updateChatbotSettings = async (req, res) => {
       });
     }
 
-    /* ─────────────── AVATAR (UPLOAD) ─────────────── */
+    /* Avatar subido */
     if (req.file) {
       if (isUploadedAvatar(settings.avatar)) {
         const publicId = settings.avatar
@@ -120,13 +120,13 @@ exports.updateChatbotSettings = async (req, res) => {
       settings.avatar = req.file.path;
     }
 
-    /* ─────────────── DATA ─────────────── */
+    /* Parse settings */
     let incomingSettings = req.body;
     if (req.body.settings) {
       incomingSettings = JSON.parse(req.body.settings);
     }
 
-    /* ─────────────── CAMPOS PERMITIDOS ─────────────── */
+    /* Whitelist */
     const allowedFields = [
       "avatar",
       "primary_color",
@@ -142,7 +142,6 @@ exports.updateChatbotSettings = async (req, res) => {
       "show_welcome_on_mobile",
       "show_branding"
     ];
-
 
     const allowedPositions = [
       "bottom-right",
@@ -162,17 +161,11 @@ exports.updateChatbotSettings = async (req, res) => {
       });
     }
 
-
-    if (incomingSettings.position && !settings.position) {
-      settings.position = {};
-    }
-
-
-    /* ─────────────── APLICAR CAMBIOS ─────────────── */
+    /* Merge settings */
     Object.keys(incomingSettings).forEach(key => {
       if (!allowedFields.includes(key)) return;
 
-      // Avatar por URL (SOLO catálogo)
+      // Avatar por URL (solo catálogo)
       if (key === "avatar" && !req.file) {
         const isValidAvatar = avatars.some(
           a => a.url === incomingSettings.avatar
@@ -187,8 +180,7 @@ exports.updateChatbotSettings = async (req, res) => {
       // Merge profundo
       if (
         typeof incomingSettings[key] === "object" &&
-        !Array.isArray(incomingSettings[key]) &&
-        settings[key]
+        !Array.isArray(incomingSettings[key])
       ) {
         settings[key] = {
           ...settings[key],
@@ -207,7 +199,7 @@ exports.updateChatbotSettings = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("UPDATE CHATBOT SETTINGS ERROR:", error);
+    console.error("UPDATE SETTINGS ERROR:", error);
     res.status(500).json({
       message: "Error al actualizar configuración"
     });
