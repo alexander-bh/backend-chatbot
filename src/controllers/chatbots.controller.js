@@ -63,6 +63,7 @@ exports.createChatbot = async (req, res) => {
 
     const startNode = await FlowNode.create(
       [{
+        account_id: req.user.account_id,  // ✅ OBLIGATORIO
         flow_id: flow[0]._id,
         node_type: "text",
         content: welcomeText,
