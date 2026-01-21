@@ -170,3 +170,69 @@ exports.saveAllSettings = async (req, res) => {
     res.status(500).json({ message: "Error al guardar configuración" });
   }
 };
+
+// Guardar toda la configuración del chatbot (incluyendo avatar)
+exports.saveAllSettingsWithAvatar = async (req, res) => {
+  try {
+    const chatbot = await Chatbot.findOne({
+      _id: req.params.id,
+      account_id: req.user.account_id
+    });
+
+    if (!chatbot) {
+      return res.status(404).json({ message: "Chatbot no encontrado" });
+    }
+
+    let settings = await ChatbotSettings.findOne({
+      chatbot_id: chatbot._id
+    });
+
+    if (!settings) {
+      settings = new ChatbotSettings({
+        chatbot_id: chatbot._id
+      });
+    }
+
+    // Avatar (si viene archivo)
+    if (req.file) {
+      if (
+        settings.avatar &&
+        !settings.avatar.includes("Captura_de_pantalla_2025")
+      ) {
+        const publicId = settings.avatar.split("/").pop().split(".")[0];
+        await cloudinary.uploader.destroy(publicId);
+      }
+
+      settings.avatar = req.file.path;
+    }
+
+    if (req.body.settings) {
+      const parsedSettings = JSON.parse(req.body.settings);
+
+      Object.keys(parsedSettings).forEach(key => {
+        if (
+          typeof parsedSettings[key] === "object" &&
+          !Array.isArray(parsedSettings[key]) &&
+          settings[key]
+        ) {
+          settings[key] = {
+            ...settings[key],
+            ...parsedSettings[key]
+          };
+        } else {
+          settings[key] = parsedSettings[key];
+        }
+      });
+    }
+
+    await settings.save();
+
+    res.json({
+      message: "Configuración completa guardada",
+      settings
+    });
+  } catch (error) {
+    console.error("SAVE ALL SETTINGS ERROR:", error);
+    res.status(500).json({ message: "Error al guardar configuración" });
+  }
+};
