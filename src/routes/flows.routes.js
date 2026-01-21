@@ -3,7 +3,7 @@ const router = express.Router();
 
 const auth = require("../middlewares/auth.middleware");
 const role = require("../middlewares/role.middleware");
-const flowController = require("../controllers/flow.controller");
+const flowController = require("../controllers/flows.controller");
 
 // Crear flujo
 router.post(
