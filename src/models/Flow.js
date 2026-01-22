@@ -6,7 +6,6 @@ const FlowSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: "Account",
       required: true,
-      index: true
     },
 
     chatbot_id: {

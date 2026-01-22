@@ -6,7 +6,6 @@ const FlowNodeSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: "Account",
       required: true,
-      index: true
     },
 
     flow_id: {
