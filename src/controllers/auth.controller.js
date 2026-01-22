@@ -312,8 +312,7 @@ exports.login = async (req, res) => {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-
-    // 2️⃣ Buscar usuario (sin account todavía)
+    
     const user = await User.findOne({
       email: normalizedEmail
     }).select("+password");
