@@ -83,7 +83,7 @@ exports.registerFirst = async (req, res) => {
       }],
       { session }
     );
-    
+
     /* -------- User (ADMIN) -------- */
     const finalOnboarding = {
       ...(onboarding || {}),
@@ -303,8 +303,8 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
-    const accountId = req.account._id;
 
+    // 1️⃣ Validaciones
     if (!email || !password) {
       return res.status(400).json({
         message: "Email y contraseña obligatorios"
@@ -313,26 +313,42 @@ exports.login = async (req, res) => {
 
     const normalizedEmail = email.toLowerCase().trim();
 
+    // 2️⃣ Buscar usuario (sin account todavía)
     const user = await User.findOne({
-      email: normalizedEmail,
-      account_id: accountId
+      email: normalizedEmail
     }).select("+password");
 
     if (!user) {
-      return res.status(401).json({ message: "Credenciales inválidas" });
+      return res.status(401).json({
+        message: "Credenciales inválidas"
+      });
     }
 
+    // 3️⃣ Validar contraseña
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) {
-      return res.status(401).json({ message: "Credenciales inválidas" });
+      return res.status(401).json({
+        message: "Credenciales inválidas"
+      });
     }
 
+    // 4️⃣ Obtener cuenta
+    const account = await Account.findById(user.account_id);
+
+    if (!account || account.status !== "active") {
+      return res.status(403).json({
+        message: "Cuenta inactiva o inexistente"
+      });
+    }
+
+    // 5️⃣ Limpiar sesiones previas
     await Token.deleteMany({ user_id: user._id });
 
+    // 6️⃣ Generar token
     const token = generateToken({
       id: user._id,
       role: user.role,
-      account_id: accountId
+      account_id: account._id
     });
 
     await Token.create({
@@ -341,12 +357,22 @@ exports.login = async (req, res) => {
       expires_at: new Date(Date.now() + 86400000)
     });
 
-    res.json({ token });
+    // 7️⃣ Respuesta completa
+    res.json({
+      token,
+      user: {
+        name: user.name,
+        email: user.email,
+      },
+    });
 
   } catch (error) {
-    console.error("LOGIN ERROR:", error);
-    res.status(500).json({ message: "Error al iniciar sesión" });
+    console.error("LOGIN AUTO ACCOUNT ERROR:", error);
+    res.status(500).json({
+      message: "Error al iniciar sesión"
+    });
   }
+
 };
 
 /* --------------------------------------------------
