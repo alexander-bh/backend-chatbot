@@ -1,19 +1,21 @@
 const Account = require("../models/Account");
 
-module.exports = async function resolveAccount(req, res, next) {
+exports.resolveAccount = async (req, res, next) => {
   try {
-    const slug = req.get("x-account-slug");
+    // 1️⃣ Obtener subdominio o slug
+    const host = req.headers.host; 
+    // ej: empresa-demo-a2552d.midominio.com
 
-    if (!slug) {
+    if (!host) {
       return res.status(400).json({
-        message: "X-Account-Slug requerido"
+        message: "No se pudo resolver la cuenta"
       });
     }
 
-    const account = await Account.findOne({
-      slug,
-      status: "active"
-    });
+    const slug = host.split(".")[0];
+
+    // 2️⃣ Buscar cuenta
+    const account = await Account.findOne({ slug });
 
     if (!account) {
       return res.status(404).json({
@@ -21,14 +23,15 @@ module.exports = async function resolveAccount(req, res, next) {
       });
     }
 
+    // 3️⃣ Adjuntar cuenta al request
     req.account = account;
-    next();
+    req.account_id = account._id;
 
+    next();
   } catch (error) {
     console.error("RESOLVE ACCOUNT ERROR:", error);
-    return res.status(500).json({
-      message: "Error al resolver cuenta"
+    res.status(500).json({
+      message: "Error al resolver la cuenta"
     });
   }
 };
-
