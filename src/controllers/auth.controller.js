@@ -324,11 +324,19 @@ exports.loginAutoAccount = async (req, res) => {
     account_id: account._id
   });
 
+  // 🔥 ESTO FALTABA
+  await Token.create({
+    user_id: user._id,
+    token,
+    expires_at: new Date(Date.now() + 86400000)
+  });
+
   res.json({
     token,
     user: {
       name: user.name,
-      email: user.email
+      email: user.email,
+      role: user.role
     },
     account: {
       name: account.name,
@@ -336,6 +344,7 @@ exports.loginAutoAccount = async (req, res) => {
     }
   });
 };
+
 
 /* --------------------------------------------------
    CHANGE PASSWORD
