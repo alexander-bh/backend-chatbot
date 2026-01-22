@@ -8,7 +8,7 @@ const { resolveAccount } = require("../middlewares/resolveAccount");
 router.post("/register-first", authCtrl.registerFirst);
 
 // Login por subdominio
-router.post("/login", resolveAccount, authCtrl.login);
+router.post("/login", resolveAccount, authCtrl.loginAutoAccount);
 
 // Crear usuarios dentro de una cuenta (solo ADMIN)
 router.post("/register", resolveAccount, auth, role("ADMIN"), authCtrl.register);
