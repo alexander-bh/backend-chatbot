@@ -2,10 +2,18 @@ const router = require("express").Router();
 const authCtrl = require("../controllers/auth.controller");
 const auth = require("../middlewares/auth.middleware");
 const role = require("../middlewares/role.middleware");
+const { resolveAccount } = require("../middlewares/resolveAccount");
 
-router.post("/register",auth,role("ADMIN"),authCtrl.register);
+// Crear la primera cuenta + admin
 router.post("/register-first", authCtrl.registerFirst);
-router.post("/login", authCtrl.login);
+
+// Login por subdominio
+router.post("/login", resolveAccount, authCtrl.login);
+
+// Crear usuarios dentro de una cuenta (solo ADMIN)
+router.post("/register", resolveAccount, auth, role("ADMIN"), authCtrl.register);
+
+// Sesión
 router.post("/logout", auth, authCtrl.logout);
 router.post("/change-password", auth, authCtrl.changePassword);
 router.put("/update-profile", auth, authCtrl.updateProfile);

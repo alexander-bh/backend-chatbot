@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const mongoose = require("mongoose");
+
 const User = require("../models/User");
 const Token = require("../models/Token");
 const Chatbot = require("../models/Chatbot");
@@ -8,9 +9,23 @@ const Account = require("../models/Account");
 const Flow = require("../models/Flow");
 const FlowNode = require("../models/FlowNode");
 const ChatbotSettings = require("../models/ChatbotSettings");
+
 const { generateToken } = require("../utils/jwt");
 
-// Registro de la primera cuenta junto con usuario, chatbot, configuración y flujo inicial
+/* --------------------------------------------------
+   Utils
+-------------------------------------------------- */
+const slugify = (text) =>
+  text
+    .toString()
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^\w-]/g, "");
+
+/* --------------------------------------------------
+   REGISTER FIRST (crea cuenta + admin)
+-------------------------------------------------- */
 exports.registerFirst = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -32,50 +47,66 @@ exports.registerFirst = async (req, res) => {
       });
     }
 
-    const finalPhoneAlt =
-      phone_alt && phone_alt.trim() !== "" ? phone_alt : phone;
-
-    const userExists = await User.findOne({ email });
-    if (userExists) {
-      return res.status(409).json({
-        message: "El usuario ya existe"
+    if (password.length < 6) {
+      return res.status(400).json({
+        message: "La contraseña debe tener al menos 6 caracteres"
       });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const normalizedEmail = email.toLowerCase().trim();
+    const baseSlug = slugify(account_name);
+    const slug = `${baseSlug}-${crypto.randomUUID().slice(0, 6)}`;
 
+    const finalPhoneAlt =
+      phone_alt && phone_alt.trim() !== "" ? phone_alt : phone;
+
+    const hashedPassword = await bcrypt.hash(password, 10);
     const welcomeText = `Hola 👋 soy el bot de ${name}, ¿en qué puedo ayudarte?`;
 
-    const account = await Account.create(
+    /* -------- Validar email -------- */
+    const userExists = await User.findOne({ email: normalizedEmail }).session(session);
+    if (userExists) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(409).json({
+        message: "El email ya está registrado"
+      });
+    }
+
+    /* -------- Account -------- */
+    const [account] = await Account.create(
       [{
         name: account_name,
+        slug,
         plan: "free",
         status: "active"
       }],
       { session }
     );
 
+    /* -------- User (ADMIN) -------- */
     const finalOnboarding = {
       ...(onboarding || {}),
       phone,
       phone_alt: finalPhoneAlt
     };
 
-    const user = await User.create(
+    const [user] = await User.create(
       [{
-        account_id: account[0]._id,
+        account_id: account._id,
         name,
-        email,
+        email: normalizedEmail,
         password: hashedPassword,
-        role: "CLIENT",
+        role: "ADMIN",
         onboarding: finalOnboarding
       }],
       { session }
     );
 
-    const chatbot = await Chatbot.create(
+    /* -------- Chatbot -------- */
+    const [chatbot] = await Chatbot.create(
       [{
-        account_id: account[0]._id,
+        account_id: account._id,
         name: `Bot de ${name}`,
         public_id: crypto.randomUUID(),
         welcome_message: welcomeText,
@@ -84,9 +115,10 @@ exports.registerFirst = async (req, res) => {
       { session }
     );
 
-    const settings = await ChatbotSettings.create(
+    /* -------- Settings -------- */
+    const [settings] = await ChatbotSettings.create(
       [{
-        chatbot_id: chatbot[0]._id,
+        chatbot_id: chatbot._id,
         avatar: process.env.DEFAULT_CHATBOT_AVATAR,
         primary_color: "#2563eb",
         secondary_color: "#111827",
@@ -103,10 +135,11 @@ exports.registerFirst = async (req, res) => {
       { session }
     );
 
-    const flow = await Flow.create(
+    /* -------- Flow -------- */
+    const [flow] = await Flow.create(
       [{
-        account_id: account[0]._id,
-        chatbot_id: chatbot[0]._id,
+        account_id: account._id,
+        chatbot_id: chatbot._id,
         name: "Flujo principal",
         is_default: true,
         is_active: false,
@@ -116,10 +149,10 @@ exports.registerFirst = async (req, res) => {
       { session }
     );
 
-    const startNode = await FlowNode.create(
+    const [startNode] = await FlowNode.create(
       [{
-        account_id: account[0]._id,
-        flow_id: flow[0]._id,
+        account_id: account._id,
+        flow_id: flow._id,
         node_type: "text",
         content: welcomeText,
         next_node_id: null,
@@ -129,15 +162,16 @@ exports.registerFirst = async (req, res) => {
       { session }
     );
 
+    /* -------- Token -------- */
     const token = generateToken({
-      id: user[0]._id,
-      role: user[0].role,
-      account_id: account[0]._id
+      id: user._id,
+      role: user.role,
+      account_id: account._id
     });
 
     await Token.create(
       [{
-        user_id: user[0]._id,
+        user_id: user._id,
         token,
         expires_at: new Date(Date.now() + 86400000)
       }],
@@ -147,65 +181,94 @@ exports.registerFirst = async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
-    return res.status(201).json({
+    res.status(201).json({
       token,
-      account: account[0],
-      user: user[0],
-      chatbot: chatbot[0],
-      flow: flow[0],
-      start_node: startNode[0],
-      settings: settings[0]
+      account,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      },
+      chatbot,
+      flow,
+      start_node: startNode,
+      settings
     });
 
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
+
     console.error("REGISTER FIRST ERROR:", error);
-    return res.status(500).json({
+    res.status(500).json({
       message: "Error al registrar cuenta inicial"
     });
   }
 };
-// Registro de usuarios adicionales en una cuenta existente
+
+/* --------------------------------------------------
+   REGISTER USER (por subdominio)
+-------------------------------------------------- */
 exports.register = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
+    const accountId = req.account._id;
     const {
-      account_id,
       name,
       email,
       password,
       phone,
       phone_alt,
-      role = "AGENT",
+      role = "CLIENT",
       onboarding
     } = req.body;
 
-    if (!account_id || !name || !email || !password || !phone) {
+    if (!name || !email || !password || !phone) {
       return res.status(400).json({
         message: "Datos obligatorios incompletos"
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        message: "La contraseña debe tener al menos 6 caracteres"
+      });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const userExists = await User.findOne({
+      email: normalizedEmail,
+      account_id: accountId
+    }).session(session);
+
+    if (userExists) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(409).json({
+        message: "El email ya está registrado en esta cuenta"
       });
     }
 
     const finalPhoneAlt =
       phone_alt && phone_alt.trim() !== "" ? phone_alt : phone;
 
-    // 🔑 MISMA CORRECCIÓN AQUÍ
+    const hashedPassword = await bcrypt.hash(password, 10);
+
     const finalOnboarding = {
       ...(onboarding || {}),
       phone,
       phone_alt: finalPhoneAlt
     };
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const user = await User.create(
+    const [user] = await User.create(
       [{
-        account_id,
+        account_id: accountId,
         name,
-        email,
+        email: normalizedEmail,
         password: hashedPassword,
         role,
         onboarding: finalOnboarding
@@ -216,77 +279,160 @@ exports.register = async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
-    return res.status(201).json({
-      id: user[0]._id,
-      name: user[0].name,
-      email: user[0].email,
-      role: user[0].role,
-      onboarding: user[0].onboarding
+    res.status(201).json({
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role
     });
 
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
+
     console.error("REGISTER ERROR:", error);
-    return res.status(500).json({
+    res.status(500).json({
       message: "Error al registrar usuario"
     });
   }
 };
-// Actualización del perfil del usuario
+
+/* --------------------------------------------------
+   LOGIN
+-------------------------------------------------- */
+exports.login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const accountId = req.account._id;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        message: "Email y contraseña obligatorios"
+      });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const user = await User.findOne({
+      email: normalizedEmail,
+      account_id: accountId
+    }).select("+password");
+
+    if (!user) {
+      return res.status(401).json({ message: "Credenciales inválidas" });
+    }
+
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) {
+      return res.status(401).json({ message: "Credenciales inválidas" });
+    }
+
+    await Token.deleteMany({ user_id: user._id });
+
+    const token = generateToken({
+      id: user._id,
+      role: user.role,
+      account_id: accountId
+    });
+
+    await Token.create({
+      user_id: user._id,
+      token,
+      expires_at: new Date(Date.now() + 86400000)
+    });
+
+    res.json({ token });
+
+  } catch (error) {
+    console.error("LOGIN ERROR:", error);
+    res.status(500).json({ message: "Error al iniciar sesión" });
+  }
+};
+
+/* --------------------------------------------------
+   CHANGE PASSWORD
+-------------------------------------------------- */
+exports.changePassword = async (req, res) => {
+  try {
+    const { current_password, new_password } = req.body;
+
+    if (!current_password || !new_password) {
+      return res.status(400).json({
+        message: "Contraseñas obligatorias"
+      });
+    }
+
+    if (new_password.length < 6) {
+      return res.status(400).json({
+        message: "La nueva contraseña debe tener al menos 6 caracteres"
+      });
+    }
+
+    const user = await User.findById(req.user.id).select("+password");
+    if (!user) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+
+    const valid = await bcrypt.compare(current_password, user.password);
+    if (!valid) {
+      return res.status(401).json({ message: "Contraseña actual incorrecta" });
+    }
+
+    const samePassword = await bcrypt.compare(new_password, user.password);
+    if (samePassword) {
+      return res.status(400).json({
+        message: "La nueva contraseña debe ser diferente a la actual"
+      });
+    }
+
+    user.password = await bcrypt.hash(new_password, 10);
+    await user.save();
+
+    await Token.deleteMany({ user_id: user._id });
+
+    res.json({
+      message: "Contraseña actualizada. Inicia sesión nuevamente."
+    });
+
+  } catch (error) {
+    console.error("CHANGE PASSWORD ERROR:", error);
+    res.status(500).json({
+      message: "Error al cambiar contraseña"
+    });
+  }
+};
+
+/* --------------------------------------------------
+   UPDATE PROFILE
+-------------------------------------------------- */
 exports.updateProfile = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    const userId = req.user.id;
-
-    const {
-      name,
-      email,
-      phone,
-      phone_alt
-    } = req.body;
-
-    if (!name && !email && !phone && !phone_alt) {
-      return res.status(400).json({
-        message: "No hay datos para actualizar"
-      });
-    }
-
-    const user = await User.findById(userId).session(session);
+    const user = await User.findById(req.user.id).session(session);
     if (!user) {
-      return res.status(404).json({
-        message: "Usuario no encontrado"
-      });
+      return res.status(404).json({ message: "Usuario no encontrado" });
     }
 
-    // 🔹 Actualizar campos simples
+    const { name, email, phone, phone_alt } = req.body;
+
     if (name) user.name = name;
-    if (email) user.email = email;
+    if (email) user.email = email.toLowerCase().trim();
 
-    // 🔹 Actualizar teléfonos dentro de onboarding
     if (phone || phone_alt) {
-      if (!user.onboarding) {
-        user.onboarding = {};
-      }
-
+      user.onboarding ||= {};
       const finalPhone = phone ?? user.onboarding.phone;
-      const finalPhoneAlt =
-        phone_alt && phone_alt.trim() !== ""
-          ? phone_alt
-          : finalPhone;
-
       user.onboarding.phone = finalPhone;
-      user.onboarding.phone_alt = finalPhoneAlt;
+      user.onboarding.phone_alt =
+        phone_alt && phone_alt.trim() !== "" ? phone_alt : finalPhone;
     }
 
     await user.save({ session });
-
     await session.commitTransaction();
     session.endSession();
 
-    return res.json({
+    res.json({
       message: "Perfil actualizado correctamente",
       user: {
         id: user._id,
@@ -299,130 +445,20 @@ exports.updateProfile = async (req, res) => {
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
-
     console.error("UPDATE PROFILE ERROR:", error);
-
-    if (error.code === 11000) {
-      return res.status(409).json({
-        message: "El email ya está en uso"
-      });
-    }
-
-    return res.status(500).json({
-      message: "Error al actualizar perfil"
-    });
+    res.status(500).json({ message: "Error al actualizar perfil" });
   }
 };
-// Cambio de contraseña del usuario
-exports.changePassword = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
 
-  try {
-    const userId = req.user.id;
-    const { current_password, new_password } = req.body;
-
-    if (!current_password || !new_password) {
-      return res.status(400).json({
-        message: "La contraseña actual y la nueva son obligatorias"
-      });
-    }
-
-    if (new_password.length < 6) {
-      return res.status(400).json({
-        message: "La nueva contraseña debe tener al menos 6 caracteres"
-      });
-    }
-
-    const user = await User
-      .findById(userId)
-      .select("+password")
-      .session(session);
-
-    if (!user) {
-      return res.status(404).json({
-        message: "Usuario no encontrado"
-      });
-    }
-
-    // 🔍 Verificar contraseña actual
-    const isValid = await bcrypt.compare(current_password, user.password);
-    if (!isValid) {
-      return res.status(401).json({
-        message: "La contraseña actual es incorrecta"
-      });
-    }
-
-    // 🚫 Evitar reutilizar la misma contraseña
-    const samePassword = await bcrypt.compare(new_password, user.password);
-    if (samePassword) {
-      return res.status(400).json({
-        message: "La nueva contraseña debe ser diferente a la actual"
-      });
-    }
-
-    // 🔐 Hash de la nueva contraseña
-    const hashedPassword = await bcrypt.hash(new_password, 10);
-    user.password = hashedPassword;
-
-    await user.save({ session });
-
-    // 🔒 Cerrar todas las sesiones activas del usuario
-    await Token.deleteMany({ user_id: user._id }, { session });
-
-    await session.commitTransaction();
-    session.endSession();
-
-    return res.json({
-      message: "Contraseña actualizada correctamente. Vuelve a iniciar sesión."
-    });
-
-  } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
-
-    console.error("CHANGE PASSWORD ERROR:", error);
-    return res.status(500).json({
-      message: "Error al cambiar la contraseña"
-    });
-  }
-};
-// Login de usuarios
-exports.login = async (req, res) => {
-  const { email, password } = req.body;
-
-  const user = await User
-    .findOne({ email })
-    .select("+password");
-
-  if (!user) {
-    return res.status(401).json({ message: "Credenciales inválidas" });
-  }
-
-  const valid = await bcrypt.compare(password, user.password);
-  if (!valid) {
-    return res.status(401).json({ message: "Credenciales inválidas" });
-  }
-
-  await Token.deleteMany({ user_id: user._id });
-
-  const token = generateToken({
-    id: user._id,
-    role: user.role,
-    account_id: user.account_id
-  });
-
-  await Token.create({
-    user_id: user._id,
-    token,
-    expires_at: new Date(Date.now() + 86400000)
-  });
-
-  res.json({ token });
-};
-// Logout de usuarios
+/* --------------------------------------------------
+   LOGOUT
+-------------------------------------------------- */
 exports.logout = async (req, res) => {
-  await Token.deleteMany({ user_id: req.user.id });
-  res.json({ message: "Sesión cerrada correctamente" });
+  try {
+    await Token.deleteMany({ user_id: req.user.id });
+    res.json({ message: "Sesión cerrada correctamente" });
+  } catch (error) {
+    console.error("LOGOUT ERROR:", error);
+    res.status(500).json({ message: "Error al cerrar sesión" });
+  }
 };
-
