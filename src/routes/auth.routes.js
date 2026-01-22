@@ -2,6 +2,7 @@ const router = require("express").Router();
 const authCtrl = require("../controllers/auth.controller");
 const auth = require("../middlewares/auth.middleware");
 const role = require("../middlewares/role.middleware");
+const { resolveAccount } = require("../middlewares/resolveAccount");
 
 // Crear la primera cuenta + admin
 router.post("/register-first", authCtrl.registerFirst);
