@@ -83,7 +83,7 @@ exports.registerFirst = async (req, res) => {
       }],
       { session }
     );
-
+    
     /* -------- User (ADMIN) -------- */
     const finalOnboarding = {
       ...(onboarding || {}),
