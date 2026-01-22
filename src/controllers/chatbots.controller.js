@@ -144,7 +144,7 @@ exports.getChatbotById = async (req, res) => {
       });
     }
 
-    // 🔹 Buscar settings
+    // Buscar settings
     const settings = await ChatbotSettings.findOne({
       chatbot_id: chatbot._id
     }).select("avatar welcome_message -_id");
@@ -287,7 +287,7 @@ exports.duplicateChatbotFull = async (req, res) => {
         account_id: accountId,
         name: `${originalChatbot.name} (Copia)`,
         welcome_message: originalChatbot.welcome_message,
-        status: "draft",
+        status: "active",
         public_id: crypto.randomUUID()
       }],
       { session }

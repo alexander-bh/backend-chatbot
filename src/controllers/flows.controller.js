@@ -137,7 +137,6 @@ const validateFlow = async (flow) => {
   return reachable.size === nodes.length;
 };
 
-
 // Crear flow
 exports.createFlow = async (req, res) => {
   try {
