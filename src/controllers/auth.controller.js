@@ -312,7 +312,7 @@ exports.login = async (req, res) => {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    
+
     const user = await User.findOne({
       email: normalizedEmail
     }).select("+password");
@@ -340,7 +340,6 @@ exports.login = async (req, res) => {
       });
     }
 
-    // 5️⃣ Limpiar sesiones previas
     await Token.deleteMany({ user_id: user._id });
 
     // 6️⃣ Generar token
