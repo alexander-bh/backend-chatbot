@@ -26,7 +26,7 @@ router.get(
 
 // Eliminar avatar 
 router.delete(
-  "/chatbots/:id/avatar",
+  "/chatbots/:id/deleteAvatar",
   auth,
   settingsController.deleteAvatar
 );
