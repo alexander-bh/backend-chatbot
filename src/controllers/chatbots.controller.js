@@ -5,6 +5,14 @@ const FlowNode = require("../models/FlowNode");
 const mongoose = require("mongoose");
 const crypto = require("crypto");
 
+const normalizeSubdoc = v =>
+  v && typeof v === "object" && Object.keys(v).length
+    ? v
+    : undefined;
+
+const normalizeArray = v =>
+  Array.isArray(v) && v.length ? v : undefined;
+
 // Crear un nuevo chatbot
 exports.createChatbot = async (req, res) => {
   const session = await mongoose.startSession();
@@ -54,7 +62,6 @@ exports.createChatbot = async (req, res) => {
         account_id: req.user.account_id,   // ✅ OBLIGATORIO
         chatbot_id: chatbot[0]._id,
         name: "Flujo principal",
-        is_default: true,
         is_active: false,
         is_draft: true,
         version: 1
@@ -298,22 +305,16 @@ exports.duplicateChatbotFull = async (req, res) => {
       chatbot_id: originalChatbot._id
     }).session(session);
 
-
     if (settings) {
       await ChatbotSettings.create(
         [{
           chatbot_id: newChatbot._id,
-
-          // ✔ Avatar activo
           avatar: settings.avatar,
-
-          // ✔ Historial completo (referencias)
-          uploaded_avatars: settings.uploaded_avatars.map(a => ({
+          uploaded_avatars: (settings.uploaded_avatars || []).map(a => ({
             url: a.url,
             public_id: a.public_id,
             created_at: a.created_at
           })),
-
           primary_color: settings.primary_color,
           secondary_color: settings.secondary_color,
           launcher_text: settings.launcher_text,
@@ -359,26 +360,44 @@ exports.duplicateChatbotFull = async (req, res) => {
     const nodeIdMap = new Map();
 
     for (const node of nodes) {
+
+      const nodePayload = {
+        account_id: accountId,
+        flow_id: flowIdMap.get(String(node.flow_id)),
+        node_type: node.node_type,
+        content: node.content,
+        variable_key: node.variable_key,
+        crm_field_key: node.crm_field_key,
+        typing_time: node.typing_time,
+        position: node.position || { x: 0, y: 0 },
+        next_node_id: null,
+        is_draft: true
+      };
+
+      // 🔹 options solo si existen
+      const normalizedOptions = normalizeArray(
+        node.options?.map(opt => ({
+          label: opt.label,
+          next_node_id: null
+        }))
+      );
+
+      if (normalizedOptions) {
+        nodePayload.options = normalizedOptions;
+      }
+
+      // 🔹 link_action SOLO para link
+      if (node.node_type === "link") {
+        nodePayload.link_action = normalizeSubdoc(node.link_action);
+      }
+
+      // 🔹 validation solo cuando aplica
+      if (["question", "email", "phone", "number"].includes(node.node_type)) {
+        nodePayload.validation = normalizeSubdoc(node.validation);
+      }
+
       const [newNode] = await FlowNode.create(
-        [{
-          account_id: accountId,
-          chatbot_id: newChatbot._id,
-          flow_id: flowIdMap.get(String(node.flow_id)),
-          node_type: node.node_type,
-          content: node.content,
-          variable_key: node.variable_key,
-          crm_field_key: node.crm_field_key,
-          validation: node.validation,
-          link_action: node.link_action,
-          typing_time: node.typing_time,
-          position: node.position,
-          options: node.options?.map(opt => ({
-            label: opt.label,
-            next_node_id: null
-          })) || [],
-          next_node_id: null,
-          is_draft: true
-        }],
+        [nodePayload],
         { session }
       );
 

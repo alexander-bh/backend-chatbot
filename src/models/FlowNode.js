@@ -56,7 +56,7 @@ const FlowNodeSchema = new Schema(
           }
         }
       ],
-      default: null
+      default: []
     },
 
     next_node_id: {
@@ -66,13 +66,20 @@ const FlowNodeSchema = new Schema(
     },
 
     link_action: {
-      type: {
-        type: String,
-        enum: ["url", "email", "phone", "whatsapp"]
-      },
-      title: String,
-      value: String
+      type: new Schema(
+        {
+          type: {
+            type: String,
+            enum: ["url", "email", "phone", "whatsapp"]
+          },
+          title: String,
+          value: String
+        },
+        { _id: false }
+      ),
+      default: undefined
     },
+
 
     typing_time: {
       type: Number,
@@ -82,32 +89,30 @@ const FlowNodeSchema = new Schema(
     },
 
     validation: {
-      enabled: {
-        type: Boolean,
-        default: false
-      },
-      rules: [
+      type: new Schema(
         {
-          type: {
-            type: String,
-            enum: [
-              "min_max",
-              "email",
-              "phone",
-              "integer",
-              "decimal"
-            ],
-            required: true
-          },
-          min: Number,
-          max: Number,
-          message: {
-            type: String,
-            required: true
-          }
-        }
-      ]
+          enabled: { type: Boolean, default: false },
+          rules: [
+            {
+              type: {
+                type: String,
+                enum: ["min_max", "email", "phone", "integer", "decimal"],
+                required: true
+              },
+              min: Number,
+              max: Number,
+              message: {
+                type: String,
+                required: true
+              }
+            }
+          ]
+        },
+        { _id: false }
+      ),
+      default: undefined
     },
+
 
     crm_field_key: {
       type: String,
@@ -118,7 +123,7 @@ const FlowNodeSchema = new Schema(
       type: Boolean,
       default: true
     },
-    
+
     position: {
       x: { type: Number, default: 0 },
       y: { type: Number, default: 0 }
