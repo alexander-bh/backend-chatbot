@@ -59,7 +59,7 @@ exports.createChatbot = async (req, res) => {
 
     const flow = await Flow.create(
       [{
-        account_id: req.user.account_id,   // ✅ OBLIGATORIO
+        account_id: req.user.account_id,
         chatbot_id: chatbot[0]._id,
         name: "Flujo principal",
         is_active: false,
@@ -71,7 +71,7 @@ exports.createChatbot = async (req, res) => {
 
     const startNode = await FlowNode.create(
       [{
-        account_id: req.user.account_id,  // ✅ OBLIGATORIO
+        account_id: req.user.account_id,
         flow_id: flow[0]._id,
         node_type: "text",
         content: welcomeText,
@@ -321,7 +321,12 @@ exports.duplicateChatbotFull = async (req, res) => {
           bubble_style: settings.bubble_style,
           font: settings.font,
           position: settings.position,
-          is_enabled: settings.is_enabled
+          is_enabled: settings.is_enabled,
+          welcome_message: settings.welcome_message,
+          welcome_delay: settings.welcome_delay,
+          input_placeholder: settings.input_placeholder,
+          show_welcome_on_mobile: settings.show_welcome_on_mobile,
+          show_branding: settings.show_branding
         }],
         { session }
       );
