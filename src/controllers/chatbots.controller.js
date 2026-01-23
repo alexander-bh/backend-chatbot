@@ -298,11 +298,22 @@ exports.duplicateChatbotFull = async (req, res) => {
       chatbot_id: originalChatbot._id
     }).session(session);
 
+
     if (settings) {
       await ChatbotSettings.create(
         [{
           chatbot_id: newChatbot._id,
+
+          // ✔ Avatar activo
           avatar: settings.avatar,
+
+          // ✔ Historial completo (referencias)
+          uploaded_avatars: settings.uploaded_avatars.map(a => ({
+            url: a.url,
+            public_id: a.public_id,
+            created_at: a.created_at
+          })),
+
           primary_color: settings.primary_color,
           secondary_color: settings.secondary_color,
           launcher_text: settings.launcher_text,

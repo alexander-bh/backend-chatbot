@@ -13,6 +13,14 @@ const ChatbotSettingsSchema = new Schema({
         default: process.env.DEFAULT_CHATBOT_AVATAR
     },
 
+    uploaded_avatars: [
+        {
+            url: String,
+            public_id: String,
+            created_at: { type: Date, default: Date.now }
+        }
+    ],
+    
     primary_color: {
         type: String,
         default: "#2563eb"

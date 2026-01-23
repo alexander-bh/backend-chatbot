@@ -1,11 +1,8 @@
 const ChatbotSettings = require("../models/ChatbotSettings");
 const Chatbot = require("../models/Chatbot");
 const avatars = require("../config/chatbotAvatars");
-const cloudinary = require("cloudinary").v2;
 
-/* ─────────────── HELPERS ─────────────── */
-const isUploadedAvatar = avatar =>
-  avatar && avatar.includes("/chatbots/avatars/");
+const MAX_AVATARS = 50;
 
 /* ─────────────── SUBIR AVATAR ─────────────── */
 exports.uploadAvatar = async (req, res) => {
@@ -28,24 +25,44 @@ exports.uploadAvatar = async (req, res) => {
     });
 
     if (!settings) {
-      settings = new ChatbotSettings({
-        chatbot_id: chatbot._id
+      settings = new ChatbotSettings({ chatbot_id: chatbot._id });
+    }
+
+    settings.uploaded_avatars ||= [];
+
+    if (settings.uploaded_avatars.length >= MAX_AVATARS) {
+      return res.status(400).json({
+        message: `Límite de ${MAX_AVATARS} avatares alcanzado`
       });
     }
 
-    // Borrar avatar anterior SOLO si fue subido
-    if (isUploadedAvatar(settings.avatar)) {
-      const publicId = settings.avatar
-        .split("/upload/")[1]
-        .split(".")[0];
+    const uploadedAvatar = {
+      url: req.file.path,
+      public_id: req.file.filename || req.file.public_id
+    };
 
-      await cloudinary.uploader.destroy(publicId);
+    const alreadyExists = settings.uploaded_avatars.some(
+      avatar =>
+        avatar.url === uploadedAvatar.url ||
+        avatar.public_id === uploadedAvatar.public_id
+    );
+
+    if (alreadyExists) {
+      return res.status(409).json({
+        message: "Este avatar ya fue subido anteriormente"
+      });
     }
 
-    settings.avatar = req.file.path;
+    settings.uploaded_avatars.push(uploadedAvatar);
+    settings.avatar = uploadedAvatar.url;
+
     await settings.save();
 
-    res.json({ avatar: settings.avatar });
+    res.json({
+      message: "Avatar subido correctamente",
+      avatar: settings.avatar,
+      uploaded_avatars: settings.uploaded_avatars
+    });
 
   } catch (error) {
     console.error("UPLOAD AVATAR ERROR:", error);
@@ -109,16 +126,32 @@ exports.updateChatbotSettings = async (req, res) => {
 
     /* Avatar subido */
     if (req.file) {
-      if (isUploadedAvatar(settings.avatar)) {
-        const publicId = settings.avatar
-          .split("/upload/")[1]
-          .split(".")[0];
+      settings.uploaded_avatars ||= [];
 
-        await cloudinary.uploader.destroy(publicId);
+      if (settings.uploaded_avatars.length >= MAX_AVATARS) {
+        return res.status(400).json({
+          message: `Límite de ${MAX_AVATARS} avatares alcanzado`
+        });
       }
 
-      settings.avatar = req.file.path;
+      const uploadedAvatar = {
+        url: req.file.path,
+        public_id: req.file.filename || req.file.public_id
+      };
+
+      const alreadyExists = settings.uploaded_avatars.some(
+        a =>
+          a.url === uploadedAvatar.url ||
+          a.public_id === uploadedAvatar.public_id
+      );
+
+      if (!alreadyExists) {
+        settings.uploaded_avatars.push(uploadedAvatar);
+      }
+
+      settings.avatar = uploadedAvatar.url;
     }
+
 
     /* Parse settings */
     let incomingSettings = req.body;
@@ -167,11 +200,12 @@ exports.updateChatbotSettings = async (req, res) => {
 
       // Avatar por URL (solo catálogo)
       if (key === "avatar" && !req.file) {
-        const isValidAvatar = avatars.some(
+        const isSystemAvatar = avatars.some(a => a.url === incomingSettings.avatar);
+        const isUploadedAvatar = settings.uploaded_avatars.some(
           a => a.url === incomingSettings.avatar
         );
 
-        if (!isValidAvatar) return;
+        if (!isSystemAvatar && !isUploadedAvatar) return;
 
         settings.avatar = incomingSettings.avatar;
         return;
@@ -206,7 +240,86 @@ exports.updateChatbotSettings = async (req, res) => {
   }
 };
 
-/* ─────────────── AVATARES DISPONIBLES ─────────────── */
-exports.getAvailableAvatars = (req, res) => {
-  res.json(avatars);
+// Eliminar avatar 
+exports.deleteAvatar = async (req, res) => {
+  try {
+    const chatbot = await Chatbot.findOne({
+      _id: req.params.id,
+      account_id: req.user.account_id
+    });
+
+    if (!chatbot) {
+      return res.status(404).json({ message: "Chatbot no encontrado" });
+    }
+
+    const { avatarUrl } = req.body;
+
+    if (!avatarUrl) {
+      return res.status(400).json({
+        message: "avatarUrl requerido"
+      });
+    }
+
+    const settings = await ChatbotSettings.findOne({
+      chatbot_id: chatbot._id
+    });
+
+    if (!settings) {
+      return res.status(404).json({ message: "Settings no encontrados" });
+    }
+
+    settings.uploaded_avatars ||= [];
+
+    settings.uploaded_avatars = settings.uploaded_avatars.filter(
+      a => a.url !== avatarUrl
+    );
+
+    if (
+      settings.avatar === avatarUrl ||
+      settings.uploaded_avatars.length === 0
+    ) {
+      settings.avatar = process.env.DEFAULT_CHATBOT_AVATAR;
+    }
+
+    await settings.save();
+
+    res.json({
+      message: "Avatar eliminado del chatbot",
+      avatar: settings.avatar,
+      uploaded_avatars: settings.uploaded_avatars
+    });
+
+  } catch (error) {
+    console.error("DELETE AVATAR ERROR:", error);
+    res.status(500).json({ message: "Error al eliminar avatar" });
+  }
 };
+
+/* ─────────────── AVATARES DISPONIBLES + SUBIDOS ─────────────── */
+exports.getAvailableAvatars = async (req, res) => {
+  try {
+    const chatbot = await Chatbot.findOne({
+      _id: req.params.id,
+      account_id: req.user.account_id
+    });
+
+    if (!chatbot) {
+      return res.status(404).json({ message: "Chatbot no encontrado" });
+    }
+
+    const settings = await ChatbotSettings.findOne({
+      chatbot_id: chatbot._id
+    });
+
+    res.json({
+      system: avatars,
+      uploaded: settings?.uploaded_avatars || [],
+      active: settings?.avatar
+    });
+  } catch (error) {
+    console.error("GET AVAILABLE AVATARS ERROR:", error);
+    res.status(500).json({ message: "Error al obtener avatares" });
+  }
+};
+
+

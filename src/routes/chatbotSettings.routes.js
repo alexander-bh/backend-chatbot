@@ -4,8 +4,6 @@ const auth = require("../middlewares/auth.middleware");
 const upload = require("../middlewares/uploadAvatar.middleware");
 const settingsController = require("../controllers/chatbotSettings.controller");
 
-
-
 // Obtener configuración de chatbot
 router.get(
   "/chatbots/:id/settings",
@@ -22,6 +20,8 @@ router.put(
 // Obtener avatares disponibles
 router.get("/chatbots/avatars", auth, settingsController.getAvailableAvatars);
 
+// Eliminar avatar 
+router.get("/delete/avatars",auth,settingsController.deleteAvatar); 
 
 
 module.exports = router;
