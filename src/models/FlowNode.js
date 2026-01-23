@@ -132,7 +132,10 @@ const FlowNodeSchema = new Schema(
   { timestamps: true }
 );
 
-FlowNodeSchema.index({ flow_id: 1, parent_node_id: 1, order: 1 });
+FlowNodeSchema.index(
+  { flow_id: 1, parent_node_id: 1, order: 1 },
+  { unique: true }
+);
 FlowNodeSchema.index({ flow_id: 1, next_node_id: 1 });
 
 module.exports = model("FlowNode", FlowNodeSchema);

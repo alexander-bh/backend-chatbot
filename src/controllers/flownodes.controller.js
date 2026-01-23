@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-const Flow = require("../models/Flow");
 const FlowNode = require("../models/FlowNode");
 const { validateCreateNode } = require("../validators/flowNode.validator");
 const normalizeLinkAction = require("../utils/normalizeLinkAction");
@@ -61,10 +60,10 @@ exports.createNode = async (req, res) => {
         options:
           node_type === "options"
             ? options.map(o => ({
-                label: o.label.trim(),
-                next_node_id: null
-              }))
-            : null,
+              label: o.label.trim(),
+              next_node_id: null
+            }))
+            : [],
         is_draft: true
       }],
       { session }
@@ -192,8 +191,21 @@ exports.updateNode = async (req, res) => {
 
     for (const field of allowed) {
       if (req.body[field] !== undefined) {
+
         if (field === "typing_time" && (req.body[field] < 0 || req.body[field] > 10)) {
           throw new Error("typing_time inválido");
+        }
+
+        if (field === "options") {
+          node.options = req.body.options.map(o => ({
+            label: o.label?.trim(),
+            next_node_id: o.next_node_id ?? null
+          }));
+          continue;
+        }
+
+        if (field === "options" && node.node_type !== "options") {
+          throw new Error("Este nodo no admite opciones");
         }
 
         node[field] =
@@ -229,12 +241,11 @@ exports.duplicateNode = async (req, res) => {
 
     await getEditableFlow(node.flow_id, req.user.account_id);
 
-    const order = await FlowNode
-      .countDocuments({
-        flow_id: node.flow_id,
-        parent_node_id: node.parent_node_id
-      })
-      .session(session);
+    const order = await FlowNode.countDocuments({
+      flow_id: node.flow_id,
+      parent_node_id: node.parent_node_id,
+      account_id: req.user.account_id
+    }).session(session);
 
     const clone = node.toObject();
     delete clone._id;
@@ -298,10 +309,14 @@ exports.deleteNode = async (req, res) => {
         "options.next_node_id": node._id,
         account_id: req.user.account_id
       },
-      { $set: { "options.$[].next_node_id": null } },
-      { session }
+      {
+        $set: { "options.$[opt].next_node_id": null }
+      },
+      {
+        arrayFilters: [{ "opt.next_node_id": node._id }],
+        session
+      }
     );
-
     await FlowNode.deleteOne({ _id: node._id }, { session });
 
     await session.commitTransaction();
@@ -327,9 +342,7 @@ exports.insertAfterNode = async (req, res) => {
       account_id: req.user.account_id
     }).session(session);
 
-    if (!prev) {
-      throw new Error("Nodo no encontrado");
-    }
+    if (!prev) throw new Error("Nodo no encontrado");
 
     await getEditableFlow(prev.flow_id, req.user.account_id);
 
@@ -359,16 +372,19 @@ exports.insertAfterNode = async (req, res) => {
         content: req.body.content ?? null,
         parent_node_id: prev.parent_node_id,
         order: prev.order + 1,
-        next_node_id: prev.next_node_id,
         typing_time: req.body.typing_time ?? 2,
-        options: req.body.node_type === "options" ? [] : null,
-        position: req.body.position ?? { x: 0, y: 0 },
+        options:
+          req.body.node_type === "options"
+            ? (req.body.options ?? []).map(o => ({
+              label: o.label.trim(),
+              next_node_id: null
+            }))
+            : [],
         is_draft: true
       }],
       { session }
     );
 
-    prev.next_node_id = newNode._id;
     prev.is_draft = true;
     await prev.save({ session });
 
@@ -388,7 +404,89 @@ exports.reorderNodes = async (req, res) => {
   const session = await mongoose.startSession();
 
   try {
-    const { flow_id, parent_node_id = null, nodes } = req.body;
+    const {
+      flow_id,
+      parent_node_id = null,
+      nodes
+    } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(flow_id)) {
+      return res.status(400).json({ message: "flow_id inválido" });
+    }
+
+    if (!Array.isArray(nodes) || nodes.length === 0) {
+      return res.status(400).json({ message: "nodes inválido" });
+    }
+
+    await getEditableFlow(flow_id, req.user.account_id);
+
+    session.startTransaction();
+
+    const nodeIds = nodes.map(n => n.node_id);
+
+    const filter = {
+      _id: { $in: nodeIds },
+      flow_id,
+      account_id: req.user.account_id
+    };
+
+    if (parent_node_id === null) {
+      filter.$or = [
+        { parent_node_id: null },
+        { parent_node_id: { $exists: false } }
+      ];
+    } else {
+      filter.parent_node_id = parent_node_id;
+    }
+
+    const count = await FlowNode.countDocuments(filter).session(session);
+
+    if (count !== nodes.length) {
+      throw new Error("Nodos inválidos para este nivel");
+    }
+
+    if (!nodes.every(n => mongoose.Types.ObjectId.isValid(n.node_id))) {
+      throw new Error("node_id inválido");
+    }
+
+    const bulk = nodes.map((n, index) => ({
+      updateOne: {
+        filter: {
+          _id: n.node_id,
+          flow_id,
+          account_id: req.user.account_id,
+          ...(parent_node_id === null
+            ? { $or: [{ parent_node_id: null }, { parent_node_id: { $exists: false } }] }
+            : { parent_node_id })
+        },
+        update: {
+          $set: {
+            order: index,
+            is_draft: true
+          }
+        }
+      }
+    }));
+
+    await FlowNode.bulkWrite(bulk, { session });
+
+    await session.commitTransaction();
+    res.json({ message: "Orden actualizado correctamente" });
+
+  } catch (error) {
+    await session.abortTransaction();
+    res.status(400).json({ message: error.message });
+  } finally {
+    session.endSession();
+  }
+};
+
+/* ───────────────────────── UPDATE CANVAS ───────────────────────── */
+exports.updateCanvas = async (req, res) => {
+  const session = await mongoose.startSession();
+
+  try {
+    const { flow_id, nodes } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(flow_id)) {
       return res.status(400).json({ message: "flow_id inválido" });
@@ -403,26 +501,27 @@ exports.reorderNodes = async (req, res) => {
     session.startTransaction();
 
     const count = await FlowNode.countDocuments({
-      _id: { $in: nodes.map(n => n.id) },
+      _id: { $in: nodes.map(n => n.node_id) },
       flow_id,
-      parent_node_id,
       account_id: req.user.account_id
     }).session(session);
 
     if (count !== nodes.length) {
-      throw new Error("Nodos inválidos para este nivel");
+      throw new Error("Uno o más nodos no pertenecen al flow");
     }
 
-    const bulk = nodes.map((n, index) => ({
+    const bulk = nodes.map(n => ({
       updateOne: {
         filter: {
-          _id: n.id,
+          _id: n.node_id,
           flow_id,
-          parent_node_id,
           account_id: req.user.account_id
         },
         update: {
-          order: index,
+          position: {
+            x: Number(n.position?.x ?? 0),
+            y: Number(n.position?.y ?? 0)
+          },
           is_draft: true
         }
       }
@@ -431,7 +530,7 @@ exports.reorderNodes = async (req, res) => {
     await FlowNode.bulkWrite(bulk, { session });
 
     await session.commitTransaction();
-    res.json({ message: "Orden actualizado correctamente" });
+    res.json({ message: "Canvas actualizado correctamente" });
 
   } catch (error) {
     await session.abortTransaction();
@@ -457,7 +556,7 @@ exports.reorderSubtree = async (req, res) => {
     session.startTransaction();
 
     const count = await FlowNode.countDocuments({
-      _id: { $in: nodes.map(n => n.id) },
+      _id: { $in: nodes.map(n => n.node_id) },
       flow_id,
       parent_node_id,
       account_id: req.user.account_id
@@ -494,68 +593,6 @@ exports.reorderSubtree = async (req, res) => {
     session.endSession();
   }
 };
-
-
-/* ───────────────────────── UPDATE CANVAS ───────────────────────── */
-exports.updateCanvas = async (req, res) => {
-  const session = await mongoose.startSession();
-
-  try {
-    const { flow_id, nodes } = req.body;
-
-    if (!mongoose.Types.ObjectId.isValid(flow_id)) {
-      return res.status(400).json({ message: "flow_id inválido" });
-    }
-
-    if (!Array.isArray(nodes) || !nodes.length) {
-      return res.status(400).json({ message: "nodes inválido" });
-    }
-
-    await getEditableFlow(flow_id, req.user.account_id);
-
-    session.startTransaction();
-
-    const count = await FlowNode.countDocuments({
-      _id: { $in: nodes.map(n => n.id) },
-      flow_id,
-      account_id: req.user.account_id
-    }).session(session);
-
-    if (count !== nodes.length) {
-      throw new Error("Uno o más nodos no pertenecen al flow");
-    }
-
-    const bulk = nodes.map(n => ({
-      updateOne: {
-        filter: {
-          _id: n.id,
-          flow_id,
-          account_id: req.user.account_id
-        },
-        update: {
-          position: {
-            x: Number(n.position?.x ?? 0),
-            y: Number(n.position?.y ?? 0)
-          },
-          is_draft: true
-        }
-      }
-    }));
-
-    await FlowNode.bulkWrite(bulk, { session });
-
-    await session.commitTransaction();
-    res.json({ message: "Canvas actualizado correctamente" });
-
-  } catch (error) {
-    await session.abortTransaction();
-    res.status(400).json({ message: error.message });
-  } finally {
-    session.endSession();
-  }
-};
-
-
 
 
 
