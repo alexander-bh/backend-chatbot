@@ -182,7 +182,18 @@ exports.registerFirst = async (req, res) => {
     session.endSession();
 
     res.status(201).json({
-      token
+      token,
+      account,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      },
+      chatbot,
+      flow,
+      start_node: startNode,
+      settings
     });
 
   } catch (error) {
@@ -320,19 +331,9 @@ exports.loginAutoAccount = async (req, res) => {
   });
 
   res.json({
-    token,
-    user: {
-      name: user.name,
-      email: user.email,
-      role: user.role
-    },
-    account: {
-      name: account.name,
-      slug: account.slug
-    }
+    token
   });
 };
-
 
 /* --------------------------------------------------
    CHANGE PASSWORD
