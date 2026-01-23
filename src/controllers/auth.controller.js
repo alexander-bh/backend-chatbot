@@ -182,18 +182,7 @@ exports.registerFirst = async (req, res) => {
     session.endSession();
 
     res.status(201).json({
-      token,
-      account,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role
-      },
-      chatbot,
-      flow,
-      start_node: startNode,
-      settings
+      token
     });
 
   } catch (error) {

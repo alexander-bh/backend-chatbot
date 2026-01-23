@@ -4,6 +4,7 @@ const Flow = require("../models/Flow");
 const FlowNode = require("../models/FlowNode");
 const mongoose = require("mongoose");
 const crypto = require("crypto");
+const { getBaseName, generateCopyName } = require("../utils/chatbotName.helper");
 
 const normalizeSubdoc = v =>
   v && typeof v === "object" && Object.keys(v).length
@@ -289,16 +290,21 @@ exports.duplicateChatbotFull = async (req, res) => {
     }
 
     /* ─────────────── NUEVO CHATBOT ─────────────── */
-    const [newChatbot] = await Chatbot.create(
-      [{
-        account_id: accountId,
-        name: `${originalChatbot.name} (Copia)`,
-        welcome_message: originalChatbot.welcome_message,
-        status: "active",
-        public_id: crypto.randomUUID()
-      }],
-      { session }
+    const baseName = getBaseName(originalChatbot.name);
+
+    const newName = await generateCopyName(
+      baseName,
+      accountId,
+      session
     );
+
+    const [newChatbot] = await Chatbot.create([{
+      account_id: accountId,
+      name: newName,
+      welcome_message: originalChatbot.welcome_message,
+      status: "active",
+      public_id: crypto.randomUUID()
+    }], { session });
 
     /* ─────────────── SETTINGS ─────────────── */
     const settings = await ChatbotSettings.findOne({
