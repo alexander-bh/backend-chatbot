@@ -352,12 +352,6 @@ exports.changePassword = async (req, res) => {
   try {
     const { new_password } = req.body;
 
-    if (new_password) {
-      return res.status(400).json({
-        message: "Contraseñas obligatorias"
-      });
-    }
-
     if (new_password.length < 6) {
       return res.status(400).json({
         message: "La nueva contraseña debe tener al menos 6 caracteres"
