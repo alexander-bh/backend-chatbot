@@ -6,7 +6,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-
 //ruta de prueba
 app.get("/ping", (req, res) => {
   res.json({ ok: true });
