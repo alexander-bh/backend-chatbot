@@ -25,7 +25,10 @@ router.get(
 );
 
 // Eliminar avatar 
-router.get("/delete/avatars",auth,settingsController.deleteAvatar); 
-
+router.delete(
+  "/chatbots/:id/avatar",
+  auth,
+  settingsController.deleteAvatar
+);
 
 module.exports = router;
