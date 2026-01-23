@@ -18,7 +18,11 @@ router.put(
   settingsController.updateChatbotSettings
 );
 // Obtener avatares disponibles
-router.get("/chatbots/avatars", auth, settingsController.getAvailableAvatars);
+router.get(
+  "/chatbots/:id/avatars",
+  auth,
+  settingsController.getAvailableAvatars
+);
 
 // Eliminar avatar 
 router.get("/delete/avatars",auth,settingsController.deleteAvatar); 
