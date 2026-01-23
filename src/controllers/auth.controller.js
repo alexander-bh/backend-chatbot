@@ -324,7 +324,6 @@ exports.loginAutoAccount = async (req, res) => {
     account_id: account._id
   });
 
-  // 🔥 ESTO FALTABA
   await Token.create({
     user_id: user._id,
     token,
@@ -351,9 +350,9 @@ exports.loginAutoAccount = async (req, res) => {
 -------------------------------------------------- */
 exports.changePassword = async (req, res) => {
   try {
-    const { current_password, new_password } = req.body;
+    const { new_password } = req.body;
 
-    if (!current_password || !new_password) {
+    if (new_password) {
       return res.status(400).json({
         message: "Contraseñas obligatorias"
       });
@@ -368,11 +367,6 @@ exports.changePassword = async (req, res) => {
     const user = await User.findById(req.user.id).select("+password");
     if (!user) {
       return res.status(404).json({ message: "Usuario no encontrado" });
-    }
-
-    const valid = await bcrypt.compare(current_password, user.password);
-    if (!valid) {
-      return res.status(401).json({ message: "Contraseña actual incorrecta" });
     }
 
     const samePassword = await bcrypt.compare(new_password, user.password);
