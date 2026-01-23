@@ -37,6 +37,4 @@ app.use("/api/meta", require("./routes/meta.routes.js"));
 // Rutas de conversación
 app.use("/api/conversations",require("./routes/conversationSession.routes.js"));
 
-
-
 module.exports = app;

@@ -9,26 +9,35 @@ function getBaseName(name) {
 
 // Genera el siguiente nombre disponible
 async function generateCopyName(baseName, accountId, session) {
-    const escaped = baseName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const regex = new RegExp(`^${escaped}( \\(${COPY_WORD}( \\d+)?\\))?$`, "i");
+  const escaped = baseName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-    const existing = await Chatbot.find({
-        account_id: accountId,
-        name: { $regex: regex }
-    }).session(session);
+  // SOLO copias numeradas
+  const regex = new RegExp(
+    `^${escaped} \\(${COPY_WORD}(?: (\\d+))?\\)$`,
+    "i"
+  );
 
-    if (!existing.length) {
-        return `${baseName} (${COPY_WORD})`;
-    }
+  const existing = await Chatbot.find({
+    account_id: accountId,
+    name: { $regex: regex }
+  }).session(session);
 
-    const numbers = existing.map(c => {
-        const match = c.name.match(/\(${COPY_WORD} (\d+)\)$/i);
-        return match ? parseInt(match[1]) : 1;
-    });
+  if (existing.length === 0) {
+    return `${baseName} (${COPY_WORD})`;
+  }
 
-    const next = Math.max(...numbers) + 1;
-    return `${baseName} (${COPY_WORD} ${next})`;
+  let max = 0;
+
+  for (const bot of existing) {
+    const match = bot.name.match(/\(${COPY_WORD}(?: (\d+))?\)$/i);
+    if (!match) continue;
+    const num = match[1] ? parseInt(match[1]) : 1;
+    max = Math.max(max, num);
+  }
+
+  return `${baseName} (${COPY_WORD} ${max + 1})`;
 }
+
 
 module.exports = {
     getBaseName,
