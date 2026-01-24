@@ -1,7 +1,6 @@
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const mongoose = require("mongoose");
-
 const User = require("../models/User");
 const Token = require("../models/Token");
 const Chatbot = require("../models/Chatbot");
@@ -9,7 +8,7 @@ const Account = require("../models/Account");
 const Flow = require("../models/Flow");
 const FlowNode = require("../models/FlowNode");
 const ChatbotSettings = require("../models/ChatbotSettings");
-
+const PasswordResetToken = require("../models/PasswordResetToken");
 const { generateToken } = require("../utils/jwt");
 
 /* --------------------------------------------------
@@ -336,6 +335,162 @@ exports.loginAutoAccount = async (req, res) => {
 };
 
 /* --------------------------------------------------
+   VALIDATE RESET TOKEN
+-------------------------------------------------- */
+exports.validateResetToken = async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    if (!token) {
+      return res.status(400).json({
+        valid: false,
+        message: "Token requerido"
+      });
+    }
+
+    const resetToken = await PasswordResetToken.findOne({
+      token,
+      expires_at: { $gt: new Date() }
+    });
+
+    if (!resetToken) {
+      return res.status(400).json({
+        valid: false,
+        message: "Token inválido o expirado"
+      });
+    }
+
+    res.json({
+      valid: true
+    });
+
+  } catch (error) {
+    console.error("VALIDATE TOKEN ERROR:", error);
+    res.status(500).json({
+      valid: false,
+      message: "Error al validar token"
+    });
+  }
+};
+
+/* --------------------------------------------------
+   FORGOT PASSWORD
+-------------------------------------------------- */
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const user = await User.findOne({
+      email: email.toLowerCase().trim()
+    });
+
+    // ⚠️ No revelar si existe o no
+    if (!user) {
+      return res.json({
+        message: "Si el email existe, recibirás un enlace de recuperación"
+      });
+    }
+
+    // Eliminar tokens anteriores
+    await PasswordResetToken.deleteMany({ user_id: user._id });
+
+    const resetToken = crypto.randomBytes(32).toString("hex");
+
+    await PasswordResetToken.create({
+      user_id: user._id,
+      token: resetToken,
+      expires_at: new Date(Date.now() + 1000 * 60 * 30) // 30 min
+    });
+
+    const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+
+    // 👉 Aquí envías el email (nodemailer, resend, etc.)
+    console.log("RESET LINK:", resetLink);
+
+    res.json({
+      message: "Si el email existe, recibirás un enlace de recuperación"
+    });
+
+  } catch (error) {
+    console.error("FORGOT PASSWORD ERROR:", error);
+    res.status(500).json({
+      message: "Error al solicitar recuperación"
+    });
+  }
+};
+
+/* --------------------------------------------------
+   RESET PASSWORD
+-------------------------------------------------- */
+exports.resetPassword = async (req, res) => {
+  try {
+    const { token, new_password } = req.body;
+
+    if (!new_password || new_password.length < 6) {
+      return res.status(400).json({
+        message: "La contraseña debe tener al menos 6 caracteres"
+      });
+    }
+
+    const resetRecord = await PasswordResetToken.findOne({
+      token,
+      expires_at: { $gt: new Date() }
+    });
+
+    if (!resetRecord) {
+      return res.status(400).json({
+        message: "Token inválido o expirado"
+      });
+    }
+
+    const user = await User.findById(resetRecord.user_id).select("+password");
+
+    if (!user) {
+      return res.status(404).json({
+        message: "Usuario no encontrado"
+      });
+    }
+
+    const samePassword = await bcrypt.compare(new_password, user.password);
+    if (samePassword) {
+      return res.status(400).json({
+        message: "La nueva contraseña debe ser diferente a la anterior"
+      });
+    }
+
+    user.password = await bcrypt.hash(new_password, 10);
+    await user.save();
+
+    // 🔥 invalidar sesiones
+    await Token.deleteMany({ user_id: user._id });
+    await PasswordResetToken.deleteMany({ user_id: user._id });
+
+    res.json({
+      message: "Contraseña restablecida correctamente"
+    });
+
+  } catch (error) {
+    console.error("RESET PASSWORD ERROR:", error);
+    res.status(500).json({
+      message: "Error al restablecer contraseña"
+    });
+  }
+};
+
+/* --------------------------------------------------
+   LOGOUT
+-------------------------------------------------- */
+exports.logout = async (req, res) => {
+  try {
+    await Token.deleteMany({ user_id: req.user.id });
+    res.json({ message: "Sesión cerrada correctamente" });
+  } catch (error) {
+    console.error("LOGOUT ERROR:", error);
+    res.status(500).json({ message: "Error al cerrar sesión" });
+  }
+};
+
+/* --------------------------------------------------
    CHANGE PASSWORD
 -------------------------------------------------- */
 exports.changePassword = async (req, res) => {
@@ -376,6 +531,10 @@ exports.changePassword = async (req, res) => {
     });
   }
 };
+
+
+
+// Usuario
 
 /* --------------------------------------------------
    UPDATE PROFILE
@@ -422,18 +581,5 @@ exports.updateProfile = async (req, res) => {
     session.endSession();
     console.error("UPDATE PROFILE ERROR:", error);
     res.status(500).json({ message: "Error al actualizar perfil" });
-  }
-};
-
-/* --------------------------------------------------
-   LOGOUT
--------------------------------------------------- */
-exports.logout = async (req, res) => {
-  try {
-    await Token.deleteMany({ user_id: req.user.id });
-    res.json({ message: "Sesión cerrada correctamente" });
-  } catch (error) {
-    console.error("LOGOUT ERROR:", error);
-    res.status(500).json({ message: "Error al cerrar sesión" });
   }
 };
