@@ -3,6 +3,7 @@ const authCtrl = require("../controllers/auth.controller");
 const auth = require("../middlewares/auth.middleware");
 const role = require("../middlewares/role.middleware");
 const { resolveAccount } = require("../middlewares/resolveAccount");
+const rateLimit = require("express-rate-limit");
 
 // Crear la primera cuenta + admin
 router.post("/register-first", authCtrl.registerFirst);
@@ -23,8 +24,13 @@ router.post(
 router.post("/logout", auth, authCtrl.logout);
 router.post("/change-password", auth, authCtrl.changePassword);
 
+const forgotLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5
+});
+
 // Recuperación de contraseña (SIN auth)
-router.post("/forgot-password", authCtrl.forgotPassword);
+router.post("/forgot-password", forgotLimiter, authCtrl.forgotPassword);
 
 // Validar token de reset (SIN auth)
 router.get("/reset-password/:token", authCtrl.validateResetToken);

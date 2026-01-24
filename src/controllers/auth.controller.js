@@ -10,9 +10,10 @@ const FlowNode = require("../models/FlowNode");
 const ChatbotSettings = require("../models/ChatbotSettings");
 const PasswordResetToken = require("../models/PasswordResetToken");
 const { generateToken } = require("../utils/jwt");
+const { sendResetPasswordEmail } = require("../services/email.service");
 
 /* --------------------------------------------------
-   Utils
+  Utils
 -------------------------------------------------- */
 const slugify = (text) =>
   text
@@ -23,7 +24,7 @@ const slugify = (text) =>
     .replace(/[^\w-]/g, "");
 
 /* --------------------------------------------------
-   REGISTER FIRST (crea cuenta + admin)
+REGISTER FIRST (crea cuenta + admin)
 -------------------------------------------------- */
 exports.registerFirst = async (req, res) => {
   const session = await mongoose.startSession();
@@ -207,7 +208,7 @@ exports.registerFirst = async (req, res) => {
 };
 
 /* --------------------------------------------------
-   REGISTER USER (por subdominio)
+  REGISTER USER (por subdominio)
 -------------------------------------------------- */
 exports.register = async (req, res) => {
   const session = await mongoose.startSession();
@@ -297,7 +298,7 @@ exports.register = async (req, res) => {
 };
 
 /* --------------------------------------------------
-   LOGIN
+  LOGIN
 -------------------------------------------------- */
 exports.loginAutoAccount = async (req, res) => {
   const { email, password } = req.body;
@@ -335,7 +336,7 @@ exports.loginAutoAccount = async (req, res) => {
 };
 
 /* --------------------------------------------------
-   VALIDATE RESET TOKEN
+  VALIDATE RESET TOKEN
 -------------------------------------------------- */
 exports.validateResetToken = async (req, res) => {
   try {
@@ -374,11 +375,15 @@ exports.validateResetToken = async (req, res) => {
 };
 
 /* --------------------------------------------------
-   FORGOT PASSWORD
+  FORGOT PASSWORD
 -------------------------------------------------- */
 exports.forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: "Email requerido" });
+    }
 
     const user = await User.findOne({
       email: email.toLowerCase().trim()
@@ -391,7 +396,6 @@ exports.forgotPassword = async (req, res) => {
       });
     }
 
-    // Eliminar tokens anteriores
     await PasswordResetToken.deleteMany({ user_id: user._id });
 
     const resetToken = crypto.randomBytes(32).toString("hex");
@@ -399,13 +403,18 @@ exports.forgotPassword = async (req, res) => {
     await PasswordResetToken.create({
       user_id: user._id,
       token: resetToken,
-      expires_at: new Date(Date.now() + 1000 * 60 * 30) // 30 min
+      expires_at: new Date(Date.now() + 1000 * 60 * 30)
     });
 
-    const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+    /* ✅ AQUÍ se construye el link */
+    const resetLink =
+      `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
 
-    // 👉 Aquí envías el email (nodemailer, resend, etc.)
-    console.log("RESET LINK:", resetLink);
+    /* ✅ AQUÍ se crea el email */
+    const emailData = sendResetPasswordEmail(user, resetLink);
+
+    // 👉 Aquí va el envío real (nodemailer, resend, etc.)
+    console.log("EMAIL DATA:", emailData);
 
     res.json({
       message: "Si el email existe, recibirás un enlace de recuperación"
@@ -420,7 +429,7 @@ exports.forgotPassword = async (req, res) => {
 };
 
 /* --------------------------------------------------
-   RESET PASSWORD
+  RESET PASSWORD
 -------------------------------------------------- */
 exports.resetPassword = async (req, res) => {
   try {
@@ -478,7 +487,7 @@ exports.resetPassword = async (req, res) => {
 };
 
 /* --------------------------------------------------
-   LOGOUT
+  LOGOUT
 -------------------------------------------------- */
 exports.logout = async (req, res) => {
   try {
@@ -491,7 +500,7 @@ exports.logout = async (req, res) => {
 };
 
 /* --------------------------------------------------
-   CHANGE PASSWORD
+  CHANGE PASSWORD
 -------------------------------------------------- */
 exports.changePassword = async (req, res) => {
   try {
@@ -532,12 +541,10 @@ exports.changePassword = async (req, res) => {
   }
 };
 
-
-
 // Usuario
 
 /* --------------------------------------------------
-   UPDATE PROFILE
+  UPDATE PROFILE
 -------------------------------------------------- */
 exports.updateProfile = async (req, res) => {
   const session = await mongoose.startSession();
