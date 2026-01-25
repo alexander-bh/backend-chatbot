@@ -12,6 +12,10 @@ const PasswordResetToken = require("../models/PasswordResetToken");
 const { generateToken } = require("../utils/jwt");
 const { sendResetPasswordEmail } = require("../services/email.service");
 
+const generateOTP = () =>
+  Math.floor(100000 + Math.random() * 900000).toString();
+
+
 /* --------------------------------------------------
   Utils
 -------------------------------------------------- */
@@ -336,45 +340,6 @@ exports.loginAutoAccount = async (req, res) => {
 };
 
 /* --------------------------------------------------
-  VALIDATE RESET TOKEN
--------------------------------------------------- */
-exports.validateResetToken = async (req, res) => {
-  try {
-    const { token } = req.params;
-
-    if (!token) {
-      return res.status(400).json({
-        valid: false,
-        message: "Token requerido"
-      });
-    }
-
-    const resetToken = await PasswordResetToken.findOne({
-      token,
-      expires_at: { $gt: new Date() }
-    });
-
-    if (!resetToken) {
-      return res.status(400).json({
-        valid: false,
-        message: "Token inválido o expirado"
-      });
-    }
-
-    res.json({
-      valid: true
-    });
-
-  } catch (error) {
-    console.error("VALIDATE TOKEN ERROR:", error);
-    res.status(500).json({
-      valid: false,
-      message: "Error al validar token"
-    });
-  }
-};
-
-/* --------------------------------------------------
   FORGOT PASSWORD
 -------------------------------------------------- */
 exports.forgotPassword = async (req, res) => {
@@ -389,89 +354,111 @@ exports.forgotPassword = async (req, res) => {
       email: email.toLowerCase().trim()
     });
 
-    // ⚠️ No revelar si existe o no
     if (!user) {
       return res.json({
-        message: "Si el email existe, recibirás un enlace de recuperación"
+        message: "Si el email existe, recibirás un código"
       });
     }
 
-    await PasswordResetToken.deleteMany({ user_id: user._id });
+    const recentToken = await PasswordResetToken.findOne({
+      user_id: user._id,
+      createdAt: { $gt: new Date(Date.now() - 1000 * 60) }
+    });
 
-    const resetToken = crypto.randomBytes(32).toString("hex");
+    if (recentToken) {
+      return res.status(429).json({
+        message: "Espera un minuto antes de solicitar otro código"
+      });
+    }
+
+    // eliminar códigos previos
+    await PasswordResetToken.deleteMany({
+      user_id: user._id,
+      expires_at: { $lt: new Date() }
+    });
+
+    // generar código
+    const code = generateOTP(); // ej: 483921
+    const hashedCode = await bcrypt.hash(code, 10);
 
     await PasswordResetToken.create({
       user_id: user._id,
-      token: resetToken,
-      expires_at: new Date(Date.now() + 1000 * 60 * 30)
+      token: hashedCode,
+      expires_at: new Date(Date.now() + 1000 * 60 * 10) // 10 min
     });
 
-    /* ✅ AQUÍ se construye el link */
-    const resetLink =
-      `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+    // enviar email
+    await sendResetPasswordEmail(user, code);
 
-    /* ✅ AQUÍ se crea el email */
-    const emailData = sendResetPasswordEmail(user, resetLink);
-
-    // 👉 Aquí va el envío real (nodemailer, resend, etc.)
-    console.log("EMAIL DATA:", emailData);
-
-    res.json({
-      message: "Si el email existe, recibirás un enlace de recuperación"
+    return res.json({
+      message: "Si el email existe, recibirás un código"
     });
 
   } catch (error) {
     console.error("FORGOT PASSWORD ERROR:", error);
-    res.status(500).json({
-      message: "Error al solicitar recuperación"
-    });
+    res.status(500).json({ message: "Error al solicitar recuperación" });
   }
 };
+
 
 /* --------------------------------------------------
   RESET PASSWORD
 -------------------------------------------------- */
 exports.resetPassword = async (req, res) => {
   try {
-    const { token, new_password } = req.body;
 
-    if (!new_password || new_password.length < 6) {
+    const { email, code, new_password } = req.body;
+
+    if (!email) {
       return res.status(400).json({
-        message: "La contraseña debe tener al menos 6 caracteres"
+        message: "Email requerido"
+      });
+    }
+
+    if (!code || !new_password || new_password.length < 6) {
+      return res.status(400).json({
+        message: "Datos inválidos"
+      });
+    }
+
+    const user = await User.findOne({
+      email: email.toLowerCase().trim()
+    }).select("+password");
+
+    if (!user) {
+      return res.status(400).json({
+        message: "Código inválido o expirado"
       });
     }
 
     const resetRecord = await PasswordResetToken.findOne({
-      token,
+      user_id: user._id,
       expires_at: { $gt: new Date() }
     });
 
     if (!resetRecord) {
       return res.status(400).json({
-        message: "Token inválido o expirado"
+        message: "Código inválido o expirado"
+      });
+    }
+    if (resetRecord.attempts >= 5) {
+      return res.status(403).json({
+        message: "Demasiados intentos. Solicita un nuevo código."
       });
     }
 
-    const user = await User.findById(resetRecord.user_id).select("+password");
+    const isValid = await bcrypt.compare(code, resetRecord.token);
 
-    if (!user) {
-      return res.status(404).json({
-        message: "Usuario no encontrado"
-      });
-    }
-
-    const samePassword = await bcrypt.compare(new_password, user.password);
-    if (samePassword) {
-      return res.status(400).json({
-        message: "La nueva contraseña debe ser diferente a la anterior"
-      });
+    if (!isValid) {
+      resetRecord.attempts += 1;
+      await resetRecord.save();
+      return res.status(400).json({ message: "Código incorrecto" });
     }
 
     user.password = await bcrypt.hash(new_password, 10);
     await user.save();
 
-    // 🔥 invalidar sesiones
-    await Token.deleteMany({ user_id: user._id });
+    await PasswordResetToken.findByIdAndDelete(resetRecord._id);
     await PasswordResetToken.deleteMany({ user_id: user._id });
 
     res.json({

@@ -32,9 +32,6 @@ const forgotLimiter = rateLimit({
 // Recuperación de contraseña (SIN auth)
 router.post("/forgot-password", forgotLimiter, authCtrl.forgotPassword);
 
-// Validar token de reset (SIN auth)
-router.get("/reset-password/:token", authCtrl.validateResetToken);
-
 // Resetear contraseña (SIN auth)
 router.post("/reset-password", authCtrl.resetPassword);
 
