@@ -96,7 +96,7 @@ const FlowNodeSchema = new Schema(
             {
               type: {
                 type: String,
-                enum: ["min_max", "email", "phone", "integer", "decimal"],
+                enum: ["required", "min_max", "email", "phone", "integer", "decimal"],
                 required: true
               },
               min: Number,

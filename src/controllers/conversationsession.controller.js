@@ -8,6 +8,7 @@ const renderNode = require("../utils/renderNode");
 
 const INPUT_NODES = ["question", "email", "phone", "number"];
 
+// Conmensar conversación
 exports.startConversation = async (req, res) => {
   try {
     const { chatbot_id } = req.body;
@@ -53,6 +54,7 @@ exports.startConversation = async (req, res) => {
   }
 };
 
+// Finalizar conversación
 exports.nextStep = async (req, res) => {
   try {
     const { session_id, input } = req.body;

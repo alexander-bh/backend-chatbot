@@ -4,7 +4,7 @@ const { validateCreateNode } = require("../validators/flowNode.validator");
 const normalizeLinkAction = require("../utils/normalizeLinkAction");
 const { getEditableFlow } = require("../utils/flow.utils");
 
-/* ───────────────────────── CREATE NODE ───────────────────────── */
+// Crear nodos
 exports.createNode = async (req, res) => {
   const session = await mongoose.startSession();
 
@@ -80,7 +80,7 @@ exports.createNode = async (req, res) => {
   }
 };
 
-/* ───────────────────────── CONNECT NODE ───────────────────────── */
+// Conectar nodos 
 exports.connectNode = async (req, res) => {
   try {
     const source = await FlowNode.findOne({
@@ -142,7 +142,7 @@ exports.connectNode = async (req, res) => {
   }
 };
 
-/* ───────────────────────── GET NODES BY FLOW ───────────────────────── */
+// Obtener nodos por flow
 exports.getNodesByFlow = async (req, res) => {
   try {
     const { flowId } = req.params;
@@ -165,7 +165,7 @@ exports.getNodesByFlow = async (req, res) => {
   }
 };
 
-/* ───────────────────────── UPDATE NODE ───────────────────────── */
+// Actualizar nodos
 exports.updateNode = async (req, res) => {
   try {
     const node = await FlowNode.findOne({
@@ -225,7 +225,7 @@ exports.updateNode = async (req, res) => {
   }
 };
 
-/* ───────────────────────── DUPLICATE NODE ───────────────────────── */
+// Duplicar nodos
 exports.duplicateNode = async (req, res) => {
   const session = await mongoose.startSession();
 
@@ -266,7 +266,7 @@ exports.duplicateNode = async (req, res) => {
   }
 };
 
-/* ───────────────────────── DELETE NODE ───────────────────────── */
+// Eliminar nodos
 exports.deleteNode = async (req, res) => {
   const session = await mongoose.startSession();
 
@@ -330,7 +330,7 @@ exports.deleteNode = async (req, res) => {
   }
 };
 
-/* ───────────────────────── INSERT AFTER NODE ───────────────────────── */
+// Insertar despues 
 exports.insertAfterNode = async (req, res) => {
   const session = await mongoose.startSession();
 
@@ -399,7 +399,7 @@ exports.insertAfterNode = async (req, res) => {
   }
 };
 
-/* ───────────────────────── REORDER NODES ───────────────────────── */
+// Reorden de nodos 
 exports.reorderNodes = async (req, res) => {
   const session = await mongoose.startSession();
 
@@ -481,7 +481,7 @@ exports.reorderNodes = async (req, res) => {
   }
 };
 
-/* ───────────────────────── UPDATE CANVAS ───────────────────────── */
+// Actualizar canvas
 exports.updateCanvas = async (req, res) => {
   const session = await mongoose.startSession();
 
@@ -540,7 +540,7 @@ exports.updateCanvas = async (req, res) => {
   }
 };
 
-/* ───────────────────────── REORDER SUBTREE ───────────────────────── */
+// Reoder subarbol
 exports.reorderSubtree = async (req, res) => {
   const session = await mongoose.startSession();
 

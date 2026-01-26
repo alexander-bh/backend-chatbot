@@ -1,5 +1,6 @@
 const Account = require("../models/Account");
 
+// Consultar cuenta
 exports.getMyAccount = async (req, res) => {
   try {
     const account = await Account.findById(req.user.account_id);

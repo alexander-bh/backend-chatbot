@@ -1,7 +1,7 @@
 const User = require("../models/User");
 const mongoose = require("mongoose");
 
-// PERFIL DEL USUARIO AUTENTICADO
+// Perfil de usario
 exports.getProfile = async (req, res) => {
   try {
     const user = await User
@@ -21,7 +21,7 @@ exports.getProfile = async (req, res) => {
   }
 };
 
-// OBTENER TODOS LOS USUARIOS
+// Obterner los datos de usario 
 exports.getUsers = async (req, res) => {
   try {
     const users = await User.find().select("-password");
@@ -31,7 +31,7 @@ exports.getUsers = async (req, res) => {
   }
 };
 
-// OBTENER USUARIO POR ID (con validación)
+// Obtener los datos de usuario 
 exports.getUserById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -51,7 +51,7 @@ exports.getUserById = async (req, res) => {
   }
 };
 
-// CREAR USUARIO
+// Crear usario
 exports.createUser = async (req, res) => {
   try {
     const user = await User.create(req.body);
@@ -61,7 +61,7 @@ exports.createUser = async (req, res) => {
   }
 };
 
-// ACTUALIZAR USUARIO
+// Actualizar usuario
 exports.updateUser = async (req, res) => {
   try {
     const data = req.body;
@@ -87,7 +87,7 @@ exports.updateUser = async (req, res) => {
   }
 };
 
-// ELIMINAR USUARIO
+// Eliminar usuario
 exports.deleteUser = async (req, res) => {
   try {
     await User.findByIdAndDelete(req.params.id);

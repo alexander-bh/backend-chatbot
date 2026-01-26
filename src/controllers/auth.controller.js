@@ -16,9 +16,7 @@ const generateOTP = () =>
   Math.floor(100000 + Math.random() * 900000).toString();
 
 
-/* --------------------------------------------------
-  Utils
--------------------------------------------------- */
+// Utils
 const slugify = (text) =>
   text
     .toString()
@@ -27,9 +25,7 @@ const slugify = (text) =>
     .replace(/\s+/g, "-")
     .replace(/[^\w-]/g, "");
 
-/* --------------------------------------------------
-REGISTER FIRST (crea cuenta + admin)
--------------------------------------------------- */
+// Primer registro (crea cuenta + chatbot + flow + flow nodes)
 exports.registerFirst = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -67,7 +63,6 @@ exports.registerFirst = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const welcomeText = `Hola 👋 soy el bot de ${name}, ¿en qué puedo ayudarte?`;
 
-    /* -------- Validar email -------- */
     const userExists = await User.findOne({ email: normalizedEmail }).session(session);
     if (userExists) {
       await session.abortTransaction();
@@ -77,7 +72,6 @@ exports.registerFirst = async (req, res) => {
       });
     }
 
-    /* -------- Account -------- */
     const [account] = await Account.create(
       [{
         name: account_name,
@@ -88,7 +82,6 @@ exports.registerFirst = async (req, res) => {
       { session }
     );
 
-    /* -------- User (ADMIN) -------- */
     const finalOnboarding = {
       ...(onboarding || {}),
       phone,
@@ -107,7 +100,6 @@ exports.registerFirst = async (req, res) => {
       { session }
     );
 
-    /* -------- Chatbot -------- */
     const [chatbot] = await Chatbot.create(
       [{
         account_id: account._id,
@@ -119,7 +111,6 @@ exports.registerFirst = async (req, res) => {
       { session }
     );
 
-    /* -------- Settings -------- */
     const [settings] = await ChatbotSettings.create(
       [{
         chatbot_id: chatbot._id,
@@ -139,7 +130,6 @@ exports.registerFirst = async (req, res) => {
       { session }
     );
 
-    /* -------- Flow -------- */
     const [flow] = await Flow.create(
       [{
         account_id: account._id,
@@ -166,7 +156,6 @@ exports.registerFirst = async (req, res) => {
       { session }
     );
 
-    /* -------- Token -------- */
     const token = generateToken({
       id: user._id,
       role: user.role,
@@ -211,9 +200,7 @@ exports.registerFirst = async (req, res) => {
   }
 };
 
-/* --------------------------------------------------
-  REGISTER USER (por subdominio)
--------------------------------------------------- */
+// Registro de usuario (por subdominio)
 exports.register = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -301,9 +288,7 @@ exports.register = async (req, res) => {
   }
 };
 
-/* --------------------------------------------------
-  LOGIN
--------------------------------------------------- */
+// Login
 exports.loginAutoAccount = async (req, res) => {
   const { email, password } = req.body;
 
@@ -339,9 +324,7 @@ exports.loginAutoAccount = async (req, res) => {
   });
 };
 
-/* --------------------------------------------------
-  FORGOT PASSWORD
--------------------------------------------------- */
+// Recuperacion de contraseña
 exports.forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -401,9 +384,7 @@ exports.forgotPassword = async (req, res) => {
 };
 
 
-/* --------------------------------------------------
-  RESET PASSWORD
--------------------------------------------------- */
+//Resetar la contraseña
 exports.resetPassword = async (req, res) => {
   try {
 
@@ -473,9 +454,7 @@ exports.resetPassword = async (req, res) => {
   }
 };
 
-/* --------------------------------------------------
-  LOGOUT
--------------------------------------------------- */
+// Cerrar sesion
 exports.logout = async (req, res) => {
   try {
     await Token.deleteMany({ user_id: req.user.id });
@@ -486,9 +465,7 @@ exports.logout = async (req, res) => {
   }
 };
 
-/* --------------------------------------------------
-  CHANGE PASSWORD
--------------------------------------------------- */
+//Cambio de contraseña
 exports.changePassword = async (req, res) => {
   try {
     const { new_password } = req.body;
@@ -528,11 +505,7 @@ exports.changePassword = async (req, res) => {
   }
 };
 
-// Usuario
-
-/* --------------------------------------------------
-  UPDATE PROFILE
--------------------------------------------------- */
+// Actualizar 
 exports.updateProfile = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();

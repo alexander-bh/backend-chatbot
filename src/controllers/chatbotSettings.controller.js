@@ -4,7 +4,7 @@ const avatars = require("../config/chatbotAvatars");
 
 const MAX_AVATARS = 50;
 
-/* ─────────────── SUBIR AVATAR ─────────────── */
+// Subir avatar 
 exports.uploadAvatar = async (req, res) => {
   try {
     if (!req.file) {
@@ -70,7 +70,7 @@ exports.uploadAvatar = async (req, res) => {
   }
 };
 
-/* ─────────────── OBTENER SETTINGS ─────────────── */
+// Obtener las configuraciones 
 exports.getSettings = async (req, res) => {
   try {
     const chatbot = await Chatbot.findOne({
@@ -100,7 +100,7 @@ exports.getSettings = async (req, res) => {
   }
 };
 
-/* ─────────────── ACTUALIZAR SETTINGS (UNIFICADO) ─────────────── */
+// Actualizar configuraciones 
 exports.updateChatbotSettings = async (req, res) => {
   try {
     /* Chatbot */
@@ -295,7 +295,7 @@ exports.deleteAvatar = async (req, res) => {
   }
 };
 
-/* ─────────────── AVATARES DISPONIBLES + SUBIDOS ─────────────── */
+// Avatar disponibles 
 exports.getAvailableAvatars = async (req, res) => {
   try {
     const chatbot = await Chatbot.findOne({
