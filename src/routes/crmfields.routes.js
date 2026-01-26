@@ -2,7 +2,7 @@ const router = require("express").Router();
 const auth = require("../middlewares/auth.middleware");
 const CRMField = require("../models/CrmField");
 
-router.get("/", auth, async (req, res) => {
+router.get("/", async (req, res) => {
   try {
     const fields = await CRMField
       .find({ is_active: true })
