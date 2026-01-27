@@ -1,4 +1,4 @@
-const renderNode = (node, session_id) => {
+module.exports = function renderNode(node, session_id) {
   const payload = {
     session_id,
     node_id: node._id,
@@ -18,7 +18,7 @@ const renderNode = (node, session_id) => {
     payload.link_action = node.link_action;
   }
 
-  if (["question", "email", "phone", "number"].includes(node.node_type)) {
+  if (["question", "email", "phone", "number", "text_input"].includes(node.node_type)) {
     payload.input_type = node.node_type;
   }
 
