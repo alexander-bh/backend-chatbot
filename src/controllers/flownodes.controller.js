@@ -540,13 +540,6 @@ exports.updateCanvas = async (req, res) => {
   }
 };
 
-
-
-
-
-
-
-
 // Reoder subarbol
 exports.reorderSubtree = async (req, res) => {
   const session = await mongoose.startSession();

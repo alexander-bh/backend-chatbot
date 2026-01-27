@@ -6,7 +6,7 @@ const upsertContactFromSession = require("../services/upsertContactFromSession.s
 const validateInput = require("../utils/validateInput");
 const renderNode = require("../utils/renderNode");
 
-const INPUT_NODES = ["text_input", "email", "phone", "number"];
+const INPUT_NODES = ["question", "email", "phone", "number"];
 const ALLOWED_MODES = ["preview", "production"];
 
 // START CONVERSATION
@@ -58,13 +58,13 @@ exports.startConversation = async (req, res) => {
       });
     }
 
-    const node = await FlowNode.findOne({
+    const startNode = await FlowNode.findOne({
       _id: flow.start_node_id,
       flow_id: flow._id,
       account_id: req.user.account_id
     });
 
-    if (!node) {
+    if (!startNode) {
       return res.status(500).json({ message: "Nodo inicial inválido" });
     }
 
@@ -78,7 +78,7 @@ exports.startConversation = async (req, res) => {
       is_completed: false
     });
 
-    res.json(renderNode(node, session._id));
+    res.json(renderNode(startNode, session._id));
 
   } catch (error) {
     console.error("startConversation:", error);
@@ -121,22 +121,34 @@ exports.nextStep = async (req, res) => {
 
     /* ───────────── OPTIONS ───────────── */
     if (currentNode.node_type === "options") {
-      const index = Number(sanitizedInput);
+      const index = parseInt(sanitizedInput, 10);
 
       if (
         Number.isNaN(index) ||
-        !Array.isArray(currentNode.options) ||
+        index < 0 ||
         !currentNode.options[index]
       ) {
         return res.status(400).json({ message: "Opción inválida" });
       }
 
-      nextNodeId = currentNode.options[index].next_node_id;
+      const option = currentNode.options[index];
+
+      if (!option.next_node_id) {
+        return res.status(500).json({
+          message: "La opción seleccionada no tiene rama configurada"
+        });
+      }
+
+      nextNodeId = option.next_node_id;
     }
 
     /* ───────────── INPUT ───────────── */
     else if (INPUT_NODES.includes(currentNode.node_type)) {
-      if (!sanitizedInput) {
+      if (
+        sanitizedInput === undefined ||
+        sanitizedInput === null ||
+        sanitizedInput === ""
+      ) {
         return res.status(400).json({ message: "Input requerido" });
       }
 
@@ -150,10 +162,7 @@ exports.nextStep = async (req, res) => {
         }
       }
 
-      if (
-        currentNode.variable_key &&
-        session.mode === "production"
-      ) {
+      if (currentNode.variable_key) {
         session.variables[currentNode.variable_key] = sanitizedInput;
       }
 
@@ -161,10 +170,20 @@ exports.nextStep = async (req, res) => {
     }
 
     /* ───────────── SIMPLE NODES ───────────── */
-    else if (
-      ["text", "link", "jump"].includes(currentNode.node_type)
-    ) {
+    else if (["text", "jump"].includes(currentNode.node_type)) {
       nextNodeId = currentNode.next_node_id;
+    }
+
+    /* ───────────── LINK = FIN ───────────── */
+    else if (currentNode.node_type === "link") {
+      nextNodeId = null;
+    }
+
+    /* ───────────── UNKNOWN ───────────── */
+    else {
+      return res.status(400).json({
+        message: "Tipo de nodo no soportado"
+      });
     }
 
     /* ───────────── END ───────────── */
