@@ -63,7 +63,6 @@ exports.startConversation = async (req, res) => {
   }
 };
 
-
 // Finalizar conversación
 exports.nextStep = async (req, res) => {
   try {
