@@ -6,40 +6,66 @@ const upsertContactFromSession = require("../services/upsertContactFromSession.s
 const validateInput = require("../utils/validateInput");
 const renderNode = require("../utils/renderNode");
 
-const INPUT_NODES = ["question", "email", "phone", "number"];
+const INPUT_NODES = ["text_input", "email", "phone", "number"];
+const ALLOWED_MODES = ["preview", "production"];
 
-// Conmenzar conversación
+// START CONVERSATION
 exports.startConversation = async (req, res) => {
   try {
-    const { chatbot_id, mode = "production" } = req.body;
+    const { chatbot_id, flow_id, mode = "production" } = req.body;
 
-    const chatbotQuery = {
-      _id: chatbot_id,
-      account_id: req.user.account_id
-    };
-
-    if (mode === "production") {
-      chatbotQuery.status = "active";
+    if (!ALLOWED_MODES.includes(mode)) {
+      return res.status(400).json({ message: "Mode inválido" });
     }
 
-    const chatbot = await Chatbot.findOne(chatbotQuery);
+    const chatbot = await Chatbot.findOne({
+      _id: chatbot_id,
+      account_id: req.user.account_id
+    });
+
     if (!chatbot) {
       return res.status(404).json({ message: "Chatbot no válido" });
     }
 
-    const flow = await Flow.findOne({
-      chatbot_id,
-      account_id: req.user.account_id,
-      ...(mode === "production" && { is_active: true })
-    }).sort({ is_active: -1, updatedAt: -1 });
+    let flow;
+
+    if (mode === "production") {
+      flow = await Flow.findOne({
+        chatbot_id,
+        account_id: req.user.account_id,
+        is_active: true
+      });
+    } else {
+      if (!flow_id) {
+        return res.status(400).json({
+          message: "flow_id es obligatorio en preview"
+        });
+      }
+
+      flow = await Flow.findOne({
+        _id: flow_id,
+        chatbot_id,
+        account_id: req.user.account_id
+      });
+    }
 
     if (!flow || !flow.start_node_id) {
-      return res.status(404).json({
+      return res.status(400).json({
         message:
           mode === "preview"
-            ? "El flujo no tiene nodo inicial configurado"
-            : "No hay flujo activo configurado"
+            ? "El flow no tiene nodo inicial configurado"
+            : "No hay flow activo publicado"
       });
+    }
+
+    const node = await FlowNode.findOne({
+      _id: flow.start_node_id,
+      flow_id: flow._id,
+      account_id: req.user.account_id
+    });
+
+    if (!node) {
+      return res.status(500).json({ message: "Nodo inicial inválido" });
     }
 
     const session = await ConversationSession.create({
@@ -48,22 +74,19 @@ exports.startConversation = async (req, res) => {
       flow_id: flow._id,
       current_node_id: flow.start_node_id,
       variables: {},
-      mode
+      mode,
+      is_completed: false
     });
 
-    const node = await FlowNode.findById(flow.start_node_id);
-    if (!node) {
-      return res.status(500).json({ message: "Nodo inicial no encontrado" });
-    }
-
     res.json(renderNode(node, session._id));
+
   } catch (error) {
-    console.error("startConversation error:", error);
+    console.error("startConversation:", error);
     res.status(500).json({ message: "Error al iniciar conversación" });
   }
 };
 
-// Finalizar conversación
+// NEXT STEP
 exports.nextStep = async (req, res) => {
   try {
     const { session_id, input } = req.body;
@@ -75,25 +98,34 @@ exports.nextStep = async (req, res) => {
     });
 
     if (!session) {
-      return res.status(404).json({ message: "Sesión inválida o finalizada" });
+      return res.status(404).json({
+        message: "Sesión inválida o finalizada"
+      });
     }
 
-    const currentNode = await FlowNode.findById(session.current_node_id);
+    const currentNode = await FlowNode.findOne({
+      _id: session.current_node_id,
+      flow_id: session.flow_id,
+      account_id: req.user.account_id
+    });
+
     if (!currentNode) {
-      return res.status(500).json({ message: "Nodo actual no encontrado" });
+      return res.status(500).json({
+        message: "Nodo actual no encontrado"
+      });
     }
 
     let nextNodeId = null;
     const sanitizedInput =
       typeof input === "string" ? input.trim() : input;
 
-    // ================= OPTIONS =================
+    /* ───────────── OPTIONS ───────────── */
     if (currentNode.node_type === "options") {
       const index = Number(sanitizedInput);
 
       if (
         Number.isNaN(index) ||
-        !currentNode.options ||
+        !Array.isArray(currentNode.options) ||
         !currentNode.options[index]
       ) {
         return res.status(400).json({ message: "Opción inválida" });
@@ -102,13 +134,12 @@ exports.nextStep = async (req, res) => {
       nextNodeId = currentNode.options[index].next_node_id;
     }
 
-    // ================= INPUT =================
+    /* ───────────── INPUT ───────────── */
     else if (INPUT_NODES.includes(currentNode.node_type)) {
       if (!sanitizedInput) {
         return res.status(400).json({ message: "Input requerido" });
       }
 
-      // 🔐 Validaciones
       if (currentNode.validation?.enabled) {
         const valid = validateInput(
           sanitizedInput,
@@ -119,29 +150,24 @@ exports.nextStep = async (req, res) => {
         }
       }
 
-      if (currentNode.variable_key) {
+      if (
+        currentNode.variable_key &&
+        session.mode === "production"
+      ) {
         session.variables[currentNode.variable_key] = sanitizedInput;
       }
 
       nextNodeId = currentNode.next_node_id;
     }
 
-    // ================= TEXT =================
-    else if (currentNode.node_type === "text") {
+    /* ───────────── SIMPLE NODES ───────────── */
+    else if (
+      ["text", "link", "jump"].includes(currentNode.node_type)
+    ) {
       nextNodeId = currentNode.next_node_id;
     }
 
-    // ================= LINK =================
-    else if (currentNode.node_type === "link") {
-      nextNodeId = currentNode.next_node_id;
-    }
-
-    // ================= JUMP =================
-    else if (currentNode.node_type === "jump") {
-      nextNodeId = currentNode.next_node_id;
-    }
-
-    // ================= END =================
+    /* ───────────── END ───────────── */
     if (!nextNodeId) {
       session.is_completed = true;
       await session.save();
@@ -157,17 +183,27 @@ exports.nextStep = async (req, res) => {
       });
     }
 
+    const nextNode = await FlowNode.findOne({
+      _id: nextNodeId,
+      flow_id: session.flow_id,
+      account_id: req.user.account_id
+    });
+
+    if (!nextNode) {
+      return res.status(500).json({
+        message: "Siguiente nodo no encontrado"
+      });
+    }
+
     session.current_node_id = nextNodeId;
     await session.save();
 
-    const nextNode = await FlowNode.findById(nextNodeId);
-    if (!nextNode) {
-      return res.status(500).json({ message: "Siguiente nodo no encontrado" });
-    }
-
     res.json(renderNode(nextNode, session._id));
+
   } catch (error) {
-    console.error("nextStep error:", error);
-    res.status(500).json({ message: "Error al procesar conversación" });
+    console.error("nextStep:", error);
+    res.status(500).json({
+      message: "Error al procesar conversación"
+    });
   }
 };

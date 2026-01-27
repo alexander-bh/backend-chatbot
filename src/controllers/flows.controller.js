@@ -69,18 +69,18 @@ const validateFlow = async (flow) => {
     if (node.node_type === "link") {
       if (!node.link_action?.type || !node.link_action?.value) return false;
     }
+
     /* CONEXIÓN OBLIGATORIA */
-    // El flujo termina cuando un nodo no tiene next_node_id
     if (
-      !node.next_node_id &&
-      !VALID_END_NODES.includes(node.node_type) &&
-      node.node_type !== "options"
+      node.node_type !== "link" &&
+      node.node_type !== "options" &&
+      !node.next_node_id
     ) {
       return false;
     }
   }
 
-  // ─────────────── Detectar ciclos ───────────────
+  /* ─────────────── CICLOS ─────────────── */
   const visited = new Set();
 
   const dfs = (id, path = new Set()) => {
@@ -108,7 +108,7 @@ const validateFlow = async (flow) => {
 
   if (!dfs(String(flow.start_node_id))) return false;
 
-  // ─────────────── Nodos alcanzables ───────────────
+  /* ─────────────── NODOS ALCANZABLES ─────────────── */
   const reachable = new Set();
 
   const walk = (id) => {
@@ -307,17 +307,12 @@ exports.saveFlow = async (req, res) => {
 
   const flow = await Flow.findOne({
     _id: req.params.id,
-    account_id: req.user.account_id
+    account_id: req.user.account_id,
+    is_active: false
   });
 
   if (!flow) {
-    return res.status(404).json({ message: "Flow no encontrado" });
-  }
-
-  if (flow.is_active) {
-    return res.status(400).json({
-      message: "No puedes modificar un flow publicado"
-    });
+    return res.status(404).json({ message: "Flow no editable" });
   }
 
   if (req.body.start_node_id) {
@@ -338,13 +333,8 @@ exports.saveFlow = async (req, res) => {
     flow.start_node_id = req.body.start_node_id;
   }
 
-
   const { nodes } = req.body;
-  if (!Array.isArray(nodes)) {
-    return res.status(400).json({ message: "nodes inválido" });
-  }
-
-  if (!nodes.length) {
+  if (!Array.isArray(nodes) || !nodes.length) {
     return res.status(400).json({ message: "El flow no tiene nodos" });
   }
 
@@ -358,7 +348,7 @@ exports.saveFlow = async (req, res) => {
 
   if (count !== nodeIds.length) {
     return res.status(400).json({
-      message: "Uno o más nodos no existen o no pertenecen al flow"
+      message: "Uno o más nodos no pertenecen al flow"
     });
   }
 
@@ -377,7 +367,7 @@ exports.saveFlow = async (req, res) => {
         next_node_id: n.next_node_id ?? null,
         parent_node_id: n.parent_node_id ?? null,
         order: n.order ?? 0,
-        ...(n.position && { position: n.position }),
+        position: n.position ?? null,
         variable_key: n.variable_key ?? null,
         crm_field_key: n.crm_field_key ?? null,
         validation: n.validation ?? null,
@@ -393,35 +383,47 @@ exports.saveFlow = async (req, res) => {
   if (bulk.length) await FlowNode.bulkWrite(bulk);
 
   flow.is_draft = true;
-  flow.is_active = false;
   await flow.save();
 
-  res.json({ message: "Cambios guardados correctamente" });
+  res.json({ message: "Flow guardado correctamente" });
 };
 
 // Publicar flow
 exports.publishFlow = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const flow = await Flow.findOne({
       _id: req.params.id,
       account_id: req.user.account_id,
-      is_active: false
-    });
+      is_active: false,
+      is_draft: true
+    }).session(session);
 
     if (!flow) {
+      await session.abortTransaction();
       return res.status(404).json({ message: "Flow no publicable" });
     }
 
     const valid = await validateFlow(flow);
     if (!valid) {
+      await session.abortTransaction();
       return res.status(400).json({
         message: "El flujo no es válido"
       });
     }
 
+    // Desactivar otros flows del chatbot
     await Flow.updateMany(
-      { chatbot_id: flow.chatbot_id, _id: { $ne: flow._id } },
-      { is_active: false }
+      {
+        chatbot_id: flow.chatbot_id,
+        _id: { $ne: flow._id }
+      },
+      {
+        is_active: false
+      },
+      { session }
     );
 
     flow.is_active = true;
@@ -429,13 +431,18 @@ exports.publishFlow = async (req, res) => {
     flow.version = (flow.version ?? 0) + 1;
     flow.published_at = new Date();
 
-    await flow.save();
+    await flow.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
 
     res.json({ message: "Flow publicado correctamente" });
 
   } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
     console.error("publishFlow:", error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "Error al publicar flow" });
   }
 };
 
