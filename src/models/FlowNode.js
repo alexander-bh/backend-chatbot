@@ -113,7 +113,6 @@ const FlowNodeSchema = new Schema(
       default: undefined
     },
 
-
     crm_field_key: {
       type: String,
       default: null

@@ -31,6 +31,13 @@ const ConversationSessionSchema = new mongoose.Schema(
       default: {}
     },
 
+    // 👇 NUEVO CAMPO
+    mode: {
+      type: String,
+      enum: ["preview", "production"],
+      default: "production"
+    },
+
     is_completed: {
       type: Boolean,
       default: false

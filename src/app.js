@@ -36,5 +36,6 @@ app.use("/api/meta", require("./routes/meta.routes.js"));
 
 // Rutas de conversación
 app.use("/api/conversations",require("./routes/conversationSession.routes.js"));
+app.use("/api/public-chatbot",require("./routes/public-chatbot.routes.js")); 
 
 module.exports = app;

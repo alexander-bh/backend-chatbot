@@ -156,6 +156,9 @@ exports.registerFirst = async (req, res) => {
       { session }
     );
 
+    flow.start_node_id = startNode._id;
+    await flow.save({ session });
+
     const token = generateToken({
       id: user._id,
       role: user.role,

@@ -8,29 +8,37 @@ const renderNode = require("../utils/renderNode");
 
 const INPUT_NODES = ["question", "email", "phone", "number"];
 
-// Conmensar conversación
+// Conmenzar conversación
 exports.startConversation = async (req, res) => {
   try {
-    const { chatbot_id } = req.body;
+    const { chatbot_id, mode = "production" } = req.body;
 
-    const chatbot = await Chatbot.findOne({
+    const chatbotQuery = {
       _id: chatbot_id,
-      account_id: req.user.account_id,
-      status: "active"
-    });
+      account_id: req.user.account_id
+    };
 
+    if (mode === "production") {
+      chatbotQuery.status = "active";
+    }
+
+    const chatbot = await Chatbot.findOne(chatbotQuery);
     if (!chatbot) {
       return res.status(404).json({ message: "Chatbot no válido" });
     }
 
     const flow = await Flow.findOne({
       chatbot_id,
-      is_active: true
-    });
+      account_id: req.user.account_id,
+      ...(mode === "production" && { is_active: true })
+    }).sort({ is_active: -1, updatedAt: -1 });
 
     if (!flow || !flow.start_node_id) {
       return res.status(404).json({
-        message: "No hay flujo activo configurado"
+        message:
+          mode === "preview"
+            ? "El flujo no tiene nodo inicial configurado"
+            : "No hay flujo activo configurado"
       });
     }
 
@@ -39,7 +47,8 @@ exports.startConversation = async (req, res) => {
       chatbot_id,
       flow_id: flow._id,
       current_node_id: flow.start_node_id,
-      variables: {}
+      variables: {},
+      mode
     });
 
     const node = await FlowNode.findById(flow.start_node_id);
@@ -53,6 +62,7 @@ exports.startConversation = async (req, res) => {
     res.status(500).json({ message: "Error al iniciar conversación" });
   }
 };
+
 
 // Finalizar conversación
 exports.nextStep = async (req, res) => {
@@ -137,7 +147,9 @@ exports.nextStep = async (req, res) => {
       session.is_completed = true;
       await session.save();
 
-      await upsertContactFromSession(session);
+      if (session.mode === "production") {
+        await upsertContactFromSession(session);
+      }
 
       return res.json({
         type: "end",
