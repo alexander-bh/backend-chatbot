@@ -4,26 +4,23 @@ const Chatbot = require("../models/Chatbot");
 const FlowNode = require("../models/FlowNode");
 
 const VALID_END_NODES = ["link"];
-const INPUT_NODES = ["question", "email", "phone", "number"];
+const INPUT_NODES = ["email", "phone", "number", "text_input"];
 
 // Validar flow
 const validateFlow = async (flow) => {
-  const nodes = await FlowNode
-    .find({ flow_id: flow._id })
-    .lean(); // ⚡ mejora rendimiento
+  const nodes = await FlowNode.find({
+    flow_id: flow._id,
+    account_id: flow.account_id
+  }).lean();
 
-  // Debe existir start node y al menos un nodo
   if (!nodes.length || !flow.start_node_id) return false;
 
   const nodeMap = new Map(nodes.map(n => [String(n._id), n]));
 
-  // Start node debe existir
   if (!nodeMap.has(String(flow.start_node_id))) return false;
 
   for (const node of nodes) {
     const nodeId = String(node._id);
-
-    // Normalizar options
     const options = Array.isArray(node.options) ? node.options : [];
 
     /* INPUTS */
@@ -70,12 +67,10 @@ const validateFlow = async (flow) => {
 
     /* LINK */
     if (node.node_type === "link") {
-      if (!node.link_action?.type || !node.link_action?.value) {
-        return false;
-      }
+      if (!node.link_action?.type || !node.link_action?.value) return false;
     }
-
     /* CONEXIÓN OBLIGATORIA */
+    // El flujo termina cuando un nodo no tiene next_node_id
     if (
       !node.next_node_id &&
       !VALID_END_NODES.includes(node.node_type) &&
@@ -85,7 +80,7 @@ const validateFlow = async (flow) => {
     }
   }
 
-  // 🔁 Detectar ciclos
+  // ─────────────── Detectar ciclos ───────────────
   const visited = new Set();
 
   const dfs = (id, path = new Set()) => {
@@ -113,7 +108,7 @@ const validateFlow = async (flow) => {
 
   if (!dfs(String(flow.start_node_id))) return false;
 
-  // 🚶‍♂️ Verificar nodos alcanzables
+  // ─────────────── Nodos alcanzables ───────────────
   const reachable = new Set();
 
   const walk = (id) => {
@@ -193,7 +188,10 @@ exports.getFlowById = async (req, res) => {
     }
 
     // Obtener nodos del flow
-    const nodes = await FlowNode.find({ flow_id: id })
+    const nodes = await FlowNode.find({
+      flow_id: id,
+      account_id: req.user.account_id
+    })
       .sort({ order: 1 })
       .lean();
 
@@ -257,25 +255,48 @@ exports.updateFlow = async (req, res) => {
 
 // Eliminar flow
 exports.deleteFlow = async (req, res) => {
-  const flow = await Flow.findOne({
-    _id: req.params.id,
-    account_id: req.user.account_id
-  });
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-  if (!flow) {
-    return res.status(404).json({ message: "Flow no encontrado" });
+
+  try {
+    const flow = await Flow.findOne({
+      _id: req.params.id,
+      account_id: req.user.account_id
+    }).session(session);
+
+
+    if (!flow) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ message: "Flow no encontrado" });
+    }
+
+
+    if (flow.is_active) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ message: "No puedes eliminar un flow activo" });
+    }
+
+
+    await FlowNode.deleteMany({ flow_id: flow._id }, { session });
+    await flow.deleteOne({ session });
+
+
+    await session.commitTransaction();
+    session.endSession();
+
+
+    res.json({ message: "Flow eliminado correctamente" });
+
+
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error("deleteFlow error:", error);
+    res.status(500).json({ message: "Error al eliminar flow" });
   }
-
-  if (flow.is_active) {
-    return res.status(400).json({
-      message: "No puedes eliminar un flow activo"
-    });
-  }
-
-  await FlowNode.deleteMany({ flow_id: flow._id });
-  await flow.deleteOne();
-
-  res.json({ message: "Flow eliminado correctamente" });
 };
 
 // Guardar flow como publicado

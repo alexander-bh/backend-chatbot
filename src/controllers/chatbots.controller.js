@@ -34,7 +34,8 @@ exports.createChatbot = async (req, res) => {
         account_id: req.user.account_id,
         name,
         welcome_message: welcomeText,
-        public_id: crypto.randomUUID()
+        public_id: crypto.randomUUID(),
+        status: "active"
       }],
       { session }
     );
@@ -82,6 +83,9 @@ exports.createChatbot = async (req, res) => {
       }],
       { session }
     );
+
+    flow[0].start_node_id = startNode[0]._id;
+    await flow[0].save({ session });
 
     await session.commitTransaction();
     session.endSession();
@@ -155,13 +159,12 @@ exports.getChatbotById = async (req, res) => {
     // Buscar settings
     const settings = await ChatbotSettings.findOne({
       chatbot_id: chatbot._id
-    }).select("avatar welcome_message -_id");
+    }).select("avatar -_id");
 
     res.json({
       ...chatbot,
-      settings: settings || {
-        avatar: process.env.DEFAULT_CHATBOT_AVATAR,
-        welcome_message: "¡Hola! ¿Cómo puedo ayudarte?"
+      settings: {
+        avatar: settings?.avatar || process.env.DEFAULT_CHATBOT_AVATAR
       }
     });
 
@@ -194,7 +197,8 @@ exports.getChatbotEditorData = async (req, res) => {
     const flowsWithNodes = await Promise.all(
       flows.map(async flow => {
         const nodes = await FlowNode.find({
-          flow_id: flow._id
+          flow_id: flow._id,
+          account_id: req.user.account_id
         });
 
         return {
@@ -248,25 +252,57 @@ exports.updateChatbot = async (req, res) => {
 
 // Eliminar chatbot
 exports.deleteChatbot = async (req, res) => {
-  try {
-    const { id } = req.params;
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-    const chatbot = await Chatbot.findOneAndDelete({
-      _id: id,
+  try {
+    const chatbot = await Chatbot.findOne({
+      _id: req.params.id,
       account_id: req.user.account_id
-    });
+    }).session(session);
 
     if (!chatbot) {
-      return res.status(404).json({
-        message: "Chatbot no encontrado"
-      });
+      await session.abortTransaction();
+      return res.status(404).json({ message: "Chatbot no encontrado" });
     }
 
-    res.json({
-      message: "Chatbot eliminado correctamente"
-    });
+    const flows = await Flow.find({
+      chatbot_id: chatbot._id
+    }).session(session);
+
+    const flowIds = flows.map(f => f._id);
+
+    await FlowNode.deleteMany(
+      { flow_id: { $in: flowIds } },
+      { session }
+    );
+
+    await Flow.deleteMany(
+      { chatbot_id: chatbot._id },
+      { session }
+    );
+
+    await ChatbotSettings.deleteOne(
+      { chatbot_id: chatbot._id },
+      { session }
+    );
+
+    await Chatbot.deleteOne(
+      { _id: chatbot._id },
+      { session }
+    );
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.json({ message: "Chatbot eliminado correctamente" });
+
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    await session.abortTransaction();
+    session.endSession();
+
+    console.error("DELETE CHATBOT ERROR:", error);
+    res.status(500).json({ message: "Error al eliminar chatbot" });
   }
 };
 
@@ -363,6 +399,15 @@ exports.duplicateChatbotFull = async (req, res) => {
       flowIdMap.set(String(flow._id), newFlow._id);
     }
 
+    const flowStartNodeMap = new Map();
+
+    for (const flow of flows) {
+      flowStartNodeMap.set(
+        String(flow._id),
+        String(flow.start_node_id)
+      );
+    }
+
     /* ─────────────── NODOS (SIN CONEXIONES) ─────────────── */
     const nodes = await FlowNode.find({
       flow_id: { $in: [...flowIdMap.keys()] }
@@ -413,6 +458,16 @@ exports.duplicateChatbotFull = async (req, res) => {
       );
 
       nodeIdMap.set(String(node._id), newNode._id);
+
+      const originalStartNodeId = flowStartNodeMap.get(String(node.flow_id));
+
+      if (String(node._id) === originalStartNodeId) {
+        await Flow.updateOne(
+          { _id: nodePayload.flow_id },
+          { start_node_id: newNode._id },
+          { session }
+        );
+      }
     }
 
     /* ─────────────── RECONSTRUIR CONEXIONES ─────────────── */
