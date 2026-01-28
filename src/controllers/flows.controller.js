@@ -159,7 +159,6 @@ exports.deleteFlow = async (req, res) => {
   }
 };
 
-
 // Guardar flow (borrador)
 exports.saveFlow = async (req, res) => {
   try {
@@ -170,18 +169,28 @@ exports.saveFlow = async (req, res) => {
 
     const { start_node_id, nodes } = req.body;
 
+    // 1️⃣ Validar nodos
+    if (!Array.isArray(nodes) || nodes.length === 0) {
+      return res.status(400).json({
+        message: "El flow debe contener al menos un nodo"
+      });
+    }
+
+    // 2️⃣ Validar start_node_id
     if (start_node_id) {
-      if (!isValidObjectId(start_node_id)) {
-        return res.status(400).json({ message: "start_node_id inválido" });
+      if (!mongoose.Types.ObjectId.isValid(start_node_id)) {
+        return res.status(400).json({
+          message: "start_node_id inválido"
+        });
       }
 
-      const exists = await FlowNode.exists({
+      const startNodeExists = await FlowNode.exists({
         _id: start_node_id,
         flow_id: flow._id,
         account_id: req.user.account_id
       });
 
-      if (!exists) {
+      if (!startNodeExists) {
         return res.status(400).json({
           message: "start_node_id no pertenece al flow"
         });
@@ -190,50 +199,75 @@ exports.saveFlow = async (req, res) => {
       flow.start_node_id = start_node_id;
     }
 
-    if (!Array.isArray(nodes) || !nodes.length) {
-      return res.status(400).json({ message: "El flow no tiene nodos" });
-    }
-
-    const bulk = nodes.map(n => ({
-      updateOne: {
-        filter: {
-          _id: n.id || n._id,
-          flow_id: flow._id,
-          account_id: req.user.account_id
-        },
-        update: {
-          content: n.content ?? null,
-          options: n.node_type === "options" ? n.options ?? [] : [],
-          next_node_id: n.next_node_id ?? null,
-          parent_node_id: n.parent_node_id ?? null,
-          order: n.order ?? 0,
-          position: n.position ?? undefined,
-          variable_key: n.variable_key ?? null,
-          crm_field_key: n.crm_field_key ?? null,
-          validation: n.validation ?? null,
-          link_action: n.link_action ?? null,
-          typing_time:
-            typeof n.typing_time === "number"
-              ? Math.min(10, Math.max(0, n.typing_time))
-              : 2,
-          is_draft: false
-        }
-      }
+    // 3️⃣ Normalizar orden (seguridad extra)
+    const normalizedNodes = nodes.map((node, index) => ({
+      ...node,
+      order: typeof node.order === "number" ? node.order : index
     }));
 
-    if (bulk.length) {
-      await FlowNode.bulkWrite(bulk);
-    }
+    // 4️⃣ Preparar bulkWrite
+    const bulkOps = normalizedNodes.map(node => {
+      const nodeId = node._id || node.id;
 
+      if (!nodeId) {
+        throw new Error("Todos los nodos deben tener _id");
+      }
+
+      return {
+        updateOne: {
+          filter: {
+            _id: nodeId,
+            flow_id: flow._id,
+            account_id: req.user.account_id
+          },
+          update: {
+            $set: {
+              content: node.content ?? null,
+              node_type: node.node_type,
+              options:
+                node.node_type === "options"
+                  ? node.options ?? []
+                  : [],
+              next_node_id: node.next_node_id ?? null,
+              parent_node_id: node.parent_node_id ?? null,
+              order: node.order,
+              position: node.position ?? undefined,
+              variable_key: node.variable_key ?? null,
+              crm_field_key: node.crm_field_key ?? null,
+              validation: node.validation ?? null,
+              link_action: node.link_action ?? null,
+              typing_time:
+                typeof node.typing_time === "number"
+                  ? Math.min(10, Math.max(0, node.typing_time))
+                  : 2,
+              is_draft: true
+            }
+          },
+          upsert: true
+        }
+      };
+    });
+
+    // 5️⃣ Guardar nodos
+    await FlowNode.bulkWrite(bulkOps);
+
+    // 6️⃣ Marcar flow como borrador
     flow.is_draft = true;
     await flow.save();
 
-    res.json({ message: "Flow guardado correctamente" });
+    res.json({
+      message: "Flow guardado correctamente",
+      start_node_id: flow.start_node_id
+    });
 
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    console.error("saveFlow:", error);
+    res.status(400).json({
+      message: error.message || "Error al guardar el flow"
+    });
   }
 };
+
 
 
 // Publicar flow
