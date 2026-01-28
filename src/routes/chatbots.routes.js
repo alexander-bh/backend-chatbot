@@ -3,6 +3,7 @@ const router = express.Router();
 const chatbotController = require("../controllers/chatbots.controller");
 const auth = require("../middlewares/auth.middleware");
 const role = require("../middlewares/role.middleware");
+const upload = require("../middlewares/uploadAvatar.middleware");
 
 //crear chatbot
 router.post("/", auth, role("ADMIN", "CLIENT"), chatbotController.createChatbot);
@@ -16,5 +17,13 @@ router.post("/:id/duplicate-full",auth,role("ADMIN", "CLIENT"),chatbotController
 router.get("/:id",auth,role("ADMIN", "CLIENT"),chatbotController.getChatbotById);
 // obtener datos completos del editor
 router.get("/:id/editor",auth,role("ADMIN", "CLIENT"),chatbotController.getChatbotEditorData);
+//Actualizar chatbot 
+router.put(
+  "/:id/settings",
+  auth,
+  upload.single("avatar"),
+  settingsController.updateChatbot
+);
+
 
 module.exports = router;
