@@ -7,7 +7,6 @@ const Chatbot = require("../models/Chatbot");
 const Account = require("../models/Account");
 const Flow = require("../models/Flow");
 const FlowNode = require("../models/FlowNode");
-const ChatbotSettings = require("../models/ChatbotSettings");
 const PasswordResetToken = require("../models/PasswordResetToken");
 const { generateToken } = require("../utils/jwt");
 const { sendResetPasswordEmail } = require("../services/email.service");
@@ -106,29 +105,24 @@ exports.registerFirst = async (req, res) => {
         name: `Bot de ${name}`,
         public_id: crypto.randomUUID(),
         welcome_message: welcomeText,
-        status: "active"
+        status: "active",
+        settings: {
+          avatar: process.env.DEFAULT_CHATBOT_AVATAR,
+          uploaded_avatars: [],
+          primary_color: "#2563eb",
+          secondary_color: "#111827",
+          launcher_text: "¿Te ayudo?",
+          position: "bottom-right",
+          offset_x: 24,
+          offset_y: 24,
+          is_enabled: true,
+          input_placeholder: "Escribe tu mensaje…",
+          show_branding: true
+        }
       }],
       { session }
     );
 
-    const [settings] = await ChatbotSettings.create(
-      [{
-        chatbot_id: chatbot._id,
-        avatar: process.env.DEFAULT_CHATBOT_AVATAR,
-        primary_color: "#2563eb",
-        secondary_color: "#111827",
-        launcher_text: "¿Te ayudo?",
-        bubble_style: "rounded",
-        font: "inter",
-        position: {
-          type: "bottom-right",
-          offset_x: 24,
-          offset_y: 24
-        },
-        is_enabled: true
-      }],
-      { session }
-    );
 
     const [flow] = await Flow.create(
       [{

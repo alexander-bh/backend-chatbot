@@ -39,7 +39,6 @@ const recalculateOrder = (nodes, startNodeId) => {
   return ordered;
 };
 
-
 // Crear flow
 exports.createFlow = async (req, res) => {
   try {
@@ -144,7 +143,6 @@ exports.getFlowsByChatbot = async (req, res) => {
   }
 };
 
-
 // Actualizar flow
 exports.updateFlow = async (req, res) => {
   try {
@@ -245,7 +243,6 @@ exports.saveFlow = async (req, res) => {
     res.status(400).json({ message: error.message });
   }
 };
-
 
 // Publicar flow
 exports.publishFlow = async (req, res) => {

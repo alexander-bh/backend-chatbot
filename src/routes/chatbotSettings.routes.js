@@ -1,22 +1,17 @@
 const express = require("express");
 const router = express.Router();
 const auth = require("../middlewares/auth.middleware");
+const settingsController = require("../controllers/chatbots.controller"); 
 const upload = require("../middlewares/uploadAvatar.middleware");
-const settingsController = require("../controllers/chatbotSettings.controller");
 
-// Obtener configuración de chatbot
-router.get(
-  "/chatbots/:id/settings",
-  auth,
-  settingsController.getSettings
-);
-// Actualizar configuración de chatbot
+//Actualizar chatbot 
 router.put(
-  "/chatbots/:id/settings",
+  "/:id/settings",
   auth,
   upload.single("avatar"),
-  settingsController.updateChatbotSettings
+  settingsController.updateChatbot
 );
+
 // Obtener avatares disponibles
 router.get(
   "/chatbots/:id/avatars",
