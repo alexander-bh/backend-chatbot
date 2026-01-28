@@ -97,7 +97,7 @@ exports.getFlowsByChatbot = async (req, res) => {
       return res.status(404).json({ message: "Chatbot no encontrado" });
     }
 
-    const flows = await Flow.find({ chatbot_id: chatbot._id });
+    const flows = await Flow.find({ chatbot_id: chatbot._id, account_id: req.user.account_id });
     res.json(flows);
 
   } catch (error) {
