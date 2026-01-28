@@ -1,8 +1,10 @@
 const mongoose = require("mongoose");
 const FlowNode = require("../models/FlowNode");
+const Flow = require("../models/Flow");  
 const { validateCreateNode } = require("../validators/flowNode.validator");
 const normalizeLinkAction = require("../utils/normalizeLinkAction");
 const { getEditableFlow } = require("../utils/flow.utils");
+
 
 // Crear nodos
 exports.createNode = async (req, res) => {
