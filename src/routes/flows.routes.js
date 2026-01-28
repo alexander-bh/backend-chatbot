@@ -3,22 +3,27 @@ const router = express.Router();
 
 const auth = require("../middlewares/auth.middleware");
 const role = require("../middlewares/role.middleware");
+
 const flowController = require("../controllers/flows.controller");
 const flowEdit = require("../controllers/flowEditor.controller");
+
+const FLOW_ROLE = role("ADMIN", "CLIENT");
+
 
 // Crear flujo
 router.post(
   "/",
   auth,
-  role("ADMIN", "CLIENT"),
+  FLOW_ROLE,
   flowController.createFlow
 );
+
 
 // Listar flujos por chatbot
 router.get(
   "/chatbot/:chatbotId",
   auth,
-  role("ADMIN", "CLIENT"),
+  FLOW_ROLE,
   flowController.getFlowsByChatbot
 );
 
@@ -26,47 +31,52 @@ router.get(
 router.put(
   "/:id",
   auth,
-  role("ADMIN", "CLIENT"),
+  FLOW_ROLE,
   flowController.updateFlow
 );
+
+// Editor
+router.get(
+  "/:flowId/editor",
+  auth,
+  FLOW_ROLE,
+  flowEdit.getFlowEditorData
+);
+
 
 // Eliminar flujo
 router.delete(
   "/:id",
   auth,
-  role("ADMIN", "CLIENT"),
+  FLOW_ROLE,
   flowController.deleteFlow
 );
+
 
 // Guardar cambios (botón verde)
 router.post(
   "/:id/save",
   auth,
-  role("ADMIN", "CLIENT"),
+  FLOW_ROLE,
   flowController.saveFlow
 );
+
 
 // Publicar flujo
 router.post(
   "/:id/publish",
   auth,
-  role("ADMIN", "CLIENT"),
+  FLOW_ROLE,
   flowController.publishFlow
 );
+
 
 // Obtener flujo por ID
 router.get(
   "/:id",
   auth,
-  role("ADMIN", "CLIENT"),
+  FLOW_ROLE,
   flowController.getFlowById
 );
-
-router.get(
-  "/:flowId/editor",
-  auth,
-  flowEdit.getFlowEditorData
-);
-
 
 module.exports = router;

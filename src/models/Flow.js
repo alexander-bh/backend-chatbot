@@ -5,7 +5,7 @@ const FlowSchema = new Schema(
     account_id: {
       type: Schema.Types.ObjectId,
       ref: "Account",
-      required: true,
+      required: true
     },
 
     chatbot_id: {
@@ -19,14 +19,11 @@ const FlowSchema = new Schema(
       required: true
     },
 
-    is_active: {
-      type: Boolean,
-      default: false
-    },
-
-    is_draft: {
-      type: Boolean,
-      default: true
+    // Estado
+    status: {
+      type: String,
+      enum: ["draft", "active", "archived"],
+      default: "draft"
     },
 
     start_node_id: {
@@ -35,12 +32,19 @@ const FlowSchema = new Schema(
       default: null
     },
 
-    published_at: Date,
-
+    // Versionado
     version: {
       type: Number,
-      default: 0
-    }
+      required: true
+    },
+
+    base_flow_id: {
+      type: Schema.Types.ObjectId,
+      ref: "Flow",
+      default: null
+    },
+
+    published_at: Date
   },
   { timestamps: true }
 );

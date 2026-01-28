@@ -3,6 +3,8 @@ const Flow = require("../models/Flow");
 const Chatbot = require("../models/Chatbot");
 const FlowNode = require("../models/FlowNode");
 const validateFlow = require("../services/validateFlow.service");
+const { getEditableFlow } = require("../utils/flow.utils");
+
 
 // Crear flow
 exports.createFlow = async (req, res) => {
@@ -11,6 +13,10 @@ exports.createFlow = async (req, res) => {
 
     if (!chatbot_id || !name) {
       return res.status(400).json({ message: "Datos incompletos" });
+    }
+
+    if (!isValidObjectId(chatbot_id)) {
+      return res.status(400).json({ message: "chatbot_id inválido" });
     }
 
     const chatbot = await Chatbot.findOne({
@@ -45,7 +51,7 @@ exports.getFlowById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!isValidObjectId(id)) {
       return res.status(400).json({ message: "ID inválido" });
     }
 
@@ -76,8 +82,14 @@ exports.getFlowById = async (req, res) => {
 // Obtener flows por chatbot
 exports.getFlowsByChatbot = async (req, res) => {
   try {
+    const { chatbotId } = req.params;
+
+    if (!isValidObjectId(chatbotId)) {
+      return res.status(400).json({ message: "chatbotId inválido" });
+    }
+
     const chatbot = await Chatbot.findOne({
-      _id: req.params.chatbotId,
+      _id: chatbotId,
       account_id: req.user.account_id
     });
 
@@ -89,35 +101,27 @@ exports.getFlowsByChatbot = async (req, res) => {
     res.json(flows);
 
   } catch (error) {
+    console.error("getFlowsByChatbot:", error);
     res.status(500).json({ message: "Error al obtener flows" });
   }
 };
 
 // Actualizar flow
 exports.updateFlow = async (req, res) => {
-  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-    return res.status(400).json({ message: "ID inválido" });
+  try {
+    const flow = await getEditableFlow(
+      req.params.id,
+      req.user.account_id
+    );
+
+    flow.name = req.body.name ?? flow.name;
+    await flow.save();
+
+    res.json(flow);
+
+  } catch (error) {
+    res.status(400).json({ message: error.message });
   }
-
-  const flow = await Flow.findOne({
-    _id: req.params.id,
-    account_id: req.user.account_id
-  });
-
-  if (!flow) {
-    return res.status(404).json({ message: "Flow no encontrado" });
-  }
-
-  if (flow.is_active) {
-    return res.status(400).json({
-      message: "No puedes modificar un flow publicado"
-    });
-  }
-
-  flow.name = req.body.name ?? flow.name;
-  await flow.save();
-
-  res.json(flow);
 };
 
 // Eliminar flow
@@ -126,24 +130,16 @@ exports.deleteFlow = async (req, res) => {
   session.startTransaction();
 
   try {
-    const flow = await Flow.findOne({
-      _id: req.params.id,
-      account_id: req.user.account_id
-    }).session(session);
+    const flow = await getEditableFlow(
+      req.params.id,
+      req.user.account_id
+    );
 
-    if (!flow) {
-      await session.abortTransaction();
-      return res.status(404).json({ message: "Flow no encontrado" });
-    }
+    await FlowNode.deleteMany(
+      { flow_id: flow._id },
+      { session }
+    );
 
-    if (flow.is_active) {
-      await session.abortTransaction();
-      return res.status(400).json({
-        message: "No puedes eliminar un flow activo"
-      });
-    }
-
-    await FlowNode.deleteMany({ flow_id: flow._id }, { session });
     await flow.deleteOne({ session });
 
     await session.commitTransaction();
@@ -154,104 +150,97 @@ exports.deleteFlow = async (req, res) => {
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
-    console.error("deleteFlow:", error);
-    res.status(500).json({ message: "Error al eliminar flow" });
+    res.status(400).json({ message: error.message });
   }
 };
+
 
 // Guardar flow (borrador)
 exports.saveFlow = async (req, res) => {
-  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-    return res.status(400).json({ message: "ID inválido" });
-  }
+  try {
+    const flow = await getEditableFlow(
+      req.params.id,
+      req.user.account_id
+    );
 
-  const flow = await Flow.findOne({
-    _id: req.params.id,
-    account_id: req.user.account_id,
-    is_active: false
-  });
+    const { start_node_id, nodes } = req.body;
 
-  if (!flow) {
-    return res.status(404).json({ message: "Flow no editable" });
-  }
+    if (start_node_id) {
+      if (!isValidObjectId(start_node_id)) {
+        return res.status(400).json({ message: "start_node_id inválido" });
+      }
 
-  if (req.body.start_node_id) {
-    if (!mongoose.Types.ObjectId.isValid(req.body.start_node_id)) {
-      return res.status(400).json({ message: "start_node_id inválido" });
-    }
-
-    const exists = await FlowNode.exists({
-      _id: req.body.start_node_id,
-      flow_id: flow._id,
-      account_id: req.user.account_id
-    });
-
-    if (!exists) {
-      return res.status(400).json({
-        message: "start_node_id no pertenece al flow"
-      });
-    }
-
-    flow.start_node_id = req.body.start_node_id;
-  }
-
-  const { nodes } = req.body;
-  if (!Array.isArray(nodes) || !nodes.length) {
-    return res.status(400).json({ message: "El flow no tiene nodos" });
-  }
-
-  const bulk = nodes.map(n => ({
-    updateOne: {
-      filter: {
-        _id: n.id || n._id,
+      const exists = await FlowNode.exists({
+        _id: start_node_id,
         flow_id: flow._id,
         account_id: req.user.account_id
-      },
-      update: {
-        content: n.content ?? null,
-        options: n.node_type === "options" ? n.options ?? [] : [],
-        next_node_id: n.next_node_id ?? null,
-        parent_node_id: n.parent_node_id ?? null,
-        order: n.order ?? 0,
-        position: n.position ?? undefined,
-        variable_key: n.variable_key ?? null,
-        crm_field_key: n.crm_field_key ?? null,
-        validation: n.validation ?? null,
-        link_action: n.link_action ?? null,
-        typing_time:
-          typeof n.typing_time === "number"
-            ? Math.min(10, Math.max(0, n.typing_time))
-            : 2,
-        is_draft: false
+      });
+
+      if (!exists) {
+        return res.status(400).json({
+          message: "start_node_id no pertenece al flow"
+        });
       }
+
+      flow.start_node_id = start_node_id;
     }
-  }));
 
-  if (bulk.length) await FlowNode.bulkWrite(bulk);
+    if (!Array.isArray(nodes) || !nodes.length) {
+      return res.status(400).json({ message: "El flow no tiene nodos" });
+    }
 
-  flow.is_draft = true;
-  await flow.save();
+    const bulk = nodes.map(n => ({
+      updateOne: {
+        filter: {
+          _id: n.id || n._id,
+          flow_id: flow._id,
+          account_id: req.user.account_id
+        },
+        update: {
+          content: n.content ?? null,
+          options: n.node_type === "options" ? n.options ?? [] : [],
+          next_node_id: n.next_node_id ?? null,
+          parent_node_id: n.parent_node_id ?? null,
+          order: n.order ?? 0,
+          position: n.position ?? undefined,
+          variable_key: n.variable_key ?? null,
+          crm_field_key: n.crm_field_key ?? null,
+          validation: n.validation ?? null,
+          link_action: n.link_action ?? null,
+          typing_time:
+            typeof n.typing_time === "number"
+              ? Math.min(10, Math.max(0, n.typing_time))
+              : 2,
+          is_draft: false
+        }
+      }
+    }));
 
-  res.json({ message: "Flow guardado correctamente" });
+    if (bulk.length) {
+      await FlowNode.bulkWrite(bulk);
+    }
+
+    flow.is_draft = true;
+    await flow.save();
+
+    res.json({ message: "Flow guardado correctamente" });
+
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
 };
+
 
 // Publicar flow
 exports.publishFlow = async (req, res) => {
   try {
-    const flow = await Flow.findOne({
-      _id: req.params.id,
-      account_id: req.user.account_id,
-      is_active: false
-    });
+    const flow = await getEditableFlow(
+      req.params.id,
+      req.user.account_id
+    );
 
-    if (!flow) {
-      return res.status(404).json({ message: "Flow no publicable" });
-    }
-
-    // 🔥 VALIDACIÓN REAL
     await validateFlow(flow);
 
-    // Desactivar otros flows del chatbot
     await Flow.updateMany(
       {
         chatbot_id: flow.chatbot_id,
