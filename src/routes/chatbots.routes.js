@@ -22,7 +22,7 @@ router.put(
   "/:id/settings",
   auth,
   upload.single("avatar"),
-  settingsController.updateChatbot
+  chatbotController.updateChatbot
 );
 
 
