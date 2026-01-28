@@ -22,65 +22,60 @@ const ChatbotSchema = new Schema({
   },
 
   /* ───────── SETTINGS EMBEBIDOS ───────── */
-  settings: {
-    avatar: {
-      type: String,
-      default: process.env.DEFAULT_CHATBOT_AVATAR
-    },
+  avatar: {
+    type: String,
+    default: process.env.DEFAULT_CHATBOT_AVATAR
+  },
 
-    uploaded_avatars: [
-      {
-        url: String,
-        public_id: String,
-        created_at: { type: Date, default: Date.now }
-      }
-    ],
-
-    primary_color: {
-      type: String,
-      default: "#2563eb"
-    },
-
-    secondary_color: {
-      type: String,
-      default: "#111827"
-    },
-
-    launcher_text: {
-      type: String,
-      default: "¿Te ayudo?"
-    },
-
-    is_enabled: {
-      type: Boolean,
-      default: true
-    },
-
-    position: {
-      type: String,
-      enum: [
-        "bottom-right",
-        "bottom-left",
-        "middle-right",
-        "middle-left",
-        "top-right",
-        "top-left"
-      ],
-      default: "bottom-right"
-    },
-
-    offset_x: { type: Number, default: 24 },
-    offset_y: { type: Number, default: 24 },
-
-    input_placeholder: {
-      type: String,
-      default: "Escribe tu mensaje..."
-    },
-
-    show_branding: {
-      type: Boolean,
-      default: true
+  uploaded_avatars: [
+    {
+      url: String,
+      public_id: String,
+      created_at: { type: Date, default: Date.now }
     }
+  ],
+
+  primary_color: {
+    type: String,
+    default: "#2563eb"
+  },
+
+  secondary_color: {
+    type: String,
+    default: "#111827"
+  },
+
+  launcher_text: {
+    type: String,
+    default: "¿Te ayudo?"
+  },
+
+  is_enabled: {
+    type: Boolean,
+    default: true
+  },
+
+  position: {
+    type: String,
+    enum: [
+      "bottom-right",
+      "bottom-left",
+      "middle-right",
+      "middle-left",
+      "top-right",
+      "top-left"
+    ],
+    default: "bottom-right"
+  },
+
+  input_placeholder: {
+    type: String,
+    default: "Escribe tu mensaje..."
+  },
+
+  show_branding: {
+    type: Boolean,
+    default: true
   },
 
   created_at: {

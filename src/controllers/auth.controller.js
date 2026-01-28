@@ -62,10 +62,11 @@ exports.registerFirst = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const welcomeText = `Hola 👋 soy el bot de ${name}, ¿en qué puedo ayudarte?`;
 
-    const userExists = await User.findOne({ email: normalizedEmail }).session(session);
+    const userExists = await User.findOne({
+      email: normalizedEmail
+    }).session(session);
+
     if (userExists) {
-      await session.abortTransaction();
-      session.endSession();
       return res.status(409).json({
         message: "El email ya está registrado"
       });
@@ -93,7 +94,7 @@ exports.registerFirst = async (req, res) => {
         name,
         email: normalizedEmail,
         password: hashedPassword,
-        role: "CLIENT",
+        role: "ADMIN",
         onboarding: finalOnboarding
       }],
       { session }
@@ -106,23 +107,18 @@ exports.registerFirst = async (req, res) => {
         public_id: crypto.randomUUID(),
         welcome_message: welcomeText,
         status: "active",
-        settings: {
-          avatar: process.env.DEFAULT_CHATBOT_AVATAR,
-          uploaded_avatars: [],
-          primary_color: "#2563eb",
-          secondary_color: "#111827",
-          launcher_text: "¿Te ayudo?",
-          position: "bottom-right",
-          offset_x: 24,
-          offset_y: 24,
-          is_enabled: true,
-          input_placeholder: "Escribe tu mensaje…",
-          show_branding: true
-        }
+        avatar: process.env.DEFAULT_CHATBOT_AVATAR,
+        uploaded_avatars: [],
+        primary_color: "#2563eb",
+        secondary_color: "#111827",
+        launcher_text: "¿Te ayudo?",
+        position: "bottom-right",
+        is_enabled: true,
+        input_placeholder: "Escribe tu mensaje…",
+        show_branding: true
       }],
       { session }
     );
-
 
     const [flow] = await Flow.create(
       [{
@@ -143,7 +139,6 @@ exports.registerFirst = async (req, res) => {
         flow_id: flow._id,
         node_type: "text",
         content: welcomeText,
-        next_node_id: null,
         position: { x: 100, y: 100 },
         is_draft: false
       }],
@@ -182,8 +177,7 @@ exports.registerFirst = async (req, res) => {
       },
       chatbot,
       flow,
-      start_node: startNode,
-      settings
+      start_node: startNode
     });
 
   } catch (error) {

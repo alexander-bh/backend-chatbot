@@ -3,7 +3,6 @@ const router = express.Router();
 const auth = require("../middlewares/auth.middleware");
 const settingsController = require("../controllers/chatbots.controller"); 
 
-
 // Obtener avatares disponibles
 router.get(
   "/chatbots/:id/avatars",
