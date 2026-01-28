@@ -164,8 +164,15 @@ exports.getNodesByFlow = async (req, res) => {
       return res.status(400).json({ message: "flowId inválido" });
     }
 
-    await getEditableFlow(flowId, req.user.account_id);
+    const flow = await Flow.findOne({
+      _id: flowId,
+      account_id: req.user.account_id
+    });
 
+    if (!flow) {
+      return res.status(404).json({ message: "Flow no encontrado" });
+    }
+    
     const nodes = await FlowNode.find({
       flow_id: flowId,
       account_id: req.user.account_id

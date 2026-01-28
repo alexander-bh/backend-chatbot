@@ -4,6 +4,7 @@ const router = express.Router();
 const auth = require("../middlewares/auth.middleware");
 const role = require("../middlewares/role.middleware");
 const flowController = require("../controllers/flows.controller");
+const flowEdit = require("../controllers/flowEditor.controller");
 
 // Crear flujo
 router.post(
@@ -60,5 +61,12 @@ router.get(
   role("ADMIN", "CLIENT"),
   flowController.getFlowById
 );
+
+router.get(
+  "/:flowId/editor",
+  authMiddleware,
+  flowEdit.getFlowEditorData
+);
+
 
 module.exports = router;
