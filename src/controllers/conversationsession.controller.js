@@ -9,7 +9,8 @@ const renderNode = require("../utils/renderNode");
 const INPUT_NODES = ["question", "email", "phone", "number"];
 const ALLOWED_MODES = ["preview", "production"];
 
-// START CONVERSATION
+/* ───────────────────────── START CONVERSATION ───────────────────────── */
+
 exports.startConversation = async (req, res) => {
   try {
     const { chatbot_id, flow_id, mode = "production" } = req.body;
@@ -72,12 +73,13 @@ exports.startConversation = async (req, res) => {
       account_id: req.user.account_id,
       chatbot_id,
       flow_id: flow._id,
-      current_node_id: flow.start_node_id,
+      current_node_id: startNode._id,
       variables: {},
       mode,
       is_completed: false
     });
 
+    // Devuelve solo lo que el frontend necesita
     res.json(renderNode(startNode, session._id));
 
   } catch (error) {
@@ -86,7 +88,8 @@ exports.startConversation = async (req, res) => {
   }
 };
 
-// NEXT STEP
+/* ───────────────────────── NEXT STEP ───────────────────────── */
+
 exports.nextStep = async (req, res) => {
   try {
     const { session_id, input } = req.body;
@@ -135,7 +138,7 @@ exports.nextStep = async (req, res) => {
 
       if (!option.next_node_id) {
         return res.status(500).json({
-          message: "La opción seleccionada no tiene rama configurada"
+          message: "La opción no tiene siguiente nodo configurado"
         });
       }
 
@@ -157,24 +160,28 @@ exports.nextStep = async (req, res) => {
           sanitizedInput,
           currentNode.validation.rules
         );
+
         if (!valid.ok) {
           return res.status(400).json({ message: valid.message });
         }
       }
 
       if (currentNode.variable_key) {
-        session.variables[currentNode.variable_key] = sanitizedInput;
+        session.variables.set(
+          currentNode.variable_key,
+          sanitizedInput
+        );
       }
 
       nextNodeId = currentNode.next_node_id;
     }
 
-    /* ───────────── SIMPLE NODES ───────────── */
+    /* ───────────── TEXT / JUMP ───────────── */
     else if (["text", "jump"].includes(currentNode.node_type)) {
       nextNodeId = currentNode.next_node_id;
     }
 
-    /* ───────────── LINK = FIN ───────────── */
+    /* ───────────── LINK ───────────── */
     else if (currentNode.node_type === "link") {
       nextNodeId = null;
     }
@@ -186,7 +193,12 @@ exports.nextStep = async (req, res) => {
       });
     }
 
-    /* ───────────── END ───────────── */
+    /* ───────────── END BY FLAG ───────────── */
+    if (currentNode.end_conversation === true) {
+      nextNodeId = null;
+    }
+
+    /* ───────────── END FLOW ───────────── */
     if (!nextNodeId) {
       session.is_completed = true;
       await session.save();
