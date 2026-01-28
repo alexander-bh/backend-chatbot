@@ -84,7 +84,7 @@ exports.getFlowsByChatbot = async (req, res) => {
   try {
     const { chatbotId } = req.params;
 
-    if (!isValidObjectId(chatbotId)) {
+    if (!mongoose.Types.ObjectId.isValid(chatbotId)) {
       return res.status(400).json({ message: "chatbotId inválido" });
     }
 
@@ -97,14 +97,19 @@ exports.getFlowsByChatbot = async (req, res) => {
       return res.status(404).json({ message: "Chatbot no encontrado" });
     }
 
-    const flows = await Flow.find({ chatbot_id: chatbot._id, account_id: req.user.account_id });
+    const flows = await Flow.find({
+      chatbot_id: chatbot._id,
+      account_id: req.user.account_id
+    });
+
     res.json(flows);
 
   } catch (error) {
     console.error("getFlowsByChatbot:", error);
-    res.status(500).json({ message: "Error al obtener flows" });
+    res.status(500).json({ message: error.message });
   }
 };
+
 
 // Actualizar flow
 exports.updateFlow = async (req, res) => {
