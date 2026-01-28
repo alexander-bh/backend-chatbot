@@ -1,9 +1,10 @@
 const mongoose = require("mongoose");
 const FlowNode = require("../models/FlowNode");
-const Flow = require("../models/Flow");  
+const Flow = require("../models/Flow");
 const { validateCreateNode } = require("../validators/flowNode.validator");
 const normalizeLinkAction = require("../utils/normalizeLinkAction");
 const { getEditableFlow } = require("../utils/flow.utils");
+const updateStartNode = require("../utils/updateStartNode");
 
 
 // Crear nodos
@@ -71,6 +72,7 @@ exports.createNode = async (req, res) => {
       { session }
     );
 
+    await updateStartNode(flow_id, req.user.account_id, session);
     await session.commitTransaction();
     res.status(201).json(node);
 
@@ -136,12 +138,26 @@ exports.connectNode = async (req, res) => {
       return res.status(400).json({ message: "Nodo destino inválido" });
     }
 
-    // ───────── CONEXIÓN ─────────
+    // ───────── AJUSTE ROOT ─────────
+    if (target.parent_node_id === null) {
+      await FlowNode.updateMany(
+        {
+          flow_id: source.flow_id,
+          parent_node_id: null,
+          order: { $gt: target.order },
+          account_id: req.user.account_id
+        },
+        { $inc: { order: -1 } }
+      );
+    }
+
+    // ───────── CONEXIÓN FINAL ─────────
     if (source.node_type === "options") {
       source.options[req.body.option_index].next_node_id = target._id;
-      target.parent_node_id = source._id; // 🔥 CLAVE
+      target.parent_node_id = source._id;
     } else {
       source.next_node_id = target._id;
+      target.parent_node_id = source._id; // 🔥 AQUÍ SÍ
     }
 
     source.is_draft = true;
@@ -150,12 +166,15 @@ exports.connectNode = async (req, res) => {
     await target.save();
     await source.save();
 
+    await updateStartNode(source.flow_id, req.user.account_id);
+
     res.json({ message: "Nodos conectados correctamente" });
 
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 // Obtener nodos por flow
 exports.getNodesByFlow = async (req, res) => {
@@ -174,7 +193,7 @@ exports.getNodesByFlow = async (req, res) => {
     if (!flow) {
       return res.status(404).json({ message: "Flow no encontrado" });
     }
-    
+
     const nodes = await FlowNode.find({
       flow_id: flowId,
       account_id: req.user.account_id
@@ -219,15 +238,15 @@ exports.updateNode = async (req, res) => {
         }
 
         if (field === "options") {
+          if (node.node_type !== "options") {
+            throw new Error("Este nodo no admite opciones");
+          }
+
           node.options = req.body.options.map(o => ({
             label: o.label?.trim(),
             next_node_id: o.next_node_id ?? null
           }));
           continue;
-        }
-
-        if (field === "options" && node.node_type !== "options") {
-          throw new Error("Este nodo no admite opciones");
         }
 
         node[field] =
@@ -277,6 +296,7 @@ exports.duplicateNode = async (req, res) => {
       { session }
     );
 
+    await updateStartNode(node.flow_id, req.user.account_id, session);
     await session.commitTransaction();
     res.status(201).json(newNode);
 
@@ -340,7 +360,7 @@ exports.deleteNode = async (req, res) => {
       }
     );
     await FlowNode.deleteOne({ _id: node._id }, { session });
-
+    await updateStartNode(node.flow_id, req.user.account_id, session);
     await session.commitTransaction();
     res.json({ message: "Nodo eliminado correctamente" });
 
@@ -409,6 +429,9 @@ exports.insertAfterNode = async (req, res) => {
 
     prev.is_draft = true;
     await prev.save({ session });
+
+
+    await updateStartNode(prev.flow_id, req.user.account_id, session);
 
     await session.commitTransaction();
     res.status(201).json(newNode);
@@ -492,6 +515,8 @@ exports.reorderNodes = async (req, res) => {
 
     await FlowNode.bulkWrite(bulk, { session });
 
+    await updateStartNode(flow_id, req.user.account_id, session);
+
     await session.commitTransaction();
     res.json({ message: "Orden actualizado correctamente" });
 
@@ -550,7 +575,7 @@ exports.updateCanvas = async (req, res) => {
     }));
 
     await FlowNode.bulkWrite(bulk, { session });
-
+    await updateStartNode(flow_id, req.user.account_id, session);
     await session.commitTransaction();
     res.json({ message: "Canvas actualizado correctamente" });
 
@@ -591,7 +616,7 @@ exports.reorderSubtree = async (req, res) => {
     const bulk = nodes.map((node, index) => ({
       updateOne: {
         filter: {
-          _id: node.id,
+          _id: node.node_id,
           flow_id,
           parent_node_id,
           account_id: req.user.account_id
