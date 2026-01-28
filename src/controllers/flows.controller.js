@@ -5,6 +5,40 @@ const FlowNode = require("../models/FlowNode");
 const validateFlow = require("../services/validateFlow.service");
 const { getEditableFlow } = require("../utils/flow.utils");
 
+const recalculateOrder = (nodes, startNodeId) => {
+  const map = new Map();
+  const visited = new Set();
+  const ordered = [];
+
+  nodes.forEach(n => map.set(String(n._id), n));
+
+  let currentId = String(startNodeId);
+  let index = 0;
+
+  while (currentId) {
+    if (visited.has(currentId)) {
+      throw new Error("Ciclo detectado en el flow");
+    }
+
+    const node = map.get(currentId);
+    if (!node) break;
+
+    visited.add(currentId);
+    ordered.push({
+      _id: node._id,
+      next_node_id: node.next_node_id ?? null,
+      parent_node_id: node.parent_node_id ?? null,
+      order: index++
+    });
+
+    currentId = node.next_node_id
+      ? String(node.next_node_id)
+      : null;
+  }
+
+  return ordered;
+};
+
 
 // Crear flow
 exports.createFlow = async (req, res) => {
@@ -169,105 +203,48 @@ exports.saveFlow = async (req, res) => {
 
     const { start_node_id, nodes } = req.body;
 
-    // 1️⃣ Validar nodos
-    if (!Array.isArray(nodes) || nodes.length === 0) {
-      return res.status(400).json({
-        message: "El flow debe contener al menos un nodo"
-      });
+    if (!Array.isArray(nodes) || !nodes.length) {
+      return res.status(400).json({ message: "nodes inválido" });
     }
 
-    // 2️⃣ Validar start_node_id
-    if (start_node_id) {
-      if (!mongoose.Types.ObjectId.isValid(start_node_id)) {
-        return res.status(400).json({
-          message: "start_node_id inválido"
-        });
-      }
+    const startId = start_node_id || flow.start_node_id;
 
-      const startNodeExists = await FlowNode.exists({
-        _id: start_node_id,
-        flow_id: flow._id,
-        account_id: req.user.account_id
-      });
-
-      if (!startNodeExists) {
-        return res.status(400).json({
-          message: "start_node_id no pertenece al flow"
-        });
-      }
-
-      flow.start_node_id = start_node_id;
+    if (!mongoose.Types.ObjectId.isValid(startId)) {
+      return res.status(400).json({ message: "start_node_id inválido" });
     }
 
-    // 3️⃣ Normalizar orden (seguridad extra)
-    const normalizedNodes = nodes.map((node, index) => ({
-      ...node,
-      order: typeof node.order === "number" ? node.order : index
+    const ordered = recalculateOrder(nodes, startId);
+
+    const bulk = ordered.map(n => ({
+      updateOne: {
+        filter: {
+          _id: n._id,
+          flow_id: flow._id,
+          account_id: req.user.account_id
+        },
+        update: {
+          $set: {
+            next_node_id: n.next_node_id,
+            parent_node_id: n.parent_node_id,
+            order: n.order,
+            is_draft: true
+          }
+        }
+      }
     }));
 
-    // 4️⃣ Preparar bulkWrite
-    const bulkOps = normalizedNodes.map(node => {
-      const nodeId = node._id || node.id;
+    await FlowNode.bulkWrite(bulk);
 
-      if (!nodeId) {
-        throw new Error("Todos los nodos deben tener _id");
-      }
-
-      return {
-        updateOne: {
-          filter: {
-            _id: nodeId,
-            flow_id: flow._id,
-            account_id: req.user.account_id
-          },
-          update: {
-            $set: {
-              content: node.content ?? null,
-              node_type: node.node_type,
-              options:
-                node.node_type === "options"
-                  ? node.options ?? []
-                  : [],
-              next_node_id: node.next_node_id ?? null,
-              parent_node_id: node.parent_node_id ?? null,
-              order: node.order,
-              position: node.position ?? undefined,
-              variable_key: node.variable_key ?? null,
-              crm_field_key: node.crm_field_key ?? null,
-              validation: node.validation ?? null,
-              link_action: node.link_action ?? null,
-              typing_time:
-                typeof node.typing_time === "number"
-                  ? Math.min(10, Math.max(0, node.typing_time))
-                  : 2,
-              is_draft: true
-            }
-          },
-          upsert: true
-        }
-      };
-    });
-
-    // 5️⃣ Guardar nodos
-    await FlowNode.bulkWrite(bulkOps);
-
-    // 6️⃣ Marcar flow como borrador
+    flow.start_node_id = startId;
     flow.is_draft = true;
     await flow.save();
 
-    res.json({
-      message: "Flow guardado correctamente",
-      start_node_id: flow.start_node_id
-    });
+    res.json({ message: "Flow guardado correctamente" });
 
   } catch (error) {
-    console.error("saveFlow:", error);
-    res.status(400).json({
-      message: error.message || "Error al guardar el flow"
-    });
+    res.status(400).json({ message: error.message });
   }
 };
-
 
 
 // Publicar flow
