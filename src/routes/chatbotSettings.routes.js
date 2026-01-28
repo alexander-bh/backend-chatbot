@@ -6,7 +6,7 @@ const upload = require("../middlewares/uploadAvatar.middleware");
 
 //Actualizar chatbot 
 router.put(
-  "/:id/settings",
+  "chatbots/:id/settings",
   auth,
   upload.single("avatar"),
   settingsController.updateChatbot
