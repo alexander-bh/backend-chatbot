@@ -64,7 +64,7 @@ router.get(
 
 router.get(
   "/:flowId/editor",
-  authMiddleware,
+  auth,
   flowEdit.getFlowEditorData
 );
 
