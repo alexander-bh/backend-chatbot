@@ -96,15 +96,21 @@ exports.connectNode = async (req, res) => {
 
     let targetId;
 
+    // ───────── OPTIONS ─────────
     if (source.node_type === "options") {
-      const { option_index, target_node_id } = req.body;
+      const { option_index, next_node_id } = req.body;
 
-      if (!source.options?.[option_index]) {
+      if (
+        typeof option_index !== "number" ||
+        !source.options?.[option_index]
+      ) {
         return res.status(400).json({ message: "Opción inválida" });
       }
 
-      targetId = target_node_id;
-    } else {
+      targetId = next_node_id;
+    }
+    // ───────── LINEAL ─────────
+    else {
       targetId = req.body.next_node_id;
     }
 
@@ -112,8 +118,10 @@ exports.connectNode = async (req, res) => {
       return res.status(400).json({ message: "Nodo destino inválido" });
     }
 
-    if (targetId === String(source._id)) {
-      return res.status(400).json({ message: "No se puede conectar un nodo consigo mismo" });
+    if (String(targetId) === String(source._id)) {
+      return res.status(400).json({
+        message: "No se puede conectar un nodo consigo mismo"
+      });
     }
 
     const target = await FlowNode.findOne({
@@ -126,13 +134,18 @@ exports.connectNode = async (req, res) => {
       return res.status(400).json({ message: "Nodo destino inválido" });
     }
 
+    // ───────── CONEXIÓN ─────────
     if (source.node_type === "options") {
       source.options[req.body.option_index].next_node_id = target._id;
+      target.parent_node_id = source._id; // 🔥 CLAVE
     } else {
       source.next_node_id = target._id;
     }
 
     source.is_draft = true;
+    target.is_draft = true;
+
+    await target.save();
     await source.save();
 
     res.json({ message: "Nodos conectados correctamente" });
