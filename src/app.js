@@ -4,23 +4,25 @@ const cors = require("cors");
 const app = express();
 
 app.use(cors());
+app.use(express.json());
 
-// JSON solo si NO es multipart
-app.use((req, res, next) => {
-  if (req.headers["content-type"]?.includes("multipart/form-data")) {
-    return next();
-  }
-  express.json()(req, res, next);
+//ruta de prueba
+app.get("/ping", (req, res) => {
+  res.json({ ok: true });
 });
 
 export const config = {
-  api: { bodyParser: false },
+  api: {
+    bodyParser: false,
+  },
 };
 
 //middleware para conectar a mongoDB
 //middleware para manejar errores de multer
 app.use(require("./middlewares/multerError.middleware"));
 app.use(require("./middlewares/mongo.middleware.js"));
+
+//rutas principales
 
 app.use("/api/accounts", require("./routes/account.routes.js"));
 app.use("/api/users", require("./routes/user.routes.js"));
