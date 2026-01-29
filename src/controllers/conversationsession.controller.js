@@ -3,7 +3,6 @@ const ConversationSession = require("../models/ConversationSession");
 const Flow = require("../models/Flow");
 const FlowNode = require("../models/FlowNode");
 const Chatbot = require("../models/Chatbot");
-const upsertContactFromSession = require("../services/upsertContactFromSession.service");
 const validateInput = require("../utils/validateInput");
 const renderNode = require("../utils/renderNode");
 
@@ -13,7 +12,7 @@ const ALLOWED_MODES = ["preview", "production"];
 /* --------------------------------------------------
    START CONVERSATION
 -------------------------------------------------- */
-exports.startConversation = async (req, res) => {
+exports.startConversation = async (req, res) => {  
   try {
     const { chatbot_id, flow_id, mode = "production" } = req.body;
 
@@ -92,6 +91,7 @@ exports.startConversation = async (req, res) => {
    NEXT STEP (ENGINE PRO)
 -------------------------------------------------- */
 exports.nextStep = async (req, res) => {
+  throw new Error("NEXT STEP TEST");
   try {
     const { id: sessionId } = req.params;
     const { input } = req.body;

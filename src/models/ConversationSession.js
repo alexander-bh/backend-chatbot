@@ -30,8 +30,6 @@ const ConversationSessionSchema = new mongoose.Schema(
       type: Object,
       default: {}
     },
-
-    // 👇 NUEVO CAMPO
     mode: {
       type: String,
       enum: ["preview", "production"],

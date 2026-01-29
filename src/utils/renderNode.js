@@ -1,3 +1,4 @@
+//renderNode
 module.exports = function renderNode(node, session_id) {
   const payload = {
     session_id,
