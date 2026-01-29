@@ -3,7 +3,8 @@ const router = express.Router();
 const chatbotController = require("../controllers/chatbots.controller");
 const auth = require("../middlewares/auth.middleware");
 const role = require("../middlewares/role.middleware");
-const upload = require("../middlewares/uploadAvatar.middleware");
+const conditionalUpload = require("../middlewares/conditionalUpload.middleware");
+
 
 //crear chatbot
 router.post("/", auth, role("ADMIN", "CLIENT"), chatbotController.createChatbot);
@@ -18,7 +19,12 @@ router.get("/:id",auth,role("ADMIN", "CLIENT"),chatbotController.getChatbotById)
 // obtener datos completos del editor
 router.get("/:id/editor",auth,role("ADMIN", "CLIENT"),chatbotController.getChatbotEditorData);
 //Actualizar chatbot 
-router.put("/:id/settings",auth,upload.single("avatar"),chatbotController.updateChatbot);
+router.put(
+  "/:id/settings",
+  auth,
+  conditionalUpload,
+  chatbotController.updateChatbot
+);
 // Obtener avatares disponibles
 router.get(
   "/:id/avatars",
