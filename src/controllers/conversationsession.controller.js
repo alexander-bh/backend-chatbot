@@ -109,47 +109,80 @@ exports.nextStep = async (req, res) => {
       return res.json({ completed: true });
     }
 
-    let currentNode = await FlowNode.findById(session.current_node_id);
+    const currentNode = await FlowNode.findById(session.current_node_id);
     if (!currentNode) {
       throw new Error("Nodo actual no encontrado");
     }
 
-    /* 🚫 INPUT OBLIGATORIO */
-    if (
-      INPUT_NODES.includes(currentNode.node_type) &&
-      typeof input === "undefined"
-    ) {
-      return res.status(400).json({
-        message: "Este nodo requiere una respuesta del usuario"
-      });
-    }
-
-    /* ✅ VALIDAR INPUT */
+    /* ==================================================
+       1️⃣ NODO INPUT (question, email, phone, number)
+    ================================================== */
     if (INPUT_NODES.includes(currentNode.node_type)) {
+
+      // 🚫 input obligatorio
+      if (typeof input === "undefined") {
+        return res.status(400).json({
+          message: "Este nodo requiere una respuesta del usuario"
+        });
+      }
+
+      // ✅ validar input
       const error = validateInput(currentNode.node_type, input);
       if (error) {
         return res.status(400).json({ message: error });
       }
+
+      // ✅ guardar variable (solo production)
+      if (session.mode === "production" && currentNode.variable_key) {
+        session.variables ??= {};
+        session.variables[currentNode.variable_key] = String(input);
+        session.markModified("variables");
+      }
+
+      // 🔚 si no hay siguiente
+      if (!currentNode.next_node_id) {
+        session.is_completed = true;
+        await session.save();
+        return res.json({ completed: true, variables: session.variables });
+      }
+
+      // ▶️ avanzar después del input
+      let nextNodeId = currentNode.next_node_id;
+
+      while (nextNodeId) {
+        const nextNode = await FlowNode.findById(nextNodeId);
+        if (!nextNode) {
+          throw new Error("Siguiente nodo no encontrado");
+        }
+
+        session.current_node_id = nextNode._id;
+        await session.save();
+
+        // ⛔ detener si el siguiente también requiere input
+        if (INPUT_NODES.includes(nextNode.node_type)) {
+          return res.json(renderNode(nextNode, session._id));
+        }
+
+        // 🟢 mostrar texto final y cerrar
+        if (!nextNode.next_node_id) {
+          session.is_completed = true;
+          await session.save();
+          return res.json(renderNode(nextNode, session._id));
+        }
+
+        nextNodeId = nextNode.next_node_id;
+      }
     }
 
-    /* ✅ GUARDAR VARIABLE (solo production) */
-    if (
-      session.mode === "production" &&
-      currentNode.variable_key
-    ) {
-      session.variables ??= {};
-      session.variables[currentNode.variable_key] = String(input);
-      session.markModified("variables");
-    }
-
-    /* 🔚 FIN SI NO HAY SIGUIENTE */
+    /* ==================================================
+       2️⃣ NODO NO INPUT (text, etc.) → auto avance
+    ================================================== */
     if (!currentNode.next_node_id) {
       session.is_completed = true;
       await session.save();
       return res.json({ completed: true });
     }
 
-    /* ▶️ AVANCE + AUTO-AVANCE */
     let nextNodeId = currentNode.next_node_id;
 
     while (nextNodeId) {
@@ -161,12 +194,10 @@ exports.nextStep = async (req, res) => {
       session.current_node_id = nextNode._id;
       await session.save();
 
-      // ⛔ detener en nodos que requieren input
       if (INPUT_NODES.includes(nextNode.node_type)) {
         return res.json(renderNode(nextNode, session._id));
       }
 
-      // 🟢 mostrar texto y seguir
       if (!nextNode.next_node_id) {
         session.is_completed = true;
         await session.save();
@@ -178,6 +209,9 @@ exports.nextStep = async (req, res) => {
 
   } catch (error) {
     console.error("nextStep:", error);
-    res.status(500).json({ message: "Error al procesar conversación" });
+    res.status(500).json({
+      message: "Error al procesar conversación"
+    });
   }
 };
+
