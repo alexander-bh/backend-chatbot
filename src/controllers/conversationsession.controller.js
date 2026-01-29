@@ -90,7 +90,7 @@ exports.startConversation = async (req, res) => {
 };
 
 /* --------------------------------------------------
-   NEXT STEP
+   NEXT STEP (PRO ENGINE)
 -------------------------------------------------- */
 exports.nextStep = async (req, res) => {
   try {
@@ -115,25 +115,29 @@ exports.nextStep = async (req, res) => {
       throw new Error("Nodo actual no encontrado");
     }
 
-    /* ---------- VALIDAR INPUT ---------- */
-    if (INPUT_NODES.includes(currentNode.node_type)) {
+    /* ---------- VALIDAR INPUT SOLO SI APLICA ---------- */
+    if (
+      INPUT_NODES.includes(currentNode.node_type) &&
+      typeof input !== "undefined"
+    ) {
       const error = validateInput(currentNode.node_type, input);
       if (error) {
         return res.status(400).json({ message: error });
       }
     }
 
-    /* ---------- GUARDAR VARIABLE (solo production) ---------- */
+    /* ---------- GUARDAR VARIABLE ---------- */
     if (
       session.mode === "production" &&
-      currentNode.variable_key
+      currentNode.variable_key &&
+      typeof input !== "undefined"
     ) {
       session.variables ??= {};
-      session.variables[currentNode.variable_key] = String(input ?? "");
+      session.variables[currentNode.variable_key] = String(input);
       session.markModified("variables");
     }
 
-    /* ---------- FIN DE CONVERSACIÓN ---------- */
+    /* ---------- FIN FORZADO ---------- */
     if (
       currentNode.end_conversation === true ||
       !currentNode.next_node_id
@@ -151,16 +155,32 @@ exports.nextStep = async (req, res) => {
       });
     }
 
-    /* ---------- SIGUIENTE NODO ---------- */
-    const nextNode = await FlowNode.findById(currentNode.next_node_id);
-    if (!nextNode) {
-      throw new Error("Siguiente nodo no encontrado");
+    /* ---------- AUTO-AVANCE (ENGINE PRO) ---------- */
+    let nextNodeId = currentNode.next_node_id;
+
+    while (nextNodeId) {
+      const nextNode = await FlowNode.findById(nextNodeId);
+      if (!nextNode) {
+        throw new Error("Siguiente nodo no encontrado");
+      }
+
+      session.current_node_id = nextNode._id;
+      await session.save();
+
+      // ⛔ detener si requiere input
+      if (INPUT_NODES.includes(nextNode.node_type)) {
+        return res.json(renderNode(nextNode, session._id));
+      }
+
+      // 🟢 mostrar texto y continuar
+      if (!nextNode.next_node_id) {
+        session.is_completed = true;
+        await session.save();
+        return res.json(renderNode(nextNode, session._id));
+      }
+
+      nextNodeId = nextNode.next_node_id;
     }
-
-    session.current_node_id = nextNode._id;
-    await session.save();
-
-    res.json(renderNode(nextNode, session._id));
 
   } catch (error) {
     console.error("nextStep:", error);
