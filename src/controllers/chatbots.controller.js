@@ -9,14 +9,6 @@ const {
   generateCopyName
 } = require("../utils/chatbotName.helper");
 const MAX_AVATARS = 50;
-const ALLOWED_POSITIONS = [
-  "bottom-right",
-  "bottom-left",
-  "middle-right",
-  "middle-left",
-  "top-right",
-  "top-left"
-];
 
 /* ==================================================
    CREAR CHATBOT
@@ -184,12 +176,38 @@ exports.updateChatbot = async (req, res) => {
       return res.status(404).json({ message: "Chatbot no encontrado" });
     }
 
-    /* ───── CASO 1: avatar subido como archivo ───── */
-    if (req.file) {
-      chatbot.avatar = req.file.path; // Cloudinary URL
+    // Asegurar array
+    if (!Array.isArray(chatbot.uploaded_avatars)) {
+      chatbot.uploaded_avatars = [];
     }
 
-    /* ───── CASO 2: avatar por URL ───── */
+    /* ───── AVATAR SUBIDO ───── */
+    if (req.file) {
+      const avatarUrl = req.file.path;
+
+      chatbot.avatar = avatarUrl;
+
+      const exists = chatbot.uploaded_avatars.some(
+        a => a.url === avatarUrl
+      );
+
+      if (!exists) {
+        // 🔴 LIMITE DE AVATARES
+        if (chatbot.uploaded_avatars.length >= MAX_AVATARS) {
+          // elimina el más antiguo
+          chatbot.uploaded_avatars.shift();
+        }
+
+        chatbot.uploaded_avatars.push({
+          id: crypto.randomUUID(),
+          label: `Avatar ${chatbot.uploaded_avatars.length + 1}`,
+          url: avatarUrl,
+          created_at: new Date()
+        });
+      }
+    }
+
+    /* ───── AVATAR DEL SISTEMA ───── */
     else if (req.body.avatar) {
       if (!req.body.avatar.startsWith("http")) {
         return res.status(400).json({ message: "Avatar inválido" });
@@ -200,21 +218,34 @@ exports.updateChatbot = async (req, res) => {
     /* ───── RESTO DE SETTINGS ───── */
     chatbot.name = req.body.name ?? chatbot.name;
     chatbot.status = req.body.status ?? chatbot.status;
-    chatbot.welcome_message = req.body.welcome_message ?? chatbot.welcome_message;
-    chatbot.primary_color = req.body.primary_color ?? chatbot.primary_color;
-    chatbot.secondary_color = req.body.secondary_color ?? chatbot.secondary_color;
-    chatbot.launcher_text = req.body.launcher_text ?? chatbot.launcher_text;
-    chatbot.is_enabled = req.body.is_enabled ?? chatbot.is_enabled;
-    chatbot.position = req.body.position ?? chatbot.position;
-    chatbot.input_placeholder = req.body.input_placeholder ?? chatbot.input_placeholder;
-    chatbot.show_branding = req.body.show_branding ?? chatbot.show_branding;
-    chatbot.welcome_delay = req.body.welcome_delay ?? chatbot.welcome_delay;
+    chatbot.welcome_message =
+      req.body.welcome_message ?? chatbot.welcome_message;
+    chatbot.primary_color =
+      req.body.primary_color ?? chatbot.primary_color;
+    chatbot.secondary_color =
+      req.body.secondary_color ?? chatbot.secondary_color;
+    chatbot.launcher_text =
+      req.body.launcher_text ?? chatbot.launcher_text;
+    chatbot.is_enabled =
+      req.body.is_enabled ?? chatbot.is_enabled;
+    chatbot.position =
+      req.body.position ?? chatbot.position;
+    chatbot.input_placeholder =
+      req.body.input_placeholder ?? chatbot.input_placeholder;
+    chatbot.show_branding =
+      req.body.show_branding ?? chatbot.show_branding;
+    chatbot.welcome_delay =
+      req.body.welcome_delay ?? chatbot.welcome_delay;
     chatbot.show_welcome_on_mobile =
-      req.body.show_welcome_on_mobile ?? chatbot.show_welcome_on_mobile;
+      req.body.show_welcome_on_mobile ??
+      chatbot.show_welcome_on_mobile;
 
     await chatbot.save();
 
-    res.json(chatbot);
+    res.json({
+      avatar: chatbot.avatar,
+      uploaded_avatars: chatbot.uploaded_avatars
+    });
   } catch (error) {
     console.error("UPDATE CHATBOT ERROR:", error);
     res.status(500).json({ message: "Error al actualizar chatbot" });
