@@ -189,6 +189,7 @@ exports.deleteFlow = async (req, res) => {
 };
 
 // Guardar flow (borrador)
+// Guardar flow (borrador)
 exports.saveFlow = async (req, res) => {
   try {
     const flow = await getEditableFlow(
@@ -196,11 +197,7 @@ exports.saveFlow = async (req, res) => {
       req.user.account_id
     );
 
-    const { start_node_id, nodes } = req.body;
-
-    if (!Array.isArray(nodes) || !nodes.length) {
-      return res.status(400).json({ message: "nodes inválido" });
-    }
+    const { start_node_id } = req.body;
 
     const startId = start_node_id || flow.start_node_id;
 
@@ -208,8 +205,17 @@ exports.saveFlow = async (req, res) => {
       return res.status(400).json({ message: "start_node_id inválido" });
     }
 
-    // ⚠️ SOLO recalculamos order, NO conexiones
-    const ordered = recalculateOrder(nodes, startId);
+    // 👇 SIEMPRE desde BD
+    const dbNodes = await FlowNode.find({
+      flow_id: flow._id,
+      account_id: req.user.account_id
+    }).lean();
+
+    const dbMap = new Map(
+      dbNodes.map(n => [String(n._id), n])
+    );
+
+    const ordered = recalculateOrder(startId, dbMap);
 
     const bulk = ordered.map(n => ({
       updateOne: {
