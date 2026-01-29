@@ -11,6 +11,12 @@ app.get("/ping", (req, res) => {
   res.json({ ok: true });
 });
 
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
+
 //middleware para conectar a mongoDB
 //middleware para manejar errores de multer
 app.use(require("./middlewares/multerError.middleware"));
@@ -28,14 +34,14 @@ app.use("/api/admin", require("./routes/admin.routes.js"));
 app.use("/api/chatbots", require("./routes/chatbots.routes.js"));
 app.use("/api/chatbot-settings", require("./routes/chatbotSettings.routes.js"));
 app.use("/api/flows", require("./routes/flows.routes.js"));
-app.use("/api/flownodes", require("./routes/flow.nodes.routes.js"));  
+app.use("/api/flownodes", require("./routes/flow.nodes.routes.js"));
 
 // Nueva ruta para CRM Fields
 app.use("/api/crm-fields", require("./routes/crmfields.routes"));
 app.use("/api/meta", require("./routes/meta.routes.js"));
 
 // Rutas de conversación
-app.use("/api/conversations",require("./routes/conversationSession.routes.js"));
-app.use("/api/public-chatbot",require("./routes/public-chatbot.routes.js")); 
+app.use("/api/conversations", require("./routes/conversationSession.routes.js"));
+app.use("/api/public-chatbot", require("./routes/public-chatbot.routes.js"));
 
 module.exports = app;

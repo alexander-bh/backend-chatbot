@@ -184,81 +184,43 @@ exports.updateChatbot = async (req, res) => {
       return res.status(404).json({ message: "Chatbot no encontrado" });
     }
 
-    const body = req.body;
-
-    const scalarFields = [
-      "name",
-      "welcome_message",
-      "welcome_delay",
-      "show_welcome_on_mobile",
-      "status",
-      "primary_color",
-      "secondary_color",
-      "launcher_text",
-      "is_enabled",
-      "input_placeholder",
-      "show_branding"
-    ];
-
-    for (const field of scalarFields) {
-      if (body[field] !== undefined) {
-        chatbot[field] = body[field];
-      }
-    }
-
-    if (body.position !== undefined) {
-      if (!ALLOWED_POSITIONS.includes(body.position)) {
-        return res.status(400).json({ message: "position inválido" });
-      }
-      chatbot.position = body.position;
-    }
-
-    chatbot.uploaded_avatars ||= [];
-
-    /* Avatar subido */
+    /* ───── CASO 1: avatar subido como archivo ───── */
     if (req.file) {
-      if (chatbot.uploaded_avatars.length >= MAX_AVATARS) {
-        return res.status(400).json({
-          message: `Límite de ${MAX_AVATARS} avatares alcanzado`
-        });
-      }
-
-      const uploadedAvatar = {
-        url: req.file.path,
-        public_id: req.file.filename || req.file.public_id
-      };
-
-      const exists = chatbot.uploaded_avatars.some(
-        a =>
-          a.url === uploadedAvatar.url ||
-          a.public_id === uploadedAvatar.public_id
-      );
-
-      if (!exists) chatbot.uploaded_avatars.push(uploadedAvatar);
-      chatbot.avatar = uploadedAvatar.url;
+      chatbot.avatar = req.file.path; // Cloudinary URL
     }
 
-    /* Avatar por URL */
-    if (body.avatar && !req.file) {
-      const isSystem = avatars.some(a => a.url === body.avatar);
-      const isUploaded = chatbot.uploaded_avatars.some(
-        a => a.url === body.avatar
-      );
-
-      if (!isSystem && !isUploaded) {
+    /* ───── CASO 2: avatar por URL ───── */
+    else if (req.body.avatar) {
+      if (!req.body.avatar.startsWith("http")) {
         return res.status(400).json({ message: "Avatar inválido" });
       }
-
-      chatbot.avatar = body.avatar;
+      chatbot.avatar = req.body.avatar;
     }
 
+    /* ───── RESTO DE SETTINGS ───── */
+    chatbot.name = req.body.name ?? chatbot.name;
+    chatbot.status = req.body.status ?? chatbot.status;
+    chatbot.welcome_message = req.body.welcome_message ?? chatbot.welcome_message;
+    chatbot.primary_color = req.body.primary_color ?? chatbot.primary_color;
+    chatbot.secondary_color = req.body.secondary_color ?? chatbot.secondary_color;
+    chatbot.launcher_text = req.body.launcher_text ?? chatbot.launcher_text;
+    chatbot.is_enabled = req.body.is_enabled ?? chatbot.is_enabled;
+    chatbot.position = req.body.position ?? chatbot.position;
+    chatbot.input_placeholder = req.body.input_placeholder ?? chatbot.input_placeholder;
+    chatbot.show_branding = req.body.show_branding ?? chatbot.show_branding;
+    chatbot.welcome_delay = req.body.welcome_delay ?? chatbot.welcome_delay;
+    chatbot.show_welcome_on_mobile =
+      req.body.show_welcome_on_mobile ?? chatbot.show_welcome_on_mobile;
+
     await chatbot.save();
+
     res.json(chatbot);
   } catch (error) {
     console.error("UPDATE CHATBOT ERROR:", error);
     res.status(500).json({ message: "Error al actualizar chatbot" });
   }
 };
+
 
 /* ==================================================
    ELIMINAR CHATBOT
