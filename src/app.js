@@ -11,12 +11,6 @@ app.get("/ping", (req, res) => {
   res.json({ ok: true });
 });
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
-
 //middleware para conectar a mongoDB
 //middleware para manejar errores de multer
 app.use(require("./middlewares/multerError.middleware"));
