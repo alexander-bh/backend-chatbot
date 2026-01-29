@@ -114,89 +114,62 @@ exports.nextStep = async (req, res) => {
       throw new Error("Nodo actual no encontrado");
     }
 
-    /* --------------------------------------------------
-       1️⃣ VALIDACIÓN ESTRICTA DE INPUT
-       👉 si el nodo requiere input, ES OBLIGATORIO
-    -------------------------------------------------- */
-    if (INPUT_NODES.includes(currentNode.node_type)) {
-      if (typeof input === "undefined") {
-        return res.status(400).json({
-          message: "Este nodo requiere una respuesta del usuario"
-        });
-      }
+    /* 🚫 SI ES INPUT Y NO SE MANDÓ INPUT */
+    if (
+      INPUT_NODES.includes(currentNode.node_type) &&
+      typeof input === "undefined"
+    ) {
+      return res.status(400).json({
+        message: "Este nodo requiere una respuesta del usuario"
+      });
+    }
 
+    /* ✅ VALIDAR INPUT */
+    if (INPUT_NODES.includes(currentNode.node_type)) {
       const error = validateInput(currentNode.node_type, input);
       if (error) {
         return res.status(400).json({ message: error });
       }
     }
 
-    /* --------------------------------------------------
-       2️⃣ GUARDAR VARIABLE (solo production)
-    -------------------------------------------------- */
-    if (
-      session.mode === "production" &&
-      currentNode.variable_key &&
-      typeof input !== "undefined"
-    ) {
+    /* ✅ GUARDAR VARIABLE */
+    if (currentNode.variable_key) {
       session.variables ??= {};
       session.variables[currentNode.variable_key] = String(input);
       session.markModified("variables");
     }
 
-    /* --------------------------------------------------
-       3️⃣ FIN FORZADO
-    -------------------------------------------------- */
-    if (
-      currentNode.end_conversation === true ||
-      !currentNode.next_node_id
-    ) {
+    /* 🔚 SI NO HAY SIGUIENTE */
+    if (!currentNode.next_node_id) {
       session.is_completed = true;
       await session.save();
-
-      if (session.mode === "production") {
-        await upsertContactFromSession(session);
-      }
-
-      return res.json({
-        completed: true,
-        variables: session.variables
-      });
+      return res.json({ completed: true, variables: session.variables });
     }
 
-    /* --------------------------------------------------
-       4️⃣ AUTO-AVANCE (WHILE PRO)
-    -------------------------------------------------- */
-    let nextNodeId = currentNode.next_node_id;
+    /* ▶️ AVANZAR AL SIGUIENTE NODO */
+    let nextNode = await FlowNode.findById(currentNode.next_node_id);
+    if (!nextNode) {
+      throw new Error("Siguiente nodo no encontrado");
+    }
 
-    while (nextNodeId) {
-      const nextNode = await FlowNode.findById(nextNodeId);
-      if (!nextNode) {
-        throw new Error("Siguiente nodo no encontrado");
-      }
+    session.current_node_id = nextNode._id;
+    await session.save();
 
+    /* 🔁 AUTO-AVANCE PARA TEXTOS */
+    while (
+      nextNode &&
+      !INPUT_NODES.includes(nextNode.node_type) &&
+      nextNode.next_node_id
+    ) {
+      nextNode = await FlowNode.findById(nextNode.next_node_id);
       session.current_node_id = nextNode._id;
       await session.save();
-
-      // ⛔ detener si requiere input
-      if (INPUT_NODES.includes(nextNode.node_type)) {
-        return res.json(renderNode(nextNode, session._id));
-      }
-
-      // 🟢 nodo informativo (texto, imagen, etc.)
-      if (!nextNode.next_node_id) {
-        session.is_completed = true;
-        await session.save();
-        return res.json(renderNode(nextNode, session._id));
-      }
-
-      // continuar al siguiente
-      nextNodeId = nextNode.next_node_id;
     }
+
+    return res.json(renderNode(nextNode, session._id));
+
   } catch (error) {
     console.error("nextStep:", error);
-    res.status(500).json({
-      message: "Error al procesar conversación"
-    });
+    res.status(500).json({ message: "Error al procesar conversación" });
   }
 };
