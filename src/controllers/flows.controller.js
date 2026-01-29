@@ -197,7 +197,7 @@ exports.saveFlow = async (req, res) => {
       req.user.account_id
     );
 
-    const { start_node_id } = req.body;
+    const { start_node_id, nodes } = req.body;
 
     const startId = start_node_id || flow.start_node_id;
 
@@ -205,7 +205,31 @@ exports.saveFlow = async (req, res) => {
       return res.status(400).json({ message: "start_node_id inválido" });
     }
 
-    // 👇 SIEMPRE desde BD
+    /* ---------------------------------------------------
+       1️⃣ Guardar conexiones (next_node_id) desde frontend
+    --------------------------------------------------- */
+    if (Array.isArray(nodes) && nodes.length) {
+      const bulkLinks = nodes.map(n => ({
+        updateOne: {
+          filter: {
+            _id: n._id,
+            flow_id: flow._id,
+            account_id: req.user.account_id
+          },
+          update: {
+            $set: {
+              next_node_id: n.next_node_id ?? null
+            }
+          }
+        }
+      }));
+
+      await FlowNode.bulkWrite(bulkLinks);
+    }
+
+    /* ---------------------------------------------------
+       2️⃣ Releer nodos desde BD (la verdad absoluta)
+    --------------------------------------------------- */
     const dbNodes = await FlowNode.find({
       flow_id: flow._id,
       account_id: req.user.account_id
@@ -215,9 +239,15 @@ exports.saveFlow = async (req, res) => {
       dbNodes.map(n => [String(n._id), n])
     );
 
+    /* ---------------------------------------------------
+       3️⃣ Recalcular orden según conexiones reales
+    --------------------------------------------------- */
     const ordered = recalculateOrder(startId, dbMap);
 
-    const bulk = ordered.map(n => ({
+    /* ---------------------------------------------------
+       4️⃣ Persistir nuevo orden
+    --------------------------------------------------- */
+    const bulkOrder = ordered.map(n => ({
       updateOne: {
         filter: {
           _id: n._id,
@@ -233,13 +263,19 @@ exports.saveFlow = async (req, res) => {
       }
     }));
 
-    await FlowNode.bulkWrite(bulk);
+    await FlowNode.bulkWrite(bulkOrder);
 
+    /* ---------------------------------------------------
+       5️⃣ Guardar flow
+    --------------------------------------------------- */
     flow.start_node_id = startId;
     flow.is_draft = true;
     await flow.save();
 
-    res.json({ message: "Flow guardado correctamente" });
+    res.json({
+      message: "Flow guardado correctamente",
+      start_node_id: startId
+    });
 
   } catch (error) {
     console.error("saveFlow:", error);
