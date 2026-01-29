@@ -197,7 +197,11 @@ exports.saveFlow = async (req, res) => {
       req.user.account_id
     );
 
-    const { start_node_id } = req.body;
+    const { start_node_id, nodes } = req.body;
+
+    if (!Array.isArray(nodes) || !nodes.length) {
+      return res.status(400).json({ message: "nodes inválido" });
+    }
 
     const startId = start_node_id || flow.start_node_id;
 
@@ -205,28 +209,8 @@ exports.saveFlow = async (req, res) => {
       return res.status(400).json({ message: "start_node_id inválido" });
     }
 
-    // 🔹 Traer nodos reales desde BD
-    const dbNodes = await FlowNode.find({
-      flow_id: flow._id,
-      account_id: req.user.account_id
-    }).lean();
-
-    if (!dbNodes.length) {
-      return res.status(400).json({ message: "El flow no tiene nodos" });
-    }
-
-    const dbMap = new Map(
-      dbNodes.map(n => [String(n._id), n])
-    );
-
-    if (!dbMap.has(String(startId))) {
-      return res.status(400).json({
-        message: "start_node_id no pertenece al flow"
-      });
-    }
-
-    // 🔹 Recalcular orden REAL
-    const ordered = recalculateOrder(startId, dbMap);
+    // ⚠️ SOLO recalculamos order, NO conexiones
+    const ordered = recalculateOrder(nodes, startId);
 
     const bulk = ordered.map(n => ({
       updateOne: {
@@ -238,8 +222,6 @@ exports.saveFlow = async (req, res) => {
         update: {
           $set: {
             order: n.order,
-            parent_node_id: n.parent_node_id,
-            next_node_id: n.next_node_id,
             is_draft: true
           }
         }
@@ -259,7 +241,6 @@ exports.saveFlow = async (req, res) => {
     res.status(400).json({ message: error.message });
   }
 };
-
 
 // Publicar flow
 exports.publishFlow = async (req, res) => {
