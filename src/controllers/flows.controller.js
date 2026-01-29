@@ -36,7 +36,6 @@ const recalculateOrder = (startNodeId, dbMap) => {
 
   return ordered;
 };
-
 // Crear flow
 exports.createFlow = async (req, res) => {
   try {
