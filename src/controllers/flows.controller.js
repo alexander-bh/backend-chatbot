@@ -5,12 +5,9 @@ const FlowNode = require("../models/FlowNode");
 const validateFlow = require("../services/validateFlow.service");
 const { getEditableFlow } = require("../utils/flow.utils");
 
-const recalculateOrder = (nodes, startNodeId) => {
-  const map = new Map();
+const recalculateOrder = (startNodeId, dbMap) => {
   const visited = new Set();
   const ordered = [];
-
-  nodes.forEach(n => map.set(String(n._id), n));
 
   let currentId = String(startNodeId);
   let index = 0;
@@ -20,13 +17,14 @@ const recalculateOrder = (nodes, startNodeId) => {
       throw new Error("Ciclo detectado en el flow");
     }
 
-    const node = map.get(currentId);
+    const node = dbMap.get(currentId);
     if (!node) break;
 
     visited.add(currentId);
+
     ordered.push({
       _id: node._id,
-      next_node_id: node.next_node_id ?? null,
+      next_node_id: node.next_node_id ?? null,   // 🔒 SOLO BD
       parent_node_id: node.parent_node_id ?? null,
       order: index++
     });
@@ -199,11 +197,7 @@ exports.saveFlow = async (req, res) => {
       req.user.account_id
     );
 
-    const { start_node_id, nodes } = req.body;
-
-    if (!Array.isArray(nodes) || !nodes.length) {
-      return res.status(400).json({ message: "nodes inválido" });
-    }
+    const { start_node_id } = req.body;
 
     const startId = start_node_id || flow.start_node_id;
 
@@ -211,7 +205,28 @@ exports.saveFlow = async (req, res) => {
       return res.status(400).json({ message: "start_node_id inválido" });
     }
 
-    const ordered = recalculateOrder(nodes, startId);
+    // 🔹 Traer nodos reales desde BD
+    const dbNodes = await FlowNode.find({
+      flow_id: flow._id,
+      account_id: req.user.account_id
+    }).lean();
+
+    if (!dbNodes.length) {
+      return res.status(400).json({ message: "El flow no tiene nodos" });
+    }
+
+    const dbMap = new Map(
+      dbNodes.map(n => [String(n._id), n])
+    );
+
+    if (!dbMap.has(String(startId))) {
+      return res.status(400).json({
+        message: "start_node_id no pertenece al flow"
+      });
+    }
+
+    // 🔹 Recalcular orden REAL
+    const ordered = recalculateOrder(startId, dbMap);
 
     const bulk = ordered.map(n => ({
       updateOne: {
@@ -222,9 +237,9 @@ exports.saveFlow = async (req, res) => {
         },
         update: {
           $set: {
-            next_node_id: n.next_node_id,
-            parent_node_id: n.parent_node_id,
             order: n.order,
+            parent_node_id: n.parent_node_id,
+            next_node_id: n.next_node_id,
             is_draft: true
           }
         }
@@ -240,9 +255,11 @@ exports.saveFlow = async (req, res) => {
     res.json({ message: "Flow guardado correctamente" });
 
   } catch (error) {
+    console.error("saveFlow:", error);
     res.status(400).json({ message: error.message });
   }
 };
+
 
 // Publicar flow
 exports.publishFlow = async (req, res) => {

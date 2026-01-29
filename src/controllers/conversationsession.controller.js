@@ -9,8 +9,7 @@ const renderNode = require("../utils/renderNode");
 const INPUT_NODES = ["question", "email", "phone", "number"];
 const ALLOWED_MODES = ["preview", "production"];
 
-/* ───────────────────────── START CONVERSATION ───────────────────────── */
-
+// Comenzar conversaion 
 exports.startConversation = async (req, res) => {
   try {
     const { chatbot_id, flow_id, mode = "production" } = req.body;
@@ -88,8 +87,7 @@ exports.startConversation = async (req, res) => {
   }
 };
 
-/* ───────────────────────── NEXT STEP ───────────────────────── */
-
+// Siguiente 
 exports.nextStep = async (req, res) => {
   try {
     const { session_id, input } = req.body;

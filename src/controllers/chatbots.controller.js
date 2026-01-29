@@ -10,9 +10,7 @@ const {
 } = require("../utils/chatbotName.helper");
 const MAX_AVATARS = 50;
 
-/* ==================================================
-   CREAR CHATBOT
-================================================== */
+// Crear chatbot
 exports.createChatbot = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -86,9 +84,8 @@ exports.createChatbot = async (req, res) => {
   }
 };
 
-/* ==================================================
-   LISTAR CHATBOTS
-================================================== */
+// Listar chatbot
+
 exports.listChatbots = async (req, res) => {
   try {
     const chatbots = await Chatbot.find({
@@ -104,9 +101,7 @@ exports.listChatbots = async (req, res) => {
   }
 };
 
-/* ==================================================
-   OBTENER CHATBOT POR ID
-================================================== */
+//Obtener chatbot por id
 exports.getChatbotById = async (req, res) => {
   try {
     const chatbot = await Chatbot.findOne({
@@ -125,9 +120,7 @@ exports.getChatbotById = async (req, res) => {
   }
 };
 
-/* ==================================================
-   DATA PARA EDITOR
-================================================== */
+// Editor
 exports.getChatbotEditorData = async (req, res) => {
   try {
     const chatbot = await Chatbot.findOne({
@@ -162,9 +155,8 @@ exports.getChatbotEditorData = async (req, res) => {
   }
 };
 
-/* ==================================================
-   ACTUALIZAR CHATBOT (MODELO PLANO)
-================================================== */
+// Actualizar chatbot + configuracion
+
 exports.updateChatbot = async (req, res) => {
   try {
     const chatbot = await Chatbot.findOne({
@@ -252,9 +244,7 @@ exports.updateChatbot = async (req, res) => {
   }
 };
 
-/* ==================================================
-   ELIMINAR CHATBOT
-================================================== */
+// Eliminar
 exports.deleteChatbot = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -291,9 +281,7 @@ exports.deleteChatbot = async (req, res) => {
   }
 };
 
-/* ==================================================
-   DUPLICAR CHATBOT COMPLETO
-================================================== */
+// Duplicar el chatabot 
 exports.duplicateChatbotFull = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -440,10 +428,7 @@ exports.duplicateChatbotFull = async (req, res) => {
   }
 };
 
-
-/* ==================================================
-   AVATARES DISPONIBLES
-================================================== */
+// Avatar disponibles
 exports.getAvailableAvatars = async (req, res) => {
   try {
     const chatbot = await Chatbot.findOne({
@@ -466,9 +451,7 @@ exports.getAvailableAvatars = async (req, res) => {
   }
 };
 
-/* ==================================================
-   ELIMINAR AVATAR
-================================================== */
+// Eliminar Avatar 
 exports.deleteAvatar = async (req, res) => {
   try {
     const chatbot = await Chatbot.findOne({

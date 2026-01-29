@@ -16,7 +16,7 @@ app.get("/ping", (req, res) => {
 app.use(require("./middlewares/multerError.middleware"));
 app.use(require("./middlewares/mongo.middleware.js"));
 
-//rutas principales
+//rutas usuario
 app.use("/api/accounts", require("./routes/account.routes.js"));
 app.use("/api/users", require("./routes/user.routes.js"));
 app.use("/api/auth", require("./routes/auth.routes.js"));
