@@ -3,16 +3,17 @@ const ConversationSession = require("../models/ConversationSession");
 const Flow = require("../models/Flow");
 const FlowNode = require("../models/FlowNode");
 const Chatbot = require("../models/Chatbot");
+const upsertContactFromSession = require("../services/upsertContactFromSession.service");
 const validateInput = require("../utils/validateInput");
 const renderNode = require("../utils/renderNode");
 
-const INPUT_NODES = ["question", "email", "phone", "number"];
+const INPUT_NODES = ["question", "email", "phone", "number", "text_input"];
 const ALLOWED_MODES = ["preview", "production"];
 
 /* --------------------------------------------------
    START CONVERSATION
 -------------------------------------------------- */
-exports.startConversation = async (req, res) => {  
+exports.startConversation = async (req, res) => {
   try {
     const { chatbot_id, flow_id, mode = "production" } = req.body;
 
@@ -83,15 +84,16 @@ exports.startConversation = async (req, res) => {
     return res.json(renderNode(startNode, session._id));
   } catch (error) {
     console.error("startConversation:", error);
-    res.status(500).json({ message: "Error al iniciar conversación" });
+    return res.status(500).json({
+      message: "Error al iniciar conversación"
+    });
   }
 };
 
 /* --------------------------------------------------
-   NEXT STEP (ENGINE PRO)
+   NEXT STEP (ENGINE)
 -------------------------------------------------- */
 exports.nextStep = async (req, res) => {
-  throw new Error("NEXT STEP TEST");
   try {
     const { id: sessionId } = req.params;
     const { input } = req.body;
@@ -118,15 +120,26 @@ exports.nextStep = async (req, res) => {
        1️⃣ NODOS QUE REQUIEREN INPUT
     ================================================== */
     if (INPUT_NODES.includes(currentNode.node_type)) {
+
       if (typeof input === "undefined") {
         return res.status(400).json({
           message: "Este nodo requiere una respuesta del usuario"
         });
       }
 
-      const error = validateInput(currentNode.node_type, input);
-      if (error) {
-        return res.status(400).json({ message: error });
+      let validationResult = { ok: true };
+
+      if (currentNode.validation?.enabled) {
+        validationResult = validateInput(
+          input,
+          currentNode.validation.rules || []
+        );
+      }
+
+      if (!validationResult.ok) {
+        return res.status(400).json({
+          message: validationResult.message
+        });
       }
 
       // Guardar variables solo en producción
@@ -134,21 +147,31 @@ exports.nextStep = async (req, res) => {
         session.variables[currentNode.variable_key] = String(input);
         session.markModified("variables");
       }
+
+      await session.save();
     }
 
     /* ==================================================
-       2️⃣ AVANCE AUTOMÁTICO (ENGINE)
+       2️⃣ AVANCE AUTOMÁTICO (ENGINE LOOP)
     ================================================== */
     let nextNodeId = currentNode.next_node_id;
 
-    // Si no hay siguiente → cerrar conversación
     if (!nextNodeId) {
       session.is_completed = true;
       await session.save();
-      return res.json({ completed: true, variables: session.variables });
+
+      if (session.mode === "production") {
+        await upsertContactFromSession(session);
+      }
+
+      return res.json({
+        completed: true,
+        variables: session.variables
+      });
     }
 
     while (nextNodeId) {
+
       const nextNode = await FlowNode.findById(nextNodeId);
       if (!nextNode) {
         throw new Error("Siguiente nodo no encontrado");
@@ -157,19 +180,24 @@ exports.nextStep = async (req, res) => {
       session.current_node_id = nextNode._id;
       await session.save();
 
-      // ⛔ Detener si el siguiente requiere input
+      // Si requiere input → detener y mostrar
       if (INPUT_NODES.includes(nextNode.node_type)) {
         return res.json(renderNode(nextNode, session._id));
       }
 
-      // 🟢 Último nodo sin input → mostrar y cerrar
+      // Si es último nodo → mostrar y cerrar
       if (!nextNode.next_node_id) {
+
         session.is_completed = true;
         await session.save();
+
+        if (session.mode === "production") {
+          await upsertContactFromSession(session);
+        }
+
         return res.json(renderNode(nextNode, session._id));
       }
 
-      // Seguir avanzando
       nextNodeId = nextNode.next_node_id;
     }
 
@@ -180,5 +208,3 @@ exports.nextStep = async (req, res) => {
     });
   }
 };
-
-
