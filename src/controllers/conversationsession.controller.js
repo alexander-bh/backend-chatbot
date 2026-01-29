@@ -94,7 +94,7 @@ exports.startConversation = async (req, res) => {
 -------------------------------------------------- */
 exports.nextStep = async (req, res) => {
   try {
-    const { sessionId } = req.params;
+    const { id: sessionId } = req.params;
     const { input } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(sessionId)) {
