@@ -19,5 +19,19 @@ router.get("/:id",auth,role("ADMIN", "CLIENT"),chatbotController.getChatbotById)
 router.get("/:id/editor",auth,role("ADMIN", "CLIENT"),chatbotController.getChatbotEditorData);
 //Actualizar chatbot 
 router.put("/:id/settings",auth,upload.single("avatar"),chatbotController.updateChatbot);
+// Obtener avatares disponibles
+router.get(
+  "/:id/avatars",
+  auth,
+  chatbotController.getAvailableAvatars
+);
+
+// Eliminar avatar 
+router.delete(
+  "/:id/deleteAvatar",
+  auth,
+  chatbotController.deleteAvatar
+);
+
 
 module.exports = router;
