@@ -5,14 +5,14 @@ const settingsController = require("../controllers/chatbots.controller");
 
 // Obtener avatares disponibles
 router.get(
-  "/chatbots/:id/avatars",
+  "/:id/avatars",
   auth,
   settingsController.getAvailableAvatars
 );
 
 // Eliminar avatar 
 router.delete(
-  "/chatbots/:id/deleteAvatar",
+  "/:id/deleteAvatar",
   auth,
   settingsController.deleteAvatar
 );
