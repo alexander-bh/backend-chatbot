@@ -18,12 +18,6 @@ router.get("/:id",auth,role("ADMIN", "CLIENT"),chatbotController.getChatbotById)
 // obtener datos completos del editor
 router.get("/:id/editor",auth,role("ADMIN", "CLIENT"),chatbotController.getChatbotEditorData);
 //Actualizar chatbot 
-router.put(
-  "/:id/settings",
-  auth,
-  upload.single("avatar"),
-  chatbotController.updateChatbot
-);
-
+router.put("/:id/settings",auth,upload.single("avatar"),chatbotController.updateChatbot);
 
 module.exports = router;

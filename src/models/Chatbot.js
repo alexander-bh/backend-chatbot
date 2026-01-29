@@ -21,6 +21,18 @@ const ChatbotSchema = new Schema({
     default: "¡Hola! ¿Cómo puedo ayudarte?"
   },
 
+  welcome_delay: {
+    type: Number,
+    default: 2,
+    min: 0
+  },
+
+  show_welcome_on_mobile: {
+    type: Boolean,
+    default: true
+  },
+
+
   /* ───────── SETTINGS EMBEBIDOS ───────── */
   avatar: {
     type: String,

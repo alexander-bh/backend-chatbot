@@ -40,6 +40,8 @@ exports.createChatbot = async (req, res) => {
         public_id: crypto.randomUUID(),
         name,
         welcome_message: welcomeText,
+        welcome_delay: welcome_delay ?? 2,
+        show_welcome_on_mobile: show_welcome_on_mobile ?? true,
         status: "active"
       }],
       { session }
@@ -178,6 +180,8 @@ exports.updateChatbot = async (req, res) => {
     const scalarFields = [
       "name",
       "welcome_message",
+      "welcome_delay",
+      "show_welcome_on_mobile",
       "status",
       "primary_color",
       "secondary_color",

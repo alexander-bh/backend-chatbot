@@ -106,6 +106,8 @@ exports.registerFirst = async (req, res) => {
         name: `Bot de ${name}`,
         public_id: crypto.randomUUID(),
         welcome_message: welcomeText,
+        welcome_delay:2,
+        show_welcome_on_mobile:false,
         status: "active",
         avatar: process.env.DEFAULT_CHATBOT_AVATAR,
         uploaded_avatars: [],
@@ -373,7 +375,6 @@ exports.forgotPassword = async (req, res) => {
     res.status(500).json({ message: "Error al solicitar recuperación" });
   }
 };
-
 
 //Resetar la contraseña
 exports.resetPassword = async (req, res) => {
