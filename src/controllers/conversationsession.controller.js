@@ -81,8 +81,7 @@ exports.startConversation = async (req, res) => {
       is_completed: false
     });
 
-    res.json(renderNode(startNode, session._id));
-
+    return res.json(renderNode(startNode, session._id));
   } catch (error) {
     console.error("startConversation:", error);
     res.status(500).json({ message: "Error al iniciar conversación" });
@@ -90,7 +89,7 @@ exports.startConversation = async (req, res) => {
 };
 
 /* --------------------------------------------------
-   NEXT STEP (PRO ENGINE)
+   NEXT STEP (ENGINE PRO)
 -------------------------------------------------- */
 exports.nextStep = async (req, res) => {
   try {
@@ -115,18 +114,26 @@ exports.nextStep = async (req, res) => {
       throw new Error("Nodo actual no encontrado");
     }
 
-    /* ---------- VALIDAR INPUT SOLO SI APLICA ---------- */
-    if (
-      INPUT_NODES.includes(currentNode.node_type) &&
-      typeof input !== "undefined"
-    ) {
+    /* --------------------------------------------------
+       1️⃣ VALIDACIÓN ESTRICTA DE INPUT
+       👉 si el nodo requiere input, ES OBLIGATORIO
+    -------------------------------------------------- */
+    if (INPUT_NODES.includes(currentNode.node_type)) {
+      if (typeof input === "undefined") {
+        return res.status(400).json({
+          message: "Este nodo requiere una respuesta del usuario"
+        });
+      }
+
       const error = validateInput(currentNode.node_type, input);
       if (error) {
         return res.status(400).json({ message: error });
       }
     }
 
-    /* ---------- GUARDAR VARIABLE ---------- */
+    /* --------------------------------------------------
+       2️⃣ GUARDAR VARIABLE (solo production)
+    -------------------------------------------------- */
     if (
       session.mode === "production" &&
       currentNode.variable_key &&
@@ -137,7 +144,9 @@ exports.nextStep = async (req, res) => {
       session.markModified("variables");
     }
 
-    /* ---------- FIN FORZADO ---------- */
+    /* --------------------------------------------------
+       3️⃣ FIN FORZADO
+    -------------------------------------------------- */
     if (
       currentNode.end_conversation === true ||
       !currentNode.next_node_id
@@ -155,7 +164,9 @@ exports.nextStep = async (req, res) => {
       });
     }
 
-    /* ---------- AUTO-AVANCE (ENGINE PRO) ---------- */
+    /* --------------------------------------------------
+       4️⃣ AUTO-AVANCE (WHILE PRO)
+    -------------------------------------------------- */
     let nextNodeId = currentNode.next_node_id;
 
     while (nextNodeId) {
@@ -172,16 +183,16 @@ exports.nextStep = async (req, res) => {
         return res.json(renderNode(nextNode, session._id));
       }
 
-      // 🟢 mostrar texto y continuar
+      // 🟢 nodo informativo (texto, imagen, etc.)
       if (!nextNode.next_node_id) {
         session.is_completed = true;
         await session.save();
         return res.json(renderNode(nextNode, session._id));
       }
 
+      // continuar al siguiente
       nextNodeId = nextNode.next_node_id;
     }
-
   } catch (error) {
     console.error("nextStep:", error);
     res.status(500).json({
