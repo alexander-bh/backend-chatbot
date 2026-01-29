@@ -109,81 +109,44 @@ exports.nextStep = async (req, res) => {
       return res.json({ completed: true });
     }
 
-    const currentNode = await FlowNode.findById(session.current_node_id);
+    let currentNode = await FlowNode.findById(session.current_node_id);
     if (!currentNode) {
       throw new Error("Nodo actual no encontrado");
     }
 
     /* ==================================================
-       1️⃣ NODO INPUT (question, email, phone, number)
+       1️⃣ NODOS QUE REQUIEREN INPUT
     ================================================== */
     if (INPUT_NODES.includes(currentNode.node_type)) {
-
-      // 🚫 input obligatorio
       if (typeof input === "undefined") {
         return res.status(400).json({
           message: "Este nodo requiere una respuesta del usuario"
         });
       }
 
-      // ✅ validar input
       const error = validateInput(currentNode.node_type, input);
       if (error) {
         return res.status(400).json({ message: error });
       }
 
-      // ✅ guardar variable (solo production)
+      // Guardar variables solo en producción
       if (session.mode === "production" && currentNode.variable_key) {
-        session.variables ??= {};
         session.variables[currentNode.variable_key] = String(input);
         session.markModified("variables");
-      }
-
-      // 🔚 si no hay siguiente
-      if (!currentNode.next_node_id) {
-        session.is_completed = true;
-        await session.save();
-        return res.json({ completed: true, variables: session.variables });
-      }
-
-      // ▶️ avanzar después del input
-      let nextNodeId = currentNode.next_node_id;
-
-      while (nextNodeId) {
-        const nextNode = await FlowNode.findById(nextNodeId);
-        if (!nextNode) {
-          throw new Error("Siguiente nodo no encontrado");
-        }
-
-        session.current_node_id = nextNode._id;
-        await session.save();
-
-        // ⛔ detener si el siguiente también requiere input
-        if (INPUT_NODES.includes(nextNode.node_type)) {
-          return res.json(renderNode(nextNode, session._id));
-        }
-
-        // 🟢 mostrar texto final y cerrar
-        if (!nextNode.next_node_id) {
-          session.is_completed = true;
-          await session.save();
-          return res.json(renderNode(nextNode, session._id));
-        }
-
-        nextNodeId = nextNode.next_node_id;
       }
     }
 
     /* ==================================================
-       2️⃣ NODO NO INPUT (text, etc.) → auto avance
+       2️⃣ AVANCE AUTOMÁTICO (ENGINE)
     ================================================== */
-    if (!currentNode.next_node_id) {
+    let nextNodeId = currentNode.next_node_id;
+
+    // Si no hay siguiente → cerrar conversación
+    if (!nextNodeId) {
       session.is_completed = true;
       await session.save();
-      return res.json({ completed: true });
+      return res.json({ completed: true, variables: session.variables });
     }
-
-    let nextNodeId = currentNode.next_node_id;
 
     while (nextNodeId) {
       const nextNode = await FlowNode.findById(nextNodeId);
@@ -194,24 +157,28 @@ exports.nextStep = async (req, res) => {
       session.current_node_id = nextNode._id;
       await session.save();
 
+      // ⛔ Detener si el siguiente requiere input
       if (INPUT_NODES.includes(nextNode.node_type)) {
         return res.json(renderNode(nextNode, session._id));
       }
 
+      // 🟢 Último nodo sin input → mostrar y cerrar
       if (!nextNode.next_node_id) {
         session.is_completed = true;
         await session.save();
         return res.json(renderNode(nextNode, session._id));
       }
 
+      // Seguir avanzando
       nextNodeId = nextNode.next_node_id;
     }
 
   } catch (error) {
     console.error("nextStep:", error);
-    res.status(500).json({
+    return res.status(500).json({
       message: "Error al procesar conversación"
     });
   }
 };
+
 
