@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const ConversationSession = require("../models/ConversationSession");
 const Flow = require("../models/Flow");
 const FlowNode = require("../models/FlowNode");
@@ -9,7 +10,9 @@ const renderNode = require("../utils/renderNode");
 const INPUT_NODES = ["question", "email", "phone", "number"];
 const ALLOWED_MODES = ["preview", "production"];
 
-// Comenzar conversaion 
+/* --------------------------------------------------
+   START CONVERSATION
+-------------------------------------------------- */
 exports.startConversation = async (req, res) => {
   try {
     const { chatbot_id, flow_id, mode = "production" } = req.body;
@@ -78,7 +81,6 @@ exports.startConversation = async (req, res) => {
       is_completed: false
     });
 
-    // Devuelve solo lo que el frontend necesita
     res.json(renderNode(startNode, session._id));
 
   } catch (error) {
@@ -87,117 +89,55 @@ exports.startConversation = async (req, res) => {
   }
 };
 
-// Siguiente 
+/* --------------------------------------------------
+   NEXT STEP
+-------------------------------------------------- */
 exports.nextStep = async (req, res) => {
   try {
-    const { session_id, input } = req.body;
+    const { sessionId } = req.params;
+    const { input } = req.body;
 
-    const session = await ConversationSession.findOne({
-      _id: session_id,
-      account_id: req.user.account_id,
-      is_completed: false
-    });
+    if (!mongoose.Types.ObjectId.isValid(sessionId)) {
+      return res.status(400).json({ message: "sessionId inválido" });
+    }
 
+    const session = await ConversationSession.findById(sessionId);
     if (!session) {
-      return res.status(404).json({
-        message: "Sesión inválida o finalizada"
-      });
+      return res.status(404).json({ message: "Sesión no encontrada" });
     }
 
-    const currentNode = await FlowNode.findOne({
-      _id: session.current_node_id,
-      flow_id: session.flow_id,
-      account_id: req.user.account_id
-    });
+    if (session.is_completed) {
+      return res.json({ completed: true });
+    }
 
+    const currentNode = await FlowNode.findById(session.current_node_id);
     if (!currentNode) {
-      return res.status(500).json({
-        message: "Nodo actual no encontrado"
-      });
+      throw new Error("Nodo actual no encontrado");
     }
 
-    let nextNodeId = null;
-    const sanitizedInput =
-      typeof input === "string" ? input.trim() : input;
-
-    /* ───────────── OPTIONS ───────────── */
-    if (currentNode.node_type === "options") {
-      const index = parseInt(sanitizedInput, 10);
-
-      if (
-        Number.isNaN(index) ||
-        index < 0 ||
-        !currentNode.options[index]
-      ) {
-        return res.status(400).json({ message: "Opción inválida" });
+    /* ---------- VALIDAR INPUT ---------- */
+    if (INPUT_NODES.includes(currentNode.node_type)) {
+      const error = validateInput(currentNode.node_type, input);
+      if (error) {
+        return res.status(400).json({ message: error });
       }
-
-      const option = currentNode.options[index];
-
-      if (!option.next_node_id) {
-        return res.status(500).json({
-          message: "La opción no tiene siguiente nodo configurado"
-        });
-      }
-
-      nextNodeId = option.next_node_id;
     }
 
-    /* ───────────── INPUT ───────────── */
-    else if (INPUT_NODES.includes(currentNode.node_type)) {
-      if (
-        sanitizedInput === undefined ||
-        sanitizedInput === null ||
-        sanitizedInput === ""
-      ) {
-        return res.status(400).json({ message: "Input requerido" });
-      }
-
-      if (currentNode.validation?.enabled) {
-        const valid = validateInput(
-          sanitizedInput,
-          currentNode.validation.rules
-        );
-
-        if (!valid.ok) {
-          return res.status(400).json({ message: valid.message });
-        }
-      }
-
-      if (currentNode.variable_key) {
-        session.variables.set(
-          currentNode.variable_key,
-          sanitizedInput
-        );
-      }
-
-      nextNodeId = currentNode.next_node_id;
+    /* ---------- GUARDAR VARIABLE (solo production) ---------- */
+    if (
+      session.mode === "production" &&
+      currentNode.variable_key
+    ) {
+      session.variables ??= {};
+      session.variables[currentNode.variable_key] = String(input ?? "");
+      session.markModified("variables");
     }
 
-    /* ───────────── TEXT / JUMP ───────────── */
-    else if (["text", "jump"].includes(currentNode.node_type)) {
-      nextNodeId = currentNode.next_node_id;
-    }
-
-    /* ───────────── LINK ───────────── */
-    else if (currentNode.node_type === "link") {
-      nextNodeId = null;
-    }
-
-    /* ───────────── UNKNOWN ───────────── */
-    else {
-      return res.status(400).json({
-        message: "Tipo de nodo no soportado"
-      });
-    }
-
-    /* ───────────── END BY FLAG ───────────── */
-    if (currentNode.end_conversation === true) {
-      nextNodeId = null;
-    }
-
-    /* ───────────── END FLOW ───────────── */
-    if (!nextNodeId) {
+    /* ---------- FIN DE CONVERSACIÓN ---------- */
+    if (
+      currentNode.end_conversation === true ||
+      !currentNode.next_node_id
+    ) {
       session.is_completed = true;
       await session.save();
 
@@ -206,25 +146,18 @@ exports.nextStep = async (req, res) => {
       }
 
       return res.json({
-        type: "end",
-        message: "Conversación finalizada",
-        captured: session.variables
+        completed: true,
+        variables: session.variables
       });
     }
 
-    const nextNode = await FlowNode.findOne({
-      _id: nextNodeId,
-      flow_id: session.flow_id,
-      account_id: req.user.account_id
-    });
-
+    /* ---------- SIGUIENTE NODO ---------- */
+    const nextNode = await FlowNode.findById(currentNode.next_node_id);
     if (!nextNode) {
-      return res.status(500).json({
-        message: "Siguiente nodo no encontrado"
-      });
+      throw new Error("Siguiente nodo no encontrado");
     }
 
-    session.current_node_id = nextNodeId;
+    session.current_node_id = nextNode._id;
     await session.save();
 
     res.json(renderNode(nextNode, session._id));
