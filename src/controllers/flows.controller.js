@@ -6,74 +6,102 @@ const validateFlow = require("../services/validateFlow.service");
 const { getEditableFlow } = require("../utils/flow.utils");
 
 // Crear flow
-exports.createFlow = async (req, res) => {
+exports.createNode = async (req, res) => {
   const session = await mongoose.startSession();
 
   try {
-    const { chatbot_id, name } = req.body;
-
-    // ✅ Validar antes de iniciar transaction pesada
-    if (!chatbot_id || !name) {
-      return res.status(400).json({
-        message: "chatbot_id y name son requeridos"
-      });
-    }
-
-    // Validar chatbot pertenezca a la cuenta
-    const chatbot = await Chatbot.findOne({
-      _id: chatbot_id,
-      account_id: req.user.account_id
-    });
-
-    if (!chatbot) {
-      return res.status(404).json({
-        message: "Chatbot no encontrado"
-      });
-    }
-
-    // 🚀 START TRANSACTION
     session.startTransaction();
 
-    // ✅ create usando array → necesario para session
-    const [flow] = await Flow.create([{
-      account_id: req.user.account_id,
-      chatbot_id,
-      name,
-      is_active: false,
-      is_draft: true,
-      start_node_id: null,
-      version: 1
-    }], { session });
+    const {
+      flow_id,
+      node_type,
+      content,
+      options = [],
+      variable_key,
+      typing_time = 2,
+      link_action,
+      crm_field_key,
+      validation
+    } = req.body;
 
-    // ✅ Crear start node inicial
-    const [startNode] = await FlowNode.create([{
-      flow_id: flow._id,
-      order: 0,
-      node_type: "message",
-      content: "Inicio del flujo",
-      next_node_id: null,
-      options: []
-    }], { session });
+    if (!mongoose.Types.ObjectId.isValid(flow_id)) {
+      throw new Error("flow_id requerido o inválido");
+    }
 
-    // ✅ Actualizar flow con start_node_id
-    flow.start_node_id = startNode._id;
-    await flow.save({ session });
+    await getEditableFlow(flow_id, req.user.account_id);
+    await validateCreateNode(req.body);
 
-    // ✅ Commit
+    if (typing_time < 0 || typing_time > 10) {
+      throw new Error("typing_time inválido");
+    }
+
+    if (node_type === "options") {
+      if (!Array.isArray(options) || options.length === 0) {
+        throw new Error("Options requerido para node_type options");
+      }
+
+      for (const opt of options) {
+        if (!opt.label || !opt.value) {
+          throw new Error("Cada opción requiere label y value");
+        }
+      }
+    }
+
+    // 🔥 ORDEN CORRECTO (max + 1)
+    const lastNode = await FlowNode.findOne({
+      flow_id,
+      account_id: req.user.account_id
+    })
+      .sort({ order: -1 })
+      .select("order")
+      .session(session);
+
+    const order = lastNode ? lastNode.order + 1 : 0;
+
+    const [node] = await FlowNode.create(
+      [
+        {
+          account_id: req.user.account_id,
+          flow_id,
+          node_type,
+          content: content ?? null,
+          order,
+          typing_time,
+          variable_key: variable_key ?? null,
+          crm_field_key: crm_field_key ?? null,
+          validation: validation ?? null,
+          link_action: link_action ? normalizeLinkAction(link_action) : null,
+          next_node_id: null,
+          options:
+            node_type === "options"
+              ? options.map((o, i) => ({
+                  label: o.label.trim(),
+                  value: o.value,
+                  order: o.order ?? i,
+                  next_node_id: null
+                }))
+              : [],
+          is_draft: true
+        }
+      ],
+      { session }
+    );
+
+    await updateStartNode(flow_id, req.user.account_id, session);
+
     await session.commitTransaction();
-
-    res.status(201).json(flow);
+    res.status(201).json(node);
 
   } catch (error) {
-    // ❌ Rollback seguro
     await session.abortTransaction();
 
-    console.error("createFlow error:", error);
+    if (error.code === 11000) {
+      return res.status(409).json({
+        message: "Conflicto de orden al crear el nodo, intenta nuevamente"
+      });
+    }
 
-    res.status(500).json({
-      message: "Error creando flow",
-      error: error.message
-    });
+    res.status(400).json({ message: error.message });
 
   } finally {
     session.endSession();
@@ -210,25 +238,36 @@ exports.saveFlow = async (req, res) => {
       throw new Error("start_node_id inválido");
     }
 
-    // 🔐 Validar flow
     const flow = await getEditableFlow(flowId, req.user.account_id);
 
-    // 🧠 ORDER-FIRST REAL
+    // 🔢 Orden secuencial seguro
     nodes
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
       .forEach((node, index) => {
         node.order = index;
       });
 
-    // 🧹 DELETE ALL NODES
-    await FlowNode.deleteMany({
-      flow_id: flowId,
-      account_id: req.user.account_id
-    }).session(session);
+    // 🔄 ID MAP
+    const idMap = new Map();
+    nodes.forEach(node => {
+      const newId = node._id
+        ? new mongoose.Types.ObjectId(node._id)
+        : new mongoose.Types.ObjectId();
+      idMap.set(String(node._id), newId);
+    });
 
-    // 🆕 PREPARE INSERT
+    // 🧹 DELETE (CON SESSION CORRECTA)
+    await FlowNode.deleteMany(
+      {
+        flow_id: flowId,
+        account_id: req.user.account_id
+      },
+      { session }
+    );
+
+    // 🆕 PREPARE DOCS
     const docs = nodes.map(node => ({
-      _id: node._id || new mongoose.Types.ObjectId(),
+      _id: idMap.get(String(node._id)),
       account_id: req.user.account_id,
       flow_id: flowId,
       parent_node_id: null,
@@ -236,27 +275,37 @@ exports.saveFlow = async (req, res) => {
       node_type: node.node_type,
       content: node.content,
       variable_key: node.variable_key || null,
-      options: node.options || [],
-      next_node_id: node.next_node_id || null,
       typing_time: node.typing_time ?? 2,
-      link_action: node.link_action || undefined,
-      validation: node.validation || undefined,
       crm_field_key: node.crm_field_key || null,
       is_draft: true,
-      end_conversation: node.end_conversation ?? false
+      end_conversation: node.end_conversation ?? false,
+
+      next_node_id: node.next_node_id
+        ? idMap.get(String(node.next_node_id)) || null
+        : null,
+
+      options: (node.options || []).map(opt => ({
+        label: opt.label,
+        value: opt.value,
+        order: opt.order ?? 0,
+        next_node_id: opt.next_node_id
+          ? idMap.get(String(opt.next_node_id)) || null
+          : null
+      })),
+
+      link_action: node.link_action || undefined,
+      validation: node.validation || undefined
     }));
 
-    // 🔗 VALIDAR start_node_id EXISTE
-    const newIds = docs.map(d => d._id.toString());
-    if (!newIds.includes(String(start_node_id))) {
+    // 🔗 VALIDAR start_node_id
+    const realStartId = idMap.get(String(start_node_id));
+    if (!realStartId) {
       throw new Error("start_node_id no pertenece al flow");
     }
 
-    // 🚀 INSERT ALL
     await FlowNode.insertMany(docs, { session });
 
-    // 🔄 UPDATE FLOW
-    flow.start_node_id = start_node_id;
+    flow.start_node_id = realStartId;
     flow.is_draft = true;
     await flow.save({ session });
 
@@ -264,17 +313,15 @@ exports.saveFlow = async (req, res) => {
 
     res.json({
       success: true,
-      message: "Flow guardado (ULTRA-RÁPIDO delete + insert)"
+      message: "Flow guardado correctamente"
     });
 
   } catch (err) {
-
     await session.abortTransaction();
     res.status(400).json({
       success: false,
       message: err.message
     });
-
   } finally {
     session.endSession();
   }

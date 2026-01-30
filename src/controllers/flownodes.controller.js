@@ -6,6 +6,45 @@ const normalizeLinkAction = require("../utils/normalizeLinkAction");
 const { getEditableFlow } = require("../utils/flow.utils");
 const updateStartNode = require("../utils/updateStartNode");
 
+
+async function collectCascadeNodeIds(startNode, flow_id, account_id, session) {
+  const visited = new Set();
+  const stack = [startNode];
+
+  while (stack.length > 0) {
+    const currentId = stack.pop();
+    if (!currentId) continue;
+
+    const key = currentId.toString();
+    if (visited.has(key)) continue;
+    visited.add(key);
+
+    const node = await FlowNode.findOne({
+      _id: currentId,
+      flow_id,
+      account_id
+    }).session(session);
+
+    if (!node) continue;
+
+    // next_node_id normal
+    if (node.next_node_id) {
+      stack.push(node.next_node_id);
+    }
+
+    // opciones
+    if (node.node_type === "options" && Array.isArray(node.options)) {
+      for (const opt of node.options) {
+        if (opt.next_node_id) {
+          stack.push(opt.next_node_id);
+        }
+      }
+    }
+  }
+
+  return Array.from(visited);
+}
+
 // Crear nodos
 exports.createNode = async (req, res) => {
   const session = await mongoose.startSession();
@@ -71,11 +110,11 @@ exports.createNode = async (req, res) => {
           options:
             node_type === "options"
               ? options.map((o, i) => ({
-                  label: o.label.trim(),
-                  value: o.value,
-                  order: o.order ?? i,
-                  next_node_id: null
-                }))
+                label: o.label.trim(),
+                value: o.value,
+                order: o.order ?? i,
+                next_node_id: null
+              }))
               : [],
           is_draft: true
         }
@@ -321,23 +360,32 @@ exports.deleteNode = async (req, res) => {
 
     await getEditableFlow(node.flow_id, req.user.account_id);
 
-    // SHIFT ORDER
+    // 1️⃣ Obtener todos los nodos a eliminar (subárbol completo)
+    const cascadeIds = await collectCascadeNodeIds(
+      node._id,
+      node.flow_id,
+      req.user.account_id,
+      session
+    );
+
+    // 2️⃣ Reordenar nodos restantes
     await FlowNode.updateMany(
       {
         flow_id: node.flow_id,
         account_id: req.user.account_id,
-        order: { $gt: node.order }
+        order: { $gt: node.order },
+        _id: { $nin: cascadeIds }
       },
       { $inc: { order: -1 } },
       { session }
     );
 
-    // LIMPIAR CONEXIONES
+    // 3️⃣ Limpiar conexiones externas hacia los nodos eliminados
     await FlowNode.updateMany(
       {
         flow_id: node.flow_id,
         account_id: req.user.account_id,
-        next_node_id: node._id
+        next_node_id: { $in: cascadeIds }
       },
       { $set: { next_node_id: null } },
       { session }
@@ -347,22 +395,36 @@ exports.deleteNode = async (req, res) => {
       {
         flow_id: node.flow_id,
         account_id: req.user.account_id,
-        "options.next_node_id": node._id
+        "options.next_node_id": { $in: cascadeIds }
       },
-      { $set: { "options.$[opt].next_node_id": null } },
       {
-        arrayFilters: [{ "opt.next_node_id": node._id }],
+        $set: { "options.$[opt].next_node_id": null }
+      },
+      {
+        arrayFilters: [{ "opt.next_node_id": { $in: cascadeIds } }],
         session
       }
     );
 
-    await FlowNode.deleteOne({ _id: node._id }, { session });
+    // 4️⃣ Eliminar todos los nodos en cascada
+    await FlowNode.deleteMany(
+      {
+        _id: { $in: cascadeIds },
+        flow_id: node.flow_id,
+        account_id: req.user.account_id
+      },
+      { session }
+    );
 
+    // 5️⃣ Actualizar start node
     await updateStartNode(node.flow_id, req.user.account_id, session);
 
     await session.commitTransaction();
 
-    res.json({ message: "Nodo eliminado correctamente" });
+    res.json({
+      message: "Nodo eliminado con cascada correctamente",
+      deleted_nodes: cascadeIds.length
+    });
 
   } catch (error) {
     await session.abortTransaction();
@@ -371,6 +433,7 @@ exports.deleteNode = async (req, res) => {
     session.endSession();
   }
 };
+
 
 // Reorden de nodos 
 exports.reorderNodes = async (req, res) => {
