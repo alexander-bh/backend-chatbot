@@ -210,107 +210,66 @@ exports.saveFlow = async (req, res) => {
       throw new Error("start_node_id inválido");
     }
 
-    // 🔐 Validar flow pertenece a la cuenta
+    // 🔐 Validar flow
     const flow = await getEditableFlow(flowId, req.user.account_id);
 
-    // Validar orders únicos
-    const orders = nodes.map(n => n.order);
-    if (orders.length !== new Set(orders).size) {
-      throw new Error("Orders duplicados detectados");
-    }
+    // 🧠 ORDER-FIRST REAL
+    nodes
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      .forEach((node, index) => {
+        node.order = index;
+      });
 
-    // ORDER-FIRST ENGINE
-    nodes.sort((a, b) => a.order - b.order);
-
-    // Obtener nodos existentes
-    const existingNodes = await FlowNode.find({
+    // 🧹 DELETE ALL NODES
+    await FlowNode.deleteMany({
       flow_id: flowId,
       account_id: req.user.account_id
     }).session(session);
 
-    const existingMap = new Map(
-      existingNodes.map(n => [n._id.toString(), n])
-    );
+    // 🆕 PREPARE INSERT
+    const docs = nodes.map(node => ({
+      _id: node._id || new mongoose.Types.ObjectId(),
+      account_id: req.user.account_id,
+      flow_id: flowId,
+      parent_node_id: null,
+      order: node.order,
+      node_type: node.node_type,
+      content: node.content,
+      variable_key: node.variable_key || null,
+      options: node.options || [],
+      next_node_id: node.next_node_id || null,
+      typing_time: node.typing_time ?? 2,
+      link_action: node.link_action || undefined,
+      validation: node.validation || undefined,
+      crm_field_key: node.crm_field_key || null,
+      is_draft: true,
+      end_conversation: node.end_conversation ?? false
+    }));
 
-    const savedNodeIds = [];
-
-    // ================= UPSERT =================
-    for (const node of nodes) {
-
-      const nodePayload = {
-        account_id: req.user.account_id,
-        flow_id: flowId,
-        node_type: node.node_type,
-        content: node.content,
-        order: node.order,
-        options: node.options || [],
-        next_node_id: node.next_node_id || null,
-        variable_key: node.variable_key || null,
-        typing_time: node.typing_time ?? 2,
-        link_action: node.link_action || undefined,
-        crm_field_key: node.crm_field_key || null,
-        validation: node.validation || undefined
-      };
-
-      let savedNode;
-
-      if (node._id && existingMap.has(node._id)) {
-
-        savedNode = await FlowNode.findOneAndUpdate(
-          {
-            _id: node._id,
-            flow_id: flowId,
-            account_id: req.user.account_id
-          },
-          nodePayload,
-          { new: true, session, runValidators: true }
-        );
-
-      } else {
-
-        const created = await FlowNode.create([nodePayload], { session });
-        savedNode = created[0];
-
-      }
-
-      savedNodeIds.push(savedNode._id.toString());
-    }
-
-    // ================= DELETE REMOVED =================
-    for (const existingNode of existingNodes) {
-      if (!savedNodeIds.includes(existingNode._id.toString())) {
-
-        await FlowNode.deleteOne({
-          _id: existingNode._id,
-          flow_id: flowId,
-          account_id: req.user.account_id
-        }).session(session);
-
-      }
-    }
-
-    // ================= VALIDAR START =================
-    if (!savedNodeIds.includes(String(start_node_id))) {
+    // 🔗 VALIDAR start_node_id EXISTE
+    const newIds = docs.map(d => d._id.toString());
+    if (!newIds.includes(String(start_node_id))) {
       throw new Error("start_node_id no pertenece al flow");
     }
 
-    // ================= UPDATE FLOW =================
+    // 🚀 INSERT ALL
+    await FlowNode.insertMany(docs, { session });
+
+    // 🔄 UPDATE FLOW
     flow.start_node_id = start_node_id;
     flow.is_draft = true;
-
     await flow.save({ session });
 
     await session.commitTransaction();
 
     res.json({
       success: true,
-      message: "Flow guardado (ORDER-FIRST + OPTIONS ENGINE)"
+      message: "Flow guardado (ULTRA-RÁPIDO delete + insert)"
     });
 
   } catch (err) {
 
     await session.abortTransaction();
-
     res.status(400).json({
       success: false,
       message: err.message
@@ -320,6 +279,7 @@ exports.saveFlow = async (req, res) => {
     session.endSession();
   }
 };
+
 
 // Publicar flow
 exports.publishFlow = async (req, res) => {
