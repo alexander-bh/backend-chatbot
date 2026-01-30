@@ -27,7 +27,6 @@ const slugify = (text) =>
 // Primer registro (crea cuenta + chatbot + flow + flow nodes)
 exports.registerFirst = async (req, res) => {
   const session = await mongoose.startSession();
-
   try {
     session.startTransaction();
 

@@ -12,8 +12,7 @@ app.get("/ping", (req, res) => {
   res.json({ ok: true });
 });
 
-// middlewares globales seguros
-app.use(require("./middlewares/multerError.middleware"));
+// middlewares 
 app.use(require("./middlewares/mongo.middleware.js"));
 
 /* ───────── RUTAS PÚBLICAS (NO requieren cuenta) ───────── */
@@ -46,5 +45,8 @@ app.use(
   resolveAccount,
   require("./routes/conversationSession.routes.js")
 );
+
+// middlewares 
+app.use(require("./middlewares/multerError.middleware"));
 
 module.exports = app;
