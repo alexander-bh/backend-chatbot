@@ -321,7 +321,7 @@ exports.duplicateChatbotFull = async (req, res) => {
       input_placeholder: original.input_placeholder,
       position: original.position,
       show_branding: original.show_branding,
-      status: "inactive",
+      status: "active",
       is_enabled: false,
       avatar: process.env.DEFAULT_CHATBOT_AVATAR,
       uploaded_avatars: []
