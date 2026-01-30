@@ -9,7 +9,6 @@ const flowEdit = require("../controllers/flowEditor.controller");
 
 const FLOW_ROLE = role("ADMIN", "CLIENT");
 
-
 // Crear flujo
 router.post(
   "/",
@@ -17,7 +16,6 @@ router.post(
   FLOW_ROLE,
   flowController.createFlow
 );
-
 
 // Listar flujos por chatbot
 router.get(
