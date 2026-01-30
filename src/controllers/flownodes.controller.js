@@ -88,7 +88,7 @@ exports.duplicateNode = async (req, res) => {
     session.startTransaction();
 
     const newNode = await flowNodeService.duplicateNode(
-      req.params.nodeId,
+      req.params.id,
       req.user.account_id,
       session
     );
