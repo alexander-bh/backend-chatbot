@@ -528,65 +528,6 @@ exports.reorderNodes = async (req, res) => {
   }
 };
 
-// Actualizar canvas
-exports.updateCanvas = async (req, res) => {
-  const session = await mongoose.startSession();
-
-  try {
-    const { flow_id, nodes } = req.body;
-
-    if (!mongoose.Types.ObjectId.isValid(flow_id)) {
-      return res.status(400).json({ message: "flow_id inválido" });
-    }
-
-    if (!Array.isArray(nodes) || !nodes.length) {
-      return res.status(400).json({ message: "nodes inválido" });
-    }
-
-    await getEditableFlow(flow_id, req.user.account_id);
-
-    session.startTransaction();
-
-    const count = await FlowNode.countDocuments({
-      _id: { $in: nodes.map(n => n.node_id) },
-      flow_id,
-      account_id: req.user.account_id
-    }).session(session);
-
-    if (count !== nodes.length) {
-      throw new Error("Uno o más nodos no pertenecen al flow");
-    }
-
-    const bulk = nodes.map(n => ({
-      updateOne: {
-        filter: {
-          _id: n.node_id,
-          flow_id,
-          account_id: req.user.account_id
-        },
-        update: {
-          position: {
-            x: Number(n.position?.x ?? 0),
-            y: Number(n.position?.y ?? 0)
-          },
-          is_draft: true
-        }
-      }
-    }));
-
-    await FlowNode.bulkWrite(bulk, { session });
-    await updateStartNode(flow_id, req.user.account_id, session);
-    await session.commitTransaction();
-    res.json({ message: "Canvas actualizado correctamente" });
-
-  } catch (error) {
-    await session.abortTransaction();
-    res.status(400).json({ message: error.message });
-  } finally {
-    session.endSession();
-  }
-};
-
 // Reoder subarbol
 exports.reorderSubtree = async (req, res) => {
   const session = await mongoose.startSession();

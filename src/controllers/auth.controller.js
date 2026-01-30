@@ -141,7 +141,6 @@ exports.registerFirst = async (req, res) => {
         flow_id: flow._id,
         node_type: "text",
         content: welcomeText,
-        position: { x: 100, y: 100 },
         is_draft: false
       }],
       { session }

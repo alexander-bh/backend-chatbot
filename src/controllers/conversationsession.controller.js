@@ -95,6 +95,7 @@ exports.startConversation = async (req, res) => {
 -------------------------------------------------- */
 exports.nextStep = async (req, res) => {
   try {
+
     const { id: sessionId } = req.params;
     const { input } = req.body;
 
@@ -103,46 +104,42 @@ exports.nextStep = async (req, res) => {
     }
 
     const session = await ConversationSession.findById(sessionId);
-    if (!session) {
-      return res.status(404).json({ message: "Sesión no encontrada" });
-    }
+    if (!session) return res.status(404).json({ message: "Sesión no encontrada" });
 
-    if (session.is_completed) {
-      return res.json({ completed: true });
-    }
+    if (session.is_completed) return res.json({ completed: true });
 
-    let currentNode = await FlowNode.findById(session.current_node_id);
-    if (!currentNode) {
-      throw new Error("Nodo actual no encontrado");
-    }
+    /* =============================
+       LOAD FLOW NODES
+    ============================= */
 
-    /* ==================================================
-       1️⃣ NODOS QUE REQUIEREN INPUT
-    ================================================== */
+    const nodes = await FlowNode.find({ flow_id: session.flow_id }).lean();
+
+    const nodesMap = new Map(nodes.map(n => [n._id.toString(), n]));
+    const orderMap = new Map(nodes.map(n => [n.order, n]));
+
+    let currentNode = nodesMap.get(session.current_node_id.toString());
+    if (!currentNode) throw new Error("Nodo actual no encontrado");
+
+    /* =============================
+       INPUT PROCESSING
+    ============================= */
+
     if (INPUT_NODES.includes(currentNode.node_type)) {
 
-      if (typeof input === "undefined") {
-        return res.status(400).json({
-          message: "Este nodo requiere una respuesta del usuario"
-        });
+      if (input === undefined) {
+        return res.status(400).json({ message: "Este nodo requiere respuesta" });
       }
 
       let validationResult = { ok: true };
 
       if (currentNode.validation?.enabled) {
-        validationResult = validateInput(
-          input,
-          currentNode.validation.rules || []
-        );
+        validationResult = validateInput(input, currentNode.validation.rules || []);
       }
 
       if (!validationResult.ok) {
-        return res.status(400).json({
-          message: validationResult.message
-        });
+        return res.status(400).json({ message: validationResult.message });
       }
 
-      // Guardar variables solo en producción
       if (session.mode === "production" && currentNode.variable_key) {
         session.variables[currentNode.variable_key] = String(input);
         session.markModified("variables");
@@ -151,42 +148,67 @@ exports.nextStep = async (req, res) => {
       await session.save();
     }
 
-    /* ==================================================
-       2️⃣ AVANCE AUTOMÁTICO (ENGINE LOOP)
-    ================================================== */
-    let nextNodeId = currentNode.next_node_id;
+    /* =============================
+       RESOLVE NEXT NODE
+    ============================= */
 
-    if (!nextNodeId) {
-      session.is_completed = true;
-      await session.save();
+    const resolveNextNode = () => {
 
-      if (session.mode === "production") {
-        await upsertContactFromSession(session);
+      /* 🔵 OPTIONS branching */
+      if (currentNode.options?.length && input !== undefined) {
+
+        const sortedOptions = [...currentNode.options]
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+        const match = sortedOptions.find(opt =>
+          opt.value === input ||
+          opt.label?.toLowerCase() === String(input).toLowerCase()
+        );
+
+        if (match?.next_node_id) {
+          return nodesMap.get(match.next_node_id.toString());
+        }
       }
 
-      return res.json({
-        completed: true,
-        variables: session.variables
-      });
-    }
-
-    while (nextNodeId) {
-
-      const nextNode = await FlowNode.findById(nextNodeId);
-      if (!nextNode) {
-        throw new Error("Siguiente nodo no encontrado");
+      /* 🟢 Manual next_node_id */
+      if (currentNode.next_node_id) {
+        return nodesMap.get(currentNode.next_node_id.toString());
       }
+
+      /* 🟡 ORDER fallback */
+      return orderMap.get(currentNode.order + 1);
+    };
+
+    let nextNode = resolveNextNode();
+
+    /* =============================
+       AUTO RENDER LOOP
+    ============================= */
+
+    while (nextNode) {
 
       session.current_node_id = nextNode._id;
+
+      if (nextNode.end_conversation) {
+        session.is_completed = true;
+      }
+
       await session.save();
 
-      // Si requiere input → detener y mostrar
       if (INPUT_NODES.includes(nextNode.node_type)) {
         return res.json(renderNode(nextNode, session._id));
       }
 
-      // Si es último nodo → mostrar y cerrar
-      if (!nextNode.next_node_id) {
+      if (nextNode.end_conversation) {
+
+        if (session.mode === "production") {
+          await upsertContactFromSession(session);
+        }
+
+        return res.json(renderNode(nextNode, session._id));
+      }
+
+      if (!nextNode.next_node_id && !nextNode.options?.length) {
 
         session.is_completed = true;
         await session.save();
@@ -198,13 +220,33 @@ exports.nextStep = async (req, res) => {
         return res.json(renderNode(nextNode, session._id));
       }
 
-      nextNodeId = nextNode.next_node_id;
+      currentNode = nextNode;
+      nextNode = resolveNextNode();
     }
 
+    /* =============================
+       FLOW END
+    ============================= */
+
+    session.is_completed = true;
+    await session.save();
+
+    if (session.mode === "production") {
+      await upsertContactFromSession(session);
+    }
+
+    return res.json({
+      completed: true,
+      variables: session.variables
+    });
+
   } catch (error) {
+
     console.error("nextStep:", error);
+
     return res.status(500).json({
       message: "Error al procesar conversación"
     });
   }
 };
+

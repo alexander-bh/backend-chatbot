@@ -63,7 +63,6 @@ exports.createChatbot = async (req, res) => {
         flow_id: flow._id,
         node_type: "text",
         content: welcomeText,
-        position: { x: 100, y: 100 },
         is_draft: false
       }],
       { session }
@@ -369,8 +368,6 @@ exports.duplicateChatbotFull = async (req, res) => {
           flow_id: flowIdMap.get(String(node.flow_id))._id,
           node_type: node.node_type,
           content: node.content,
-          position: node.position,
-          options: [],
           next_node_id: null,
           is_draft: true
         }],

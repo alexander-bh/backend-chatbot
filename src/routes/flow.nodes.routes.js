@@ -5,15 +5,6 @@ const auth = require("../middlewares/auth.middleware");
 const role = require("../middlewares/role.middleware");
 const nodeController = require("../controllers/flownodes.controller");
 
-
-// Actualizar canvas (posiciones)
-router.patch(
-  "/update-canvas",
-  auth,
-  role("ADMIN", "CLIENT"),
-  nodeController.updateCanvas
-);
-
 // Obtener nodos por flow
 router.get(
   "/flow/:flowId",

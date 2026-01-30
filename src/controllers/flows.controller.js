@@ -5,37 +5,6 @@ const FlowNode = require("../models/FlowNode");
 const validateFlow = require("../services/validateFlow.service");
 const { getEditableFlow } = require("../utils/flow.utils");
 
-const recalculateOrder = (startNodeId, dbMap) => {
-  const visited = new Set();
-  const ordered = [];
-
-  let currentId = String(startNodeId);
-  let index = 0;
-
-  while (currentId) {
-    if (visited.has(currentId)) {
-      throw new Error("Ciclo detectado en el flow");
-    }
-
-    const node = dbMap.get(currentId);
-    if (!node) break;
-
-    visited.add(currentId);
-
-    ordered.push({
-      _id: node._id,
-      next_node_id: node.next_node_id ?? null,   // 🔒 SOLO BD
-      parent_node_id: node.parent_node_id ?? null,
-      order: index++
-    });
-
-    currentId = node.next_node_id
-      ? String(node.next_node_id)
-      : null;
-  }
-
-  return ordered;
-};
 // Crear flow
 exports.createFlow = async (req, res) => {
   try {
@@ -188,100 +157,135 @@ exports.deleteFlow = async (req, res) => {
   }
 };
 
-// Guardar flow (borrador)
-// Guardar flow (borrador)
+// Guardar flow
 exports.saveFlow = async (req, res) => {
+  const session = await mongoose.startSession();
+
   try {
-    const flow = await getEditableFlow(
-      req.params.id,
-      req.user.account_id
-    );
+    session.startTransaction();
 
-    const { start_node_id, nodes } = req.body;
+    const flowId = req.params.id;
+    const { nodes, start_node_id } = req.body;
 
-    const startId = start_node_id || flow.start_node_id;
-
-    if (!mongoose.Types.ObjectId.isValid(startId)) {
-      return res.status(400).json({ message: "start_node_id inválido" });
+    if (!Array.isArray(nodes) || nodes.length === 0) {
+      throw new Error("Nodes array requerido");
     }
 
-    /* ---------------------------------------------------
-       1️⃣ Guardar conexiones (next_node_id) desde frontend
-    --------------------------------------------------- */
-    if (Array.isArray(nodes) && nodes.length) {
-      const bulkLinks = nodes.map(n => ({
-        updateOne: {
-          filter: {
-            _id: n._id,
-            flow_id: flow._id,
+    if (!mongoose.Types.ObjectId.isValid(start_node_id)) {
+      throw new Error("start_node_id inválido");
+    }
+
+    // 🔐 Validar flow pertenece a la cuenta
+    const flow = await getEditableFlow(flowId, req.user.account_id);
+
+    // Validar orders únicos
+    const orders = nodes.map(n => n.order);
+    if (orders.length !== new Set(orders).size) {
+      throw new Error("Orders duplicados detectados");
+    }
+
+    // ORDER-FIRST ENGINE
+    nodes.sort((a, b) => a.order - b.order);
+
+    // Obtener nodos existentes
+    const existingNodes = await FlowNode.find({
+      flow_id: flowId,
+      account_id: req.user.account_id
+    }).session(session);
+
+    const existingMap = new Map(
+      existingNodes.map(n => [n._id.toString(), n])
+    );
+
+    const savedNodeIds = [];
+
+    // ================= UPSERT =================
+    for (const node of nodes) {
+
+      const nodePayload = {
+        account_id: req.user.account_id,
+        flow_id: flowId,
+        node_type: node.node_type,
+        content: node.content,
+        order: node.order,
+        options: node.options || [],
+        next_node_id: node.next_node_id || null,
+        variable_key: node.variable_key || null,
+        typing_time: node.typing_time ?? 2,
+        link_action: node.link_action || undefined,
+        crm_field_key: node.crm_field_key || null,
+        validation: node.validation || undefined
+      };
+
+      let savedNode;
+
+      if (node._id && existingMap.has(node._id)) {
+
+        savedNode = await FlowNode.findOneAndUpdate(
+          {
+            _id: node._id,
+            flow_id: flowId,
             account_id: req.user.account_id
           },
-          update: {
-            $set: {
-              next_node_id: n.next_node_id ?? null
-            }
-          }
-        }
-      }));
+          nodePayload,
+          { new: true, session, runValidators: true }
+        );
 
-      await FlowNode.bulkWrite(bulkLinks);
+      } else {
+
+        const created = await FlowNode.create([nodePayload], { session });
+        savedNode = created[0];
+
+      }
+
+      savedNodeIds.push(savedNode._id.toString());
     }
 
-    /* ---------------------------------------------------
-       2️⃣ Releer nodos desde BD (la verdad absoluta)
-    --------------------------------------------------- */
-    const dbNodes = await FlowNode.find({
-      flow_id: flow._id,
-      account_id: req.user.account_id
-    }).lean();
+    // ================= DELETE REMOVED =================
+    for (const existingNode of existingNodes) {
+      if (!savedNodeIds.includes(existingNode._id.toString())) {
 
-    const dbMap = new Map(
-      dbNodes.map(n => [String(n._id), n])
-    );
-
-    /* ---------------------------------------------------
-       3️⃣ Recalcular orden según conexiones reales
-    --------------------------------------------------- */
-    const ordered = recalculateOrder(startId, dbMap);
-
-    /* ---------------------------------------------------
-       4️⃣ Persistir nuevo orden
-    --------------------------------------------------- */
-    const bulkOrder = ordered.map(n => ({
-      updateOne: {
-        filter: {
-          _id: n._id,
-          flow_id: flow._id,
+        await FlowNode.deleteOne({
+          _id: existingNode._id,
+          flow_id: flowId,
           account_id: req.user.account_id
-        },
-        update: {
-          $set: {
-            order: n.order,
-            is_draft: true
-          }
-        }
+        }).session(session);
+
       }
-    }));
+    }
 
-    await FlowNode.bulkWrite(bulkOrder);
+    // ================= VALIDAR START =================
+    if (!savedNodeIds.includes(String(start_node_id))) {
+      throw new Error("start_node_id no pertenece al flow");
+    }
 
-    /* ---------------------------------------------------
-       5️⃣ Guardar flow
-    --------------------------------------------------- */
-    flow.start_node_id = startId;
+    // ================= UPDATE FLOW =================
+    flow.start_node_id = start_node_id;
     flow.is_draft = true;
-    await flow.save();
+
+    await flow.save({ session });
+
+    await session.commitTransaction();
 
     res.json({
-      message: "Flow guardado correctamente",
-      start_node_id: startId
+      success: true,
+      message: "Flow guardado (ORDER-FIRST + OPTIONS ENGINE)"
     });
 
-  } catch (error) {
-    console.error("saveFlow:", error);
-    res.status(400).json({ message: error.message });
+  } catch (err) {
+
+    await session.abortTransaction();
+
+    res.status(400).json({
+      success: false,
+      message: err.message
+    });
+
+  } finally {
+    session.endSession();
   }
 };
+
 
 // Publicar flow
 exports.publishFlow = async (req, res) => {
