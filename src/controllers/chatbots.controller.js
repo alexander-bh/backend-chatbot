@@ -12,81 +12,83 @@ const MAX_AVATARS = 50;
 
 // Crear chatbot
 exports.createChatbot = async (req, res) => {
- const session = await mongoose.startSession();
+  const session = await mongoose.startSession();
 
- try {
-  session.startTransaction();
+  try {
+    session.startTransaction();
 
-  const {
-   name,
-   welcome_message,
-   welcome_delay,
-   show_welcome_on_mobile
-  } = req.body;
+    const {
+      name,
+      welcome_message,
+      welcome_delay,
+      show_welcome_on_mobile
+    } = req.body;
 
-  if (!name) throw new Error("El nombre es obligatorio");
+    if (!name) throw new Error("El nombre es obligatorio");
 
-  if (welcome_delay !== undefined &&
-     (welcome_delay < 0 || welcome_delay > 10)) {
-   throw new Error("welcome_delay inválido");
+    if (welcome_delay !== undefined &&
+        (welcome_delay < 0 || welcome_delay > 10)) {
+      throw new Error("welcome_delay inválido");
+    }
+
+    const welcomeText =
+      welcome_message || "Hola 👋 ¿en qué puedo ayudarte?";
+
+    /* ───── CHATBOT ───── */
+    const [chatbot] = await Chatbot.create([{
+      account_id: req.user.account_id,
+      public_id: crypto.randomUUID(),
+      name,
+      welcome_message: welcomeText,
+      welcome_delay,
+      show_welcome_on_mobile,
+      status: "inactive",
+      is_enabled: false
+    }], { session });
+
+    /* ───── FLOW ───── */
+    const [flow] = await Flow.create([{
+      account_id: req.user.account_id,
+      chatbot_id: chatbot._id,
+      name: "Flujo principal",
+      status: "draft",
+      version: 1
+    }], { session });
+
+    /* ───── START NODE ───── */
+    const [startNode] = await FlowNode.create([{
+      account_id: req.user.account_id,
+      flow_id: flow._id,
+      node_type: "text",
+      content: welcomeText,
+      order: 0,
+      typing_time: 2,
+      parent_node_id: null,
+      next_node_id: null,
+      variable_key: null,
+      validation: null,
+      crm_field_key: null,
+      link_action: null,
+      is_draft: true
+    }], { session });
+
+    flow.start_node_id = startNode._id;
+    await flow.save({ session });
+
+    await session.commitTransaction();
+
+    res.status(201).json({
+      chatbot,
+      flow,
+      start_node: startNode
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    res.status(500).json({ message: error.message });
+  } finally {
+    session.endSession();
   }
-
-  const welcomeText =
-   welcome_message || "Hola 👋 ¿en qué puedo ayudarte?";
-
-  const [chatbot] = await Chatbot.create(
-   [{
-    account_id: req.user.account_id,
-    public_id: crypto.randomUUID(),
-    name,
-    welcome_message: welcomeText,
-    ...(welcome_delay !== undefined && { welcome_delay }),
-    ...(show_welcome_on_mobile !== undefined && { show_welcome_on_mobile }),
-    status: "active"
-   }],
-   { session }
-  );
-
-  const [flow] = await Flow.create(
-   [{
-    account_id: req.user.account_id,
-    chatbot_id: chatbot._id,
-    name: "Flujo principal",
-    is_active: false,
-    is_draft: true,
-    version: 1
-   }],
-   { session }
-  );
-
-  const [startNode] = await FlowNode.create(
-   [{
-    account_id: req.user.account_id,
-    flow_id: flow._id,
-    node_type: "text",
-    content: welcomeText,
-    order: 0,
-    typing_time: 2,
-    next_node_id: null,
-    is_draft: false
-   }],
-   { session }
-  );
-
-  flow.start_node_id = startNode._id;
-  await flow.save({ session });
-
-  await session.commitTransaction();
-
-  res.status(201).json({ chatbot, flow, start_node: startNode });
-
- } catch (error) {
-  await session.abortTransaction();
-  console.error("CREATE CHATBOT ERROR:", error);
-  res.status(500).json({ message: error.message || "Error al crear chatbot" });
- } finally {
-  session.endSession();
- }
 };
 
 // Listar chatbot

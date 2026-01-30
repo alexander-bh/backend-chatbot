@@ -1,9 +1,14 @@
 const Flow = require("../models/Flow");
+
 exports.getEditableFlow = async (flow_id, account_id) => {
+  if (!flow_id) {
+    throw new Error("flow_id requerido");
+  }
+
   const flow = await Flow.findOne({
     _id: flow_id,
     account_id,
-    is_active: { $ne: true }
+    status: "draft"
   });
 
   if (!flow) {
@@ -12,3 +17,5 @@ exports.getEditableFlow = async (flow_id, account_id) => {
 
   return flow;
 };
+
+

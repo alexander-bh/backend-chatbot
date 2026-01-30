@@ -69,7 +69,7 @@ exports.registerFirst = async (req, res) => {
       throw new Error("El email ya está registrado");
     }
 
-    /* ACCOUNT */
+    /* ───────── ACCOUNT ───────── */
     const [account] = await Account.create([{
       name: account_name,
       slug,
@@ -77,7 +77,7 @@ exports.registerFirst = async (req, res) => {
       status: "active"
     }], { session });
 
-    /* USER */
+    /* ───────── USER ───────── */
     const finalOnboarding = {
       ...(onboarding || {}),
       phone,
@@ -93,7 +93,7 @@ exports.registerFirst = async (req, res) => {
       onboarding: finalOnboarding
     }], { session });
 
-    /* CHATBOT */
+    /* ───────── CHATBOT ───────── */
     const [chatbot] = await Chatbot.create([{
       account_id: account._id,
       name: `Bot de ${name}`,
@@ -113,18 +113,16 @@ exports.registerFirst = async (req, res) => {
       show_branding: true
     }], { session });
 
-    /* FLOW */
+    /* ───────── FLOW ───────── */
     const [flow] = await Flow.create([{
       account_id: account._id,
       chatbot_id: chatbot._id,
       name: "Flujo principal",
-      is_default: true,
-      is_active: false,
-      is_draft: true,
+      status: "draft",
       version: 1
     }], { session });
 
-    /* START NODE — ORDER FIRST READY */
+    /* ───────── START NODE ───────── */
     const [startNode] = await FlowNode.create([{
       account_id: account._id,
       flow_id: flow._id,
@@ -132,14 +130,19 @@ exports.registerFirst = async (req, res) => {
       content: welcomeText,
       order: 0,
       parent_node_id: null,
+      next_node_id: null,
       typing_time: 2,
-      is_draft: false
+      variable_key: null,
+      validation: null,
+      crm_field_key: null,
+      link_action: null,
+      is_draft: true
     }], { session });
 
     flow.start_node_id = startNode._id;
     await flow.save({ session });
 
-    /* TOKEN */
+    /* ───────── TOKEN ───────── */
     const token = generateToken({
       id: user._id,
       role: user.role,
@@ -170,15 +173,12 @@ exports.registerFirst = async (req, res) => {
 
   } catch (error) {
     await session.abortTransaction();
-
-    res.status(400).json({
-      message: error.message
-    });
-
+    res.status(400).json({ message: error.message });
   } finally {
     session.endSession();
   }
 };
+
 
 // Registro de usuario (por subdominio)
 exports.register = async (req, res) => {
