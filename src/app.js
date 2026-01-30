@@ -1,4 +1,10 @@
-// normales
+const express = require("express");
+const cors = require("cors");
+const { resolveAccount } = require("./middlewares/resolveAccount");
+
+const app = express(); // ✅ ESTO FALTABA
+
+// ───────── MIDDLEWARES NORMALES ─────────
 app.use(cors());
 app.use(express.json());
 
@@ -7,14 +13,14 @@ app.get("/ping", (req, res) => {
   res.json({ ok: true });
 });
 
-// mongo (normal middleware)
+// mongo (middleware normal)
 app.use(require("./middlewares/mongo.middleware.js"));
 
-/* ───────── RUTAS ───────── */
-
+// ───────── RUTAS PÚBLICAS ─────────
 app.use("/api/auth", require("./routes/auth.routes.js"));
 app.use("/api/public-chatbot", require("./routes/public-chatbot.routes.js"));
 
+// ───────── RUTAS PRIVADAS ─────────
 app.use("/api/accounts", resolveAccount, require("./routes/account.routes.js"));
 app.use("/api/users", resolveAccount, require("./routes/user.routes.js"));
 app.use("/api/admin", resolveAccount, require("./routes/admin.routes.js"));
@@ -32,9 +38,7 @@ app.use(
   require("./routes/conversationSession.routes.js")
 );
 
-/* ───────── ERROR HANDLERS (SIEMPRE AL FINAL) ───────── */
-
-// ⛔ ESTE VA AL FINAL DE TODO
+// ───────── ERROR HANDLERS (AL FINAL SIEMPRE) ─────────
 app.use(require("./middlewares/multerError.middleware.js"));
 
 module.exports = app;
