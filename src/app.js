@@ -1,6 +1,5 @@
 const express = require("express");
 const cors = require("cors");
-const { resolveAccount } = require("./middlewares/resolveAccount");
 
 const app = express(); // ✅ ESTO FALTABA
 
@@ -21,20 +20,19 @@ app.use("/api/auth", require("./routes/auth.routes.js"));
 app.use("/api/public-chatbot", require("./routes/public-chatbot.routes.js"));
 
 // ───────── RUTAS PRIVADAS ─────────
-app.use("/api/accounts", resolveAccount, require("./routes/account.routes.js"));
-app.use("/api/users", resolveAccount, require("./routes/user.routes.js"));
-app.use("/api/admin", resolveAccount, require("./routes/admin.routes.js"));
+app.use("/api/accounts", require("./routes/account.routes.js"));
+app.use("/api/users", require("./routes/user.routes.js"));
+app.use("/api/admin", require("./routes/admin.routes.js"));
 
-app.use("/api/chatbots", resolveAccount, require("./routes/chatbots.routes.js"));
-app.use("/api/flows", resolveAccount, require("./routes/flows.routes.js"));
-app.use("/api/flownodes", resolveAccount, require("./routes/flow.nodes.routes.js"));
+app.use("/api/chatbots", require("./routes/chatbots.routes.js"));
+app.use("/api/flows", require("./routes/flows.routes.js"));
+app.use("/api/flownodes", require("./routes/flow.nodes.routes.js"));
 
-app.use("/api/crm-fields", resolveAccount, require("./routes/crmfields.routes"));
-app.use("/api/meta", resolveAccount, require("./routes/meta.routes.js"));
+app.use("/api/crm-fields", require("./routes/crmfields.routes"));
+app.use("/api/meta", require("./routes/meta.routes.js"));
 
 app.use(
   "/api/conversations",
-  resolveAccount,
   require("./routes/conversationSession.routes.js")
 );
 
