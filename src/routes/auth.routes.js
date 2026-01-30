@@ -5,7 +5,7 @@ const role = require("../middlewares/role.middleware");
 const { resolveAccount } = require("../middlewares/resolveAccount");
 const rateLimit = require("express-rate-limit");
 
-// Crear la primera cuenta + admin
+// Crear la primera cuenta 
 router.post("/register-first", authCtrl.registerFirst);
 
 // Login
