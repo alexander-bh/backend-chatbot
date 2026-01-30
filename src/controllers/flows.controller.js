@@ -6,114 +6,77 @@ const validateFlow = require("../services/validateFlow.service");
 const { getEditableFlow } = require("../utils/flow.utils");
 
 // Crear flow
-exports.createNode = async (req, res) => {
+exports.createFlow = async (req, res) => {
   const session = await mongoose.startSession();
 
   try {
-    session.startTransaction();
+    const { chatbot_id, name } = req.body;
 
-    const {
-      flow_id,
-      node_type,
-      content,
-      options = [],
-      variable_key,
-      typing_time = 2,
-      link_action,
-      crm_field_key,
-      validation
-    } = req.body;
-
-    if (!mongoose.Types.ObjectId.isValid(flow_id)) {
-      throw new Error("flow_id requerido o inválido");
-    }
-
-    await getEditableFlow(flow_id, req.user.account_id);
-    await validateCreateNode(req.body);
-
-    if (typing_time < 0 || typing_time > 10) {
-      throw new Error("typing_time inválido");
-    }
-
-    if (node_type === "options") {
-      if (!Array.isArray(options) || options.length === 0) {
-        throw new Error("Options requerido para node_type options");
-      }
-
-      for (const opt of options) {
-        if (!opt.label || !opt.value) {
-          throw new Error("Cada opción requiere label y value");
-        }
-      }
-    }
-
-    // 🔥 ORDEN CORRECTO (max + 1)
-    const lastNode = await FlowNode.findOne({
-      flow_id,
-      account_id: req.user.account_id
-    })
-      .sort({ order: -1 })
-      .select("order")
-      .session(session);
-
-    const order = lastNode ? lastNode.order + 1 : 0;
-
-    const [node] = await FlowNode.create(
-      [
-        {
-          account_id: req.user.account_id,
-          flow_id,
-          node_type,
-          content: content ?? null,
-          order,
-          typing_time,
-          variable_key: variable_key ?? null,
-          crm_field_key: crm_field_key ?? null,
-          validation: validation ?? null,
-          link_action: link_action ? normalizeLinkAction(link_action) : null,
-          next_node_id: null,
-          options:
-            node_type === "options"
-              ? options.map((o, i) => ({
-                  label: o.label.trim(),
-                  value: o.value,
-                  order: o.order ?? i,
-                  next_node_id: null
-                }))
-              : [],
-          is_draft: true
-        }
-      ],
-      { session }
-    );
-
-    await updateStartNode(flow_id, req.user.account_id, session);
-
-    await session.commitTransaction();
-    res.status(201).json(node);
-
-  } catch (error) {
-    await session.abortTransaction();
-
-    if (error.code === 11000) {
-      return res.status(409).json({
-        message: "Conflicto de orden al crear el nodo, intenta nuevamente"
+    if (!chatbot_id || !name) {
+      return res.status(400).json({
+        message: "chatbot_id y name son requeridos"
       });
     }
 
-    res.status(400).json({ message: error.message });
+    const chatbot = await Chatbot.findOne({
+      _id: chatbot_id,
+      account_id: req.user.account_id
+    });
 
+    if (!chatbot) {
+      return res.status(404).json({
+        message: "Chatbot no encontrado"
+      });
+    }
+
+    session.startTransaction();
+
+    const [flow] = await Flow.create([{
+      account_id: req.user.account_id,
+      chatbot_id,
+      name,
+      is_active: false,
+      is_draft: true,
+      start_node_id: null,
+      version: 1
+    }], { session });
+
+    const [startNode] = await FlowNode.create([{
+      account_id: req.user.account_id, // ✅ FIX
+      flow_id: flow._id,
+      order: 0,
+      node_type: "message",
+      content: "Inicio del flujo",
+      next_node_id: null,
+      options: []
+    }], { session });
+
+    flow.start_node_id = startNode._id;
+    await flow.save({ session });
+
+    await session.commitTransaction();
+
+    res.status(201).json(flow);
+
+  } catch (error) {
+    await session.abortTransaction();
+    console.error("createFlow error:", error);
+    res.status(500).json({
+      message: "Error creando flow",
+      error: error.message
+    });
   } finally {
     session.endSession();
   }
 };
+
 
 //Obtener flow por ID
 exports.getFlowById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (!isValidObjectId(id)) {
+    if (!mongoose.Types.ObjectId.isValid(id)) { // ✅ FIX
       return res.status(400).json({ message: "ID inválido" });
     }
 
@@ -140,6 +103,7 @@ exports.getFlowById = async (req, res) => {
     res.status(500).json({ message: "Error al obtener flow" });
   }
 };
+
 
 // Obtener flows por chatbot
 exports.getFlowsByChatbot = async (req, res) => {
@@ -196,10 +160,14 @@ exports.deleteFlow = async (req, res) => {
   session.startTransaction();
 
   try {
-    const flow = await getEditableFlow(
-      req.params.id,
-      req.user.account_id
-    );
+    const flow = await Flow.findOne({
+      _id: req.params.id,
+      account_id: req.user.account_id
+    }).session(session);
+
+    if (!flow) {
+      throw new Error("Flow no encontrado");
+    }
 
     await FlowNode.deleteMany(
       { flow_id: flow._id },
@@ -209,16 +177,16 @@ exports.deleteFlow = async (req, res) => {
     await flow.deleteOne({ session });
 
     await session.commitTransaction();
-    session.endSession();
-
     res.json({ message: "Flow eliminado correctamente" });
 
   } catch (error) {
     await session.abortTransaction();
-    session.endSession();
     res.status(400).json({ message: error.message });
+  } finally {
+    session.endSession();
   }
 };
+
 
 // Guardar flow
 exports.saveFlow = async (req, res) => {
@@ -240,34 +208,31 @@ exports.saveFlow = async (req, res) => {
 
     const flow = await getEditableFlow(flowId, req.user.account_id);
 
-    // 🔢 Orden secuencial seguro
+    // 🔢 Orden seguro
     nodes
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
       .forEach((node, index) => {
         node.order = index;
       });
 
-    // 🔄 ID MAP
+    // 🗺 MAP DE IDS (FIX DEFINITIVO)
     const idMap = new Map();
     nodes.forEach(node => {
-      const newId = node._id
-        ? new mongoose.Types.ObjectId(node._id)
-        : new mongoose.Types.ObjectId();
-      idMap.set(String(node._id), newId);
+      const tempKey = node._id
+        ? String(node._id)
+        : new mongoose.Types.ObjectId().toString();
+
+      idMap.set(tempKey, new mongoose.Types.ObjectId());
+      node.__temp_id = tempKey;
     });
 
-    // 🧹 DELETE (CON SESSION CORRECTA)
     await FlowNode.deleteMany(
-      {
-        flow_id: flowId,
-        account_id: req.user.account_id
-      },
+      { flow_id: flowId, account_id: req.user.account_id },
       { session }
     );
 
-    // 🆕 PREPARE DOCS
     const docs = nodes.map(node => ({
-      _id: idMap.get(String(node._id)),
+      _id: idMap.get(node.__temp_id),
       account_id: req.user.account_id,
       flow_id: flowId,
       parent_node_id: null,
@@ -297,7 +262,6 @@ exports.saveFlow = async (req, res) => {
       validation: node.validation || undefined
     }));
 
-    // 🔗 VALIDAR start_node_id
     const realStartId = idMap.get(String(start_node_id));
     if (!realStartId) {
       throw new Error("start_node_id no pertenece al flow");
@@ -341,6 +305,7 @@ exports.publishFlow = async (req, res) => {
     await Flow.updateMany(
       {
         chatbot_id: flow.chatbot_id,
+        account_id: req.user.account_id, // ✅ FIX
         _id: { $ne: flow._id }
       },
       { is_active: false }
@@ -362,3 +327,4 @@ exports.publishFlow = async (req, res) => {
     });
   }
 };
+

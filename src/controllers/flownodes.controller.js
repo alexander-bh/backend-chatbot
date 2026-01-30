@@ -6,49 +6,48 @@ const normalizeLinkAction = require("../utils/normalizeLinkAction");
 const { getEditableFlow } = require("../utils/flow.utils");
 const updateStartNode = require("../utils/updateStartNode");
 
+async function getNextOrder(flow_id, account_id, session) {
+  const last = await FlowNode.findOne(
+    { flow_id, account_id },
+    { order: 1 },
+    { sort: { order: -1 }, session }
+  );
+  return last ? last.order + 1 : 0;
+}
 
-async function collectCascadeNodeIds(startNode, flow_id, account_id, session) {
+async function collectCascadeNodeIds(startId, flow_id, account_id, session) {
   const visited = new Set();
-  const stack = [startNode];
+  const stack = [startId];
 
-  while (stack.length > 0) {
-    const currentId = stack.pop();
-    if (!currentId) continue;
-
-    const key = currentId.toString();
+  while (stack.length) {
+    const current = stack.pop();
+    const key = current.toString();
     if (visited.has(key)) continue;
     visited.add(key);
 
-    const node = await FlowNode.findOne({
-      _id: currentId,
-      flow_id,
-      account_id
-    }).session(session);
+    const node = await FlowNode.findOne(
+      { _id: current, flow_id, account_id },
+      null,
+      { session }
+    );
 
     if (!node) continue;
 
-    // next_node_id normal
-    if (node.next_node_id) {
-      stack.push(node.next_node_id);
-    }
+    if (node.next_node_id) stack.push(node.next_node_id);
 
-    // opciones
-    if (node.node_type === "options" && Array.isArray(node.options)) {
-      for (const opt of node.options) {
-        if (opt.next_node_id) {
-          stack.push(opt.next_node_id);
-        }
-      }
+    if (node.node_type === "options") {
+      node.options.forEach(opt => {
+        if (opt.next_node_id) stack.push(opt.next_node_id);
+      });
     }
   }
 
-  return Array.from(visited);
+  return [...visited];
 }
 
 // Crear nodos
 exports.createNode = async (req, res) => {
   const session = await mongoose.startSession();
-
   try {
     session.startTransaction();
 
@@ -65,71 +64,62 @@ exports.createNode = async (req, res) => {
     } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(flow_id)) {
-      throw new Error("flow_id requerido o inválido");
+      throw new Error("flow_id inválido");
     }
 
     await getEditableFlow(flow_id, req.user.account_id);
-
     await validateCreateNode(req.body);
 
     if (typing_time < 0 || typing_time > 10) {
       throw new Error("typing_time inválido");
     }
 
-    if (node_type === "options") {
-      if (!Array.isArray(options) || options.length === 0) {
-        throw new Error("Options requerido para node_type options");
-      }
-
-      for (const opt of options) {
-        if (!opt.label || !opt.value) {
-          throw new Error("Cada opción requiere label y value");
-        }
-      }
+    if (node_type === "options" && !options.length) {
+      throw new Error("Options requeridas");
     }
 
-    const order = await FlowNode.countDocuments({
+    const order = await getNextOrder(
       flow_id,
-      account_id: req.user.account_id
-    }).session(session);
+      req.user.account_id,
+      session
+    );
 
     const [node] = await FlowNode.create(
-      [
-        {
-          account_id: req.user.account_id,
-          flow_id,
-          node_type,
-          content: content ?? null,
-          order,
-          typing_time,
-          variable_key: variable_key ?? null,
-          crm_field_key: crm_field_key ?? null,
-          validation: validation ?? null,
-          link_action: link_action ? normalizeLinkAction(link_action) : null,
-          next_node_id: null,
-          options:
-            node_type === "options"
-              ? options.map((o, i) => ({
-                label: o.label.trim(),
-                value: o.value,
-                order: o.order ?? i,
-                next_node_id: null
-              }))
-              : [],
-          is_draft: true
-        }
-      ],
+      [{
+        account_id: req.user.account_id,
+        flow_id,
+        node_type,
+        content: content ?? null,
+        order,
+        typing_time,
+        variable_key: variable_key ?? null,
+        crm_field_key: crm_field_key ?? null,
+        validation: validation ?? null,
+        link_action: link_action ? normalizeLinkAction(link_action) : null,
+        next_node_id: null,
+        options: node_type === "options"
+          ? options.map((o, i) => ({
+              label: o.label.trim(),
+              value: o.value,
+              order: o.order ?? i,
+              next_node_id: null
+            }))
+          : [],
+        is_draft: true
+      }],
       { session }
     );
 
     await updateStartNode(flow_id, req.user.account_id, session);
-
     await session.commitTransaction();
+
     res.status(201).json(node);
 
-  } catch (error) {
+  } catch (err) {
     await session.abortTransaction();
-    res.status(400).json({ message: error.message });
+    res.status(err.code === 11000 ? 409 : 400).json({
+      message: err.message
+    });
   } finally {
     session.endSession();
   }
@@ -150,15 +140,14 @@ exports.connectNode = async (req, res) => {
     await getEditableFlow(source.flow_id, req.user.account_id);
 
     let targetId;
+    let optionIndex;
 
     if (source.node_type === "options") {
-      const { option_index, next_node_id } = req.body;
-
-      if (!Number.isInteger(option_index) || !source.options?.[option_index]) {
-        return res.status(400).json({ message: "Opción inválida" });
+      optionIndex = req.body.option_index;
+      if (!Number.isInteger(optionIndex)) {
+        return res.status(400).json({ message: "option_index inválido" });
       }
-
-      targetId = next_node_id;
+      targetId = req.body.next_node_id;
     } else {
       targetId = req.body.next_node_id;
     }
@@ -174,11 +163,11 @@ exports.connectNode = async (req, res) => {
     });
 
     if (!target) {
-      return res.status(400).json({ message: "Nodo destino no existe" });
+      return res.status(404).json({ message: "Nodo destino no existe" });
     }
 
     if (source.node_type === "options") {
-      source.options[req.body.option_index].next_node_id = targetId;
+      source.options[optionIndex].next_node_id = targetId;
     } else {
       source.next_node_id = targetId;
     }
@@ -188,10 +177,10 @@ exports.connectNode = async (req, res) => {
 
     await updateStartNode(source.flow_id, req.user.account_id);
 
-    res.json({ message: "Nodos conectados correctamente" });
+    res.json({ message: "Nodos conectados" });
 
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 };
 
@@ -204,13 +193,6 @@ exports.getNodesByFlow = async (req, res) => {
       return res.status(400).json({ message: "flowId inválido" });
     }
 
-    const flow = await Flow.findOne({
-      _id: flowId,
-      account_id: req.user.account_id
-    });
-
-    if (!flow) return res.status(404).json({ message: "Flow no encontrado" });
-
     const nodes = await FlowNode.find({
       flow_id: flowId,
       account_id: req.user.account_id
@@ -218,8 +200,8 @@ exports.getNodesByFlow = async (req, res) => {
 
     res.json(nodes);
 
-  } catch (error) {
-    res.status(403).json({ message: error.message });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 };
 
@@ -231,7 +213,9 @@ exports.updateNode = async (req, res) => {
       account_id: req.user.account_id
     });
 
-    if (!node) return res.status(404).json({ message: "Nodo no encontrado" });
+    if (!node) {
+      return res.status(404).json({ message: "Nodo no encontrado" });
+    }
 
     await getEditableFlow(node.flow_id, req.user.account_id);
 
@@ -246,7 +230,10 @@ exports.updateNode = async (req, res) => {
 
     for (const field of allowed) {
       if (req.body[field] !== undefined) {
-        if (field === "typing_time" && (req.body[field] < 0 || req.body[field] > 10)) {
+        if (
+          field === "typing_time" &&
+          (req.body[field] < 0 || req.body[field] > 10)
+        ) {
           throw new Error("typing_time inválido");
         }
 
@@ -257,12 +244,16 @@ exports.updateNode = async (req, res) => {
       }
     }
 
-    if (req.body.options && node.node_type === "options") {
+    // 🔥 NO perder conexiones
+    if (node.node_type === "options" && Array.isArray(req.body.options)) {
       node.options = req.body.options.map((o, i) => ({
         label: o.label?.trim(),
         value: o.value,
         order: o.order ?? i,
-        next_node_id: o.next_node_id ?? node.options?.[i]?.next_node_id ?? null
+        next_node_id:
+          o.next_node_id ??
+          node.options?.[i]?.next_node_id ??
+          null
       }));
     }
 
@@ -271,8 +262,8 @@ exports.updateNode = async (req, res) => {
 
     res.json(node);
 
-  } catch (error) {
-    res.status(400).json({ message: error.message });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
   }
 };
 
@@ -355,12 +346,12 @@ exports.deleteNode = async (req, res) => {
     }).session(session);
 
     if (!node) {
-      return res.status(404).json({ message: "Nodo no encontrado" });
+      throw new Error("Nodo no encontrado");
     }
 
     await getEditableFlow(node.flow_id, req.user.account_id);
 
-    // 1️⃣ Obtener todos los nodos a eliminar (subárbol completo)
+    // 1️⃣ Obtener cascada
     const cascadeIds = await collectCascadeNodeIds(
       node._id,
       node.flow_id,
@@ -368,19 +359,7 @@ exports.deleteNode = async (req, res) => {
       session
     );
 
-    // 2️⃣ Reordenar nodos restantes
-    await FlowNode.updateMany(
-      {
-        flow_id: node.flow_id,
-        account_id: req.user.account_id,
-        order: { $gt: node.order },
-        _id: { $nin: cascadeIds }
-      },
-      { $inc: { order: -1 } },
-      { session }
-    );
-
-    // 3️⃣ Limpiar conexiones externas hacia los nodos eliminados
+    // 2️⃣ LIMPIAR referencias entrantes
     await FlowNode.updateMany(
       {
         flow_id: node.flow_id,
@@ -406,7 +385,7 @@ exports.deleteNode = async (req, res) => {
       }
     );
 
-    // 4️⃣ Eliminar todos los nodos en cascada
+    // 3️⃣ BORRAR nodos
     await FlowNode.deleteMany(
       {
         _id: { $in: cascadeIds },
@@ -416,24 +395,44 @@ exports.deleteNode = async (req, res) => {
       { session }
     );
 
+    // 4️⃣ Reordenar TODO
+    const remaining = await FlowNode.find(
+      {
+        flow_id: node.flow_id,
+        account_id: req.user.account_id
+      },
+      null,
+      { session }
+    ).sort({ order: 1 });
+
+    const bulk = remaining.map((n, index) => ({
+      updateOne: {
+        filter: { _id: n._id },
+        update: { $set: { order: index } }
+      }
+    }));
+
+    if (bulk.length) {
+      await FlowNode.bulkWrite(bulk, { session });
+    }
+
     // 5️⃣ Actualizar start node
     await updateStartNode(node.flow_id, req.user.account_id, session);
 
     await session.commitTransaction();
 
     res.json({
-      message: "Nodo eliminado con cascada correctamente",
+      message: "Nodo eliminado en cascada correctamente",
       deleted_nodes: cascadeIds.length
     });
 
-  } catch (error) {
+  } catch (err) {
     await session.abortTransaction();
-    res.status(400).json({ message: error.message });
+    res.status(400).json({ message: err.message });
   } finally {
     session.endSession();
   }
 };
-
 
 // Reorden de nodos 
 exports.reorderNodes = async (req, res) => {
@@ -447,6 +446,17 @@ exports.reorderNodes = async (req, res) => {
     }
 
     await getEditableFlow(flow_id, req.user.account_id);
+
+    // 🔐 Validar que TODOS pertenezcan al flow
+    const count = await FlowNode.countDocuments({
+      flow_id,
+      account_id: req.user.account_id,
+      _id: { $in: nodes.map(n => n.node_id) }
+    });
+
+    if (count !== nodes.length) {
+      throw new Error("Uno o más nodos no pertenecen al flow");
+    }
 
     session.startTransaction();
 
@@ -474,12 +484,11 @@ exports.reorderNodes = async (req, res) => {
 
     res.json({ message: "Orden actualizado correctamente" });
 
-  } catch (error) {
+  } catch (err) {
     await session.abortTransaction();
-    res.status(400).json({ message: error.message });
+    res.status(400).json({ message: err.message });
   } finally {
     session.endSession();
   }
 };
-
 
