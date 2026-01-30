@@ -1,3 +1,4 @@
+//utils flow.utils.js
 const Flow = require("../models/Flow");
 
 exports.getEditableFlow = async (flow_id, account_id) => {
@@ -8,7 +9,7 @@ exports.getEditableFlow = async (flow_id, account_id) => {
   const flow = await Flow.findOne({
     _id: flow_id,
     account_id,
-    status: "draft"
+    is_draft: true
   });
 
   if (!flow) {
@@ -17,5 +18,3 @@ exports.getEditableFlow = async (flow_id, account_id) => {
 
   return flow;
 };
-
-
