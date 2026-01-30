@@ -6,7 +6,6 @@ const normalizeLinkAction = require("../utils/normalizeLinkAction");
 const { getEditableFlow } = require("../utils/flow.utils");
 const updateStartNode = require("../utils/updateStartNode");
 
-
 // Crear nodos
 exports.createNode = async (req, res) => {
   const session = await mongoose.startSession();
