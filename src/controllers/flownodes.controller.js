@@ -67,7 +67,7 @@ exports.getNodesByFlow = async (req, res) => {
 exports.updateNode = async (req, res) => {
   try {
     const node = await flowNodeService.updateNode({
-      nodeId: req.params.nodeId,
+      nodeId: req.params.id,
       data: req.body,
       account_id: req.user.account_id
     });
@@ -116,7 +116,7 @@ exports.deleteNode = async (req, res) => {
     session.startTransaction();
 
     const result = await flowNodeService.deleteNode(
-      req.params.nodeId,
+      req.params.id,
       req.user.account_id,
       session
     );
