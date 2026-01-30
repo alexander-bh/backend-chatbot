@@ -6,7 +6,7 @@ const FlowNodeSchema = new Schema(
     flow_id: { type: Schema.Types.ObjectId, ref: "Flow", required: true, index: true },
 
     parent_node_id: { type: Schema.Types.ObjectId, ref: "FlowNode", default: null },
-    order: { type: Number, required: true },
+    order: { type: Number, default: 0 },
 
     node_type: {
       type: String,
@@ -24,7 +24,6 @@ const FlowNodeSchema = new Schema(
       required: true
     },
 
-
     content: String,
     variable_key: String,
 
@@ -32,7 +31,7 @@ const FlowNodeSchema = new Schema(
       type: [
         new Schema({
           label: String,
-          value: { type: String, required: true },
+          value: String,
           order: { type: Number, default: 0 },
           next_node_id: { type: Schema.Types.ObjectId, ref: "FlowNode" }
         }, { _id: false })
@@ -92,31 +91,5 @@ FlowNodeSchema.index(
   { unique: true }
 );
 FlowNodeSchema.index({ flow_id: 1, next_node_id: 1 });
-FlowNodeSchema.index({
-  flow_id: 1,
-  "options.next_node_id": 1
-});
-FlowNodeSchema.pre("validate", function (next) {
-
-  if (this.node_type === "options" && this.next_node_id) {
-    return next(
-      new Error("Nodos tipo 'options' no deben usar next_node_id")
-    );
-  }
-
-  if (this.node_type === "options" && (!this.options || this.options.length === 0)) {
-    return next(
-      new Error("Nodes tipo 'options' requieren al menos una opción")
-    );
-  }
-
-  if (this.node_type !== "options" && this.options?.length > 0) {
-    return next(
-      new Error("Solo nodos tipo 'options' pueden contener options")
-    );
-  }
-
-  next();
-});
 
 module.exports = model("FlowNode", FlowNodeSchema);
