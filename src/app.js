@@ -41,4 +41,12 @@ app.use(
 // ───────── ERROR HANDLERS (AL FINAL SIEMPRE) ─────────
 app.use(require("./middlewares/multerError.middleware.js"));
 
+app.use((err, req, res, next) => {
+  console.error("GLOBAL ERROR:", err);
+  res.status(err.status || 400).json({
+    message: err.message || "Error interno del servidor"
+  });
+});
+
+
 module.exports = app;

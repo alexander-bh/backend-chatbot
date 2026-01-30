@@ -25,8 +25,9 @@ const slugify = (text) =>
     .replace(/[^\w-]/g, "");
 
 // Primer registro (crea cuenta + chatbot + flow + flow nodes)
-exports.registerFirst = async (req, res) => {
+exports.registerFirst = async (req, res, next) => {
   const session = await mongoose.startSession();
+
   try {
     session.startTransaction();
 
@@ -38,7 +39,6 @@ exports.registerFirst = async (req, res) => {
       onboarding
     } = req.body;
 
-    // ✅ VALIDACIÓN CORRECTA
     if (
       !account_name ||
       !name ||
@@ -74,7 +74,6 @@ exports.registerFirst = async (req, res) => {
       throw new Error("El email ya está registrado");
     }
 
-    /* ───────── ACCOUNT ───────── */
     const [account] = await Account.create([{
       name: account_name,
       slug,
@@ -82,7 +81,6 @@ exports.registerFirst = async (req, res) => {
       status: "active"
     }], { session });
 
-    /* ───────── USER ───────── */
     const finalOnboarding = {
       ...onboarding,
       phone: onboarding.phone,
@@ -98,7 +96,6 @@ exports.registerFirst = async (req, res) => {
       onboarding: finalOnboarding
     }], { session });
 
-    /* ───────── CHATBOT ───────── */
     const [chatbot] = await Chatbot.create([{
       account_id: account._id,
       name: `Bot de ${name}`,
@@ -116,7 +113,6 @@ exports.registerFirst = async (req, res) => {
       show_branding: true
     }], { session });
 
-    /* ───────── FLOW ───────── */
     const [flow] = await Flow.create([{
       account_id: account._id,
       chatbot_id: chatbot._id,
@@ -125,7 +121,6 @@ exports.registerFirst = async (req, res) => {
       version: 1
     }], { session });
 
-    /* ───────── START NODE ───────── */
     const [startNode] = await FlowNode.create([{
       account_id: account._id,
       flow_id: flow._id,
@@ -139,7 +134,6 @@ exports.registerFirst = async (req, res) => {
     flow.start_node_id = startNode._id;
     await flow.save({ session });
 
-    /* ───────── TOKEN ───────── */
     const token = generateToken({
       id: user._id,
       role: user.role,
@@ -166,6 +160,8 @@ exports.registerFirst = async (req, res) => {
     });
 
   } catch (error) {
+    await session.abortTransaction();
+    next(error); // 👈 CLAVE
   } finally {
     session.endSession();
   }
