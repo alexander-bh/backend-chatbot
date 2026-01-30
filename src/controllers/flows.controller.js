@@ -7,41 +7,76 @@ const { getEditableFlow } = require("../utils/flow.utils");
 
 // Crear flow
 exports.createFlow = async (req, res) => {
+  const session = await mongoose.startSession();
+
   try {
     const { chatbot_id, name } = req.body;
 
+    // ✅ Validar antes de iniciar transaction pesada
     if (!chatbot_id || !name) {
-      return res.status(400).json({ message: "Datos incompletos" });
+      return res.status(400).json({
+        message: "chatbot_id y name son requeridos"
+      });
     }
 
-    if (!isValidObjectId(chatbot_id)) {
-      return res.status(400).json({ message: "chatbot_id inválido" });
-    }
-
+    // Validar chatbot pertenezca a la cuenta
     const chatbot = await Chatbot.findOne({
       _id: chatbot_id,
       account_id: req.user.account_id
     });
 
     if (!chatbot) {
-      return res.status(404).json({ message: "Chatbot no encontrado" });
+      return res.status(404).json({
+        message: "Chatbot no encontrado"
+      });
     }
 
-    const flow = await Flow.create({
+    // 🚀 START TRANSACTION
+    session.startTransaction();
+
+    // ✅ create usando array → necesario para session
+    const [flow] = await Flow.create([{
       account_id: req.user.account_id,
       chatbot_id,
       name,
       is_active: false,
       is_draft: true,
       start_node_id: null,
-      version: 0
-    });
+      version: 1
+    }], { session });
+
+    // ✅ Crear start node inicial
+    const [startNode] = await FlowNode.create([{
+      flow_id: flow._id,
+      order: 0,
+      node_type: "message",
+      content: "Inicio del flujo",
+      next_node_id: null,
+      options: []
+    }], { session });
+
+    // ✅ Actualizar flow con start_node_id
+    flow.start_node_id = startNode._id;
+    await flow.save({ session });
+
+    // ✅ Commit
+    await session.commitTransaction();
 
     res.status(201).json(flow);
 
   } catch (error) {
-    console.error("createFlow:", error);
-    res.status(500).json({ message: "Error al crear flow" });
+    // ❌ Rollback seguro
+    await session.abortTransaction();
+
+    console.error("createFlow error:", error);
+
+    res.status(500).json({
+      message: "Error creando flow",
+      error: error.message
+    });
+
+  } finally {
+    session.endSession();
   }
 };
 
@@ -285,7 +320,6 @@ exports.saveFlow = async (req, res) => {
     session.endSession();
   }
 };
-
 
 // Publicar flow
 exports.publishFlow = async (req, res) => {

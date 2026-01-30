@@ -27,9 +27,10 @@ const slugify = (text) =>
 // Primer registro (crea cuenta + chatbot + flow + flow nodes)
 exports.registerFirst = async (req, res) => {
   const session = await mongoose.startSession();
-  session.startTransaction();
 
   try {
+    session.startTransaction();
+
     const {
       account_name,
       name,
@@ -41,15 +42,11 @@ exports.registerFirst = async (req, res) => {
     } = req.body;
 
     if (!account_name || !name || !email || !password || !phone) {
-      return res.status(400).json({
-        message: "Datos obligatorios incompletos"
-      });
+      throw new Error("Datos obligatorios incompletos");
     }
 
     if (password.length < 6) {
-      return res.status(400).json({
-        message: "La contraseña debe tener al menos 6 caracteres"
-      });
+      throw new Error("La contraseña debe tener al menos 6 caracteres");
     }
 
     const normalizedEmail = email.toLowerCase().trim();
@@ -60,112 +57,102 @@ exports.registerFirst = async (req, res) => {
       phone_alt && phone_alt.trim() !== "" ? phone_alt : phone;
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const welcomeText = `Hola 👋 soy el bot de ${name}, ¿en qué puedo ayudarte?`;
+
+    const welcomeText =
+      `Hola 👋 soy el bot de ${name}, ¿en qué puedo ayudarte?`;
 
     const userExists = await User.findOne({
       email: normalizedEmail
     }).session(session);
 
     if (userExists) {
-      return res.status(409).json({
-        message: "El email ya está registrado"
-      });
+      throw new Error("El email ya está registrado");
     }
 
-    const [account] = await Account.create(
-      [{
-        name: account_name,
-        slug,
-        plan: "free",
-        status: "active"
-      }],
-      { session }
-    );
+    /* ACCOUNT */
+    const [account] = await Account.create([{
+      name: account_name,
+      slug,
+      plan: "free",
+      status: "active"
+    }], { session });
 
+    /* USER */
     const finalOnboarding = {
       ...(onboarding || {}),
       phone,
       phone_alt: finalPhoneAlt
     };
 
-    const [user] = await User.create(
-      [{
-        account_id: account._id,
-        name,
-        email: normalizedEmail,
-        password: hashedPassword,
-        role: "ADMIN",
-        onboarding: finalOnboarding
-      }],
-      { session }
-    );
+    const [user] = await User.create([{
+      account_id: account._id,
+      name,
+      email: normalizedEmail,
+      password: hashedPassword,
+      role: "ADMIN",
+      onboarding: finalOnboarding
+    }], { session });
 
-    const [chatbot] = await Chatbot.create(
-      [{
-        account_id: account._id,
-        name: `Bot de ${name}`,
-        public_id: crypto.randomUUID(),
-        welcome_message: welcomeText,
-        welcome_delay:2,
-        show_welcome_on_mobile:false,
-        status: "active",
-        avatar: process.env.DEFAULT_CHATBOT_AVATAR,
-        uploaded_avatars: [],
-        primary_color: "#2563eb",
-        secondary_color: "#111827",
-        launcher_text: "¿Te ayudo?",
-        position: "bottom-right",
-        is_enabled: true,
-        input_placeholder: "Escribe tu mensaje…",
-        show_branding: true
-      }],
-      { session }
-    );
+    /* CHATBOT */
+    const [chatbot] = await Chatbot.create([{
+      account_id: account._id,
+      name: `Bot de ${name}`,
+      public_id: crypto.randomUUID(),
+      welcome_message: welcomeText,
+      welcome_delay: 2,
+      show_welcome_on_mobile: false,
+      status: "active",
+      avatar: process.env.DEFAULT_CHATBOT_AVATAR,
+      uploaded_avatars: [],
+      primary_color: "#2563eb",
+      secondary_color: "#111827",
+      launcher_text: "¿Te ayudo?",
+      position: "bottom-right",
+      is_enabled: true,
+      input_placeholder: "Escribe tu mensaje…",
+      show_branding: true
+    }], { session });
 
-    const [flow] = await Flow.create(
-      [{
-        account_id: account._id,
-        chatbot_id: chatbot._id,
-        name: "Flujo principal",
-        is_default: true,
-        is_active: false,
-        is_draft: true,
-        version: 1
-      }],
-      { session }
-    );
+    /* FLOW */
+    const [flow] = await Flow.create([{
+      account_id: account._id,
+      chatbot_id: chatbot._id,
+      name: "Flujo principal",
+      is_default: true,
+      is_active: false,
+      is_draft: true,
+      version: 1
+    }], { session });
 
-    const [startNode] = await FlowNode.create(
-      [{
-        account_id: account._id,
-        flow_id: flow._id,
-        node_type: "text",
-        content: welcomeText,
-        is_draft: false
-      }],
-      { session }
-    );
+    /* START NODE — ORDER FIRST READY */
+    const [startNode] = await FlowNode.create([{
+      account_id: account._id,
+      flow_id: flow._id,
+      node_type: "text",
+      content: welcomeText,
+      order: 0,
+      parent_node_id: null,
+      typing_time: 2,
+      is_draft: false
+    }], { session });
 
     flow.start_node_id = startNode._id;
     await flow.save({ session });
 
+    /* TOKEN */
     const token = generateToken({
       id: user._id,
       role: user.role,
       account_id: account._id
     });
 
-    await Token.create(
-      [{
-        user_id: user._id,
-        token,
-        expires_at: new Date(Date.now() + 86400000)
-      }],
-      { session }
-    );
+    await Token.create([{
+      user_id: user._id,
+      token,
+      expires_at: new Date(Date.now() + 86400000)
+    }], { session });
 
     await session.commitTransaction();
-    session.endSession();
 
     res.status(201).json({
       token,
@@ -183,12 +170,13 @@ exports.registerFirst = async (req, res) => {
 
   } catch (error) {
     await session.abortTransaction();
-    session.endSession();
 
-    console.error("REGISTER FIRST ERROR:", error);
-    res.status(500).json({
-      message: "Error al registrar cuenta inicial"
+    res.status(400).json({
+      message: error.message
     });
+
+  } finally {
+    session.endSession();
   }
 };
 

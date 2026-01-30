@@ -19,7 +19,6 @@ exports.createNode = async (req, res) => {
       node_type,
       content,
       options = [],
-      parent_node_id = null,
       variable_key,
       typing_time = 2,
       link_action,
@@ -40,19 +39,22 @@ exports.createNode = async (req, res) => {
       throw new Error("typing_time inválido");
     }
 
+    if (node_type === "options" && options.length === 0) {
+      throw new Error("Options requerido para node_type options");
+    }
+
+    // ORDER GLOBAL
     const order = await FlowNode.countDocuments({
       flow_id,
-      parent_node_id,
       account_id: req.user.account_id
     }).session(session);
 
-    const [node] = await FlowNode.create(
-      [{
+    const [node] = await FlowNode.create([
+      {
         account_id: req.user.account_id,
         flow_id,
         node_type,
         content: content ?? null,
-        parent_node_id,
         order,
         typing_time,
         variable_key: variable_key ?? null,
@@ -62,17 +64,19 @@ exports.createNode = async (req, res) => {
         next_node_id: null,
         options:
           node_type === "options"
-            ? options.map(o => ({
-              label: o.label.trim(),
-              next_node_id: null
-            }))
+            ? options.map((o, i) => ({
+                label: o.label?.trim(),
+                value: o.value,
+                order: o.order ?? i,
+                next_node_id: null
+              }))
             : [],
         is_draft: true
-      }],
-      { session }
-    );
+      }
+    ], { session });
 
     await updateStartNode(flow_id, req.user.account_id, session);
+
     await session.commitTransaction();
     res.status(201).json(node);
 
@@ -100,21 +104,15 @@ exports.connectNode = async (req, res) => {
 
     let targetId;
 
-    // ───────── OPTIONS ─────────
     if (source.node_type === "options") {
       const { option_index, next_node_id } = req.body;
 
-      if (
-        typeof option_index !== "number" ||
-        !source.options?.[option_index]
-      ) {
+      if (typeof option_index !== "number" || !source.options?.[option_index]) {
         return res.status(400).json({ message: "Opción inválida" });
       }
 
       targetId = next_node_id;
-    }
-    // ───────── LINEAL ─────────
-    else {
+    } else {
       targetId = req.body.next_node_id;
     }
 
@@ -122,12 +120,7 @@ exports.connectNode = async (req, res) => {
       return res.status(400).json({ message: "Nodo destino inválido" });
     }
 
-    if (String(targetId) === String(source._id)) {
-      return res.status(400).json({
-        message: "No se puede conectar un nodo consigo mismo"
-      });
-    }
-
+    // VALIDAR QUE EL TARGET EXISTE
     const target = await FlowNode.findOne({
       _id: targetId,
       flow_id: source.flow_id,
@@ -135,35 +128,17 @@ exports.connectNode = async (req, res) => {
     });
 
     if (!target) {
-      return res.status(400).json({ message: "Nodo destino inválido" });
+      return res.status(400).json({ message: "Nodo destino no existe" });
     }
 
-    // ───────── AJUSTE ROOT ─────────
-    if (target.parent_node_id === null) {
-      await FlowNode.updateMany(
-        {
-          flow_id: source.flow_id,
-          parent_node_id: null,
-          order: { $gt: target.order },
-          account_id: req.user.account_id
-        },
-        { $inc: { order: -1 } }
-      );
-    }
-
-    // ───────── CONEXIÓN FINAL ─────────
     if (source.node_type === "options") {
-      source.options[req.body.option_index].next_node_id = target._id;
-      target.parent_node_id = source._id;
+      const { option_index } = req.body;
+      source.options[option_index].next_node_id = targetId;
     } else {
-      source.next_node_id = target._id;
-      target.parent_node_id = source._id; // 🔥 AQUÍ SÍ
+      source.next_node_id = targetId;
     }
 
     source.is_draft = true;
-    target.is_draft = true;
-
-    await target.save();
     await source.save();
 
     await updateStartNode(source.flow_id, req.user.account_id);
@@ -174,7 +149,6 @@ exports.connectNode = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 
 // Obtener nodos por flow
 exports.getNodesByFlow = async (req, res) => {
@@ -190,14 +164,12 @@ exports.getNodesByFlow = async (req, res) => {
       account_id: req.user.account_id
     });
 
-    if (!flow) {
-      return res.status(404).json({ message: "Flow no encontrado" });
-    }
+    if (!flow) return res.status(404).json({ message: "Flow no encontrado" });
 
     const nodes = await FlowNode.find({
       flow_id: flowId,
       account_id: req.user.account_id
-    }).sort({ parent_node_id: 1, order: 1 });
+    }).sort({ order: 1 });
 
     res.json(nodes);
 
@@ -214,15 +186,12 @@ exports.updateNode = async (req, res) => {
       account_id: req.user.account_id
     });
 
-    if (!node) {
-      return res.status(404).json({ message: "Nodo no encontrado" });
-    }
+    if (!node) return res.status(404).json({ message: "Nodo no encontrado" });
 
     await getEditableFlow(node.flow_id, req.user.account_id);
 
     const allowed = [
       "content",
-      "options",
       "variable_key",
       "crm_field_key",
       "validation",
@@ -232,21 +201,8 @@ exports.updateNode = async (req, res) => {
 
     for (const field of allowed) {
       if (req.body[field] !== undefined) {
-
         if (field === "typing_time" && (req.body[field] < 0 || req.body[field] > 10)) {
           throw new Error("typing_time inválido");
-        }
-
-        if (field === "options") {
-          if (node.node_type !== "options") {
-            throw new Error("Este nodo no admite opciones");
-          }
-
-          node.options = req.body.options.map(o => ({
-            label: o.label?.trim(),
-            next_node_id: o.next_node_id ?? null
-          }));
-          continue;
         }
 
         node[field] =
@@ -254,6 +210,15 @@ exports.updateNode = async (req, res) => {
             ? normalizeLinkAction(req.body[field])
             : req.body[field];
       }
+    }
+
+    if (req.body.options && node.node_type === "options") {
+      node.options = req.body.options.map((o, i) => ({
+        label: o.label?.trim(),
+        value: o.value,
+        order: o.order ?? i,
+        next_node_id: o.next_node_id ?? null
+      }));
     }
 
     node.is_draft = true;
@@ -282,21 +247,45 @@ exports.duplicateNode = async (req, res) => {
 
     await getEditableFlow(node.flow_id, req.user.account_id);
 
-    const order = await FlowNode.countDocuments({
-      flow_id: node.flow_id,
-      parent_node_id: node.parent_node_id,
-      account_id: req.user.account_id
-    }).session(session);
+    // SHIFT ORDERS
+    await FlowNode.updateMany(
+      {
+        flow_id: node.flow_id,
+        account_id: req.user.account_id,
+        order: { $gt: node.order }
+      },
+      { $inc: { order: 1 } },
+      { session }
+    );
 
     const clone = node.toObject();
     delete clone._id;
 
+    if (clone.options?.length) {
+      clone.options = clone.options.map(o => ({
+        label: o.label,
+        value: o.value,
+        order: o.order,
+        next_node_id: o.next_node_id ?? null
+      }));
+    }
+
     const [newNode] = await FlowNode.create(
-      [{ ...clone, order, is_draft: true }],
+      [
+        {
+          ...clone,
+          order: node.order + 1,
+          is_draft: true
+        }
+      ],
       { session }
     );
 
+    node.is_draft = true;
+    await node.save({ session });
+
     await updateStartNode(node.flow_id, req.user.account_id, session);
+
     await session.commitTransaction();
     res.status(201).json(newNode);
 
@@ -326,10 +315,10 @@ exports.deleteNode = async (req, res) => {
 
     await getEditableFlow(node.flow_id, req.user.account_id);
 
+    // SHIFT ORDER
     await FlowNode.updateMany(
       {
         flow_id: node.flow_id,
-        parent_node_id: node.parent_node_id,
         account_id: req.user.account_id,
         order: { $gt: node.order }
       },
@@ -337,10 +326,12 @@ exports.deleteNode = async (req, res) => {
       { session }
     );
 
+    // LIMPIAR CONEXIONES
     await FlowNode.updateMany(
       {
-        next_node_id: node._id,
-        account_id: req.user.account_id
+        flow_id: node.flow_id,
+        account_id: req.user.account_id,
+        next_node_id: node._id
       },
       { $set: { next_node_id: null } },
       { session }
@@ -348,93 +339,24 @@ exports.deleteNode = async (req, res) => {
 
     await FlowNode.updateMany(
       {
-        "options.next_node_id": node._id,
-        account_id: req.user.account_id
+        flow_id: node.flow_id,
+        account_id: req.user.account_id,
+        "options.next_node_id": node._id
       },
-      {
-        $set: { "options.$[opt].next_node_id": null }
-      },
+      { $set: { "options.$[opt].next_node_id": null } },
       {
         arrayFilters: [{ "opt.next_node_id": node._id }],
         session
       }
     );
+
     await FlowNode.deleteOne({ _id: node._id }, { session });
+
     await updateStartNode(node.flow_id, req.user.account_id, session);
+
     await session.commitTransaction();
+
     res.json({ message: "Nodo eliminado correctamente" });
-
-  } catch (error) {
-    await session.abortTransaction();
-    res.status(400).json({ message: error.message });
-  } finally {
-    session.endSession();
-  }
-};
-
-// Insertar despues 
-exports.insertAfterNode = async (req, res) => {
-  const session = await mongoose.startSession();
-
-  try {
-    session.startTransaction();
-
-    const prev = await FlowNode.findOne({
-      _id: req.params.id,
-      account_id: req.user.account_id
-    }).session(session);
-
-    if (!prev) throw new Error("Nodo no encontrado");
-
-    await getEditableFlow(prev.flow_id, req.user.account_id);
-
-    await validateCreateNode({
-      flow_id: prev.flow_id,
-      node_type: req.body.node_type,
-      content: req.body.content,
-      variable_key: req.body.variable_key
-    });
-
-    await FlowNode.updateMany(
-      {
-        flow_id: prev.flow_id,
-        parent_node_id: prev.parent_node_id,
-        account_id: req.user.account_id,
-        order: { $gt: prev.order }
-      },
-      { $inc: { order: 1 } },
-      { session }
-    );
-
-    const [newNode] = await FlowNode.create(
-      [{
-        account_id: req.user.account_id,
-        flow_id: prev.flow_id,
-        node_type: req.body.node_type,
-        content: req.body.content ?? null,
-        parent_node_id: prev.parent_node_id,
-        order: prev.order + 1,
-        typing_time: req.body.typing_time ?? 2,
-        options:
-          req.body.node_type === "options"
-            ? (req.body.options ?? []).map(o => ({
-              label: o.label.trim(),
-              next_node_id: null
-            }))
-            : [],
-        is_draft: true
-      }],
-      { session }
-    );
-
-    prev.is_draft = true;
-    await prev.save({ session });
-
-
-    await updateStartNode(prev.flow_id, req.user.account_id, session);
-
-    await session.commitTransaction();
-    res.status(201).json(newNode);
 
   } catch (error) {
     await session.abortTransaction();
@@ -449,60 +371,22 @@ exports.reorderNodes = async (req, res) => {
   const session = await mongoose.startSession();
 
   try {
-    const {
-      flow_id,
-      parent_node_id = null,
-      nodes
-    } = req.body;
-
-    if (!mongoose.Types.ObjectId.isValid(flow_id)) {
-      return res.status(400).json({ message: "flow_id inválido" });
-    }
+    const { flow_id, nodes } = req.body;
 
     if (!Array.isArray(nodes) || nodes.length === 0) {
-      return res.status(400).json({ message: "nodes inválido" });
+      throw new Error("nodes inválido");
     }
 
     await getEditableFlow(flow_id, req.user.account_id);
 
     session.startTransaction();
 
-    const nodeIds = nodes.map(n => n.node_id);
-
-    const filter = {
-      _id: { $in: nodeIds },
-      flow_id,
-      account_id: req.user.account_id
-    };
-
-    if (parent_node_id === null) {
-      filter.$or = [
-        { parent_node_id: null },
-        { parent_node_id: { $exists: false } }
-      ];
-    } else {
-      filter.parent_node_id = parent_node_id;
-    }
-
-    const count = await FlowNode.countDocuments(filter).session(session);
-
-    if (count !== nodes.length) {
-      throw new Error("Nodos inválidos para este nivel");
-    }
-
-    if (!nodes.every(n => mongoose.Types.ObjectId.isValid(n.node_id))) {
-      throw new Error("node_id inválido");
-    }
-
     const bulk = nodes.map((n, index) => ({
       updateOne: {
         filter: {
           _id: n.node_id,
           flow_id,
-          account_id: req.user.account_id,
-          ...(parent_node_id === null
-            ? { $or: [{ parent_node_id: null }, { parent_node_id: { $exists: false } }] }
-            : { parent_node_id })
+          account_id: req.user.account_id
         },
         update: {
           $set: {
@@ -518,6 +402,7 @@ exports.reorderNodes = async (req, res) => {
     await updateStartNode(flow_id, req.user.account_id, session);
 
     await session.commitTransaction();
+
     res.json({ message: "Orden actualizado correctamente" });
 
   } catch (error) {
@@ -527,60 +412,5 @@ exports.reorderNodes = async (req, res) => {
     session.endSession();
   }
 };
-
-// Reoder subarbol
-exports.reorderSubtree = async (req, res) => {
-  const session = await mongoose.startSession();
-
-  try {
-    const { flow_id, parent_node_id = null, nodes } = req.body;
-
-    if (!Array.isArray(nodes) || !nodes.length) {
-      return res.status(400).json({ message: "nodes inválido" });
-    }
-
-    await getEditableFlow(flow_id, req.user.account_id);
-
-    session.startTransaction();
-
-    const count = await FlowNode.countDocuments({
-      _id: { $in: nodes.map(n => n.node_id) },
-      flow_id,
-      parent_node_id,
-      account_id: req.user.account_id
-    }).session(session);
-
-    if (count !== nodes.length) {
-      throw new Error("Nodos inválidos para este nivel");
-    }
-
-    const bulk = nodes.map((node, index) => ({
-      updateOne: {
-        filter: {
-          _id: node.node_id,
-          flow_id,
-          parent_node_id,
-          account_id: req.user.account_id
-        },
-        update: {
-          order: index,
-          is_draft: true
-        }
-      }
-    }));
-
-    await FlowNode.bulkWrite(bulk, { session });
-
-    await session.commitTransaction();
-    res.json({ message: "Subárbol reordenado correctamente" });
-
-  } catch (error) {
-    await session.abortTransaction();
-    res.status(400).json({ message: error.message });
-  } finally {
-    session.endSession();
-  }
-};
-
 
 

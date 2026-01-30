@@ -53,14 +53,6 @@ router.post(
   nodeController.connectNode
 );
 
-// Insertar nodo después
-router.post(
-  "/:id/insert-after",
-  auth,
-  role("ADMIN", "CLIENT"),
-  nodeController.insertAfterNode
-);
-
 // Duplicar nodo
 router.post(
   "/:id/duplicate",
@@ -75,14 +67,6 @@ router.patch(
   auth,
   role("ADMIN", "CLIENT"),
   nodeController.reorderNodes
-);
-
-// Reordenar subárbol
-router.patch(
-  "/reorder-subtree",
-  auth,
-  role("ADMIN", "CLIENT"),
-  nodeController.reorderSubtree
 );
 
 
