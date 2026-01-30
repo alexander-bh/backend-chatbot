@@ -166,8 +166,6 @@ exports.registerFirst = async (req, res) => {
     });
 
   } catch (error) {
-    await session.abortTransaction();
-    res.status(400).json({ message: error.message });
   } finally {
     session.endSession();
   }
