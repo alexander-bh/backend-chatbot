@@ -36,12 +36,17 @@ exports.registerFirst = async (req, res) => {
       name,
       email,
       password,
-      phone,
-      phone_alt,
       onboarding
     } = req.body;
 
-    if (!account_name || !name || !email || !password || !phone) {
+    // ✅ VALIDACIÓN CORRECTA
+    if (
+      !account_name ||
+      !name ||
+      !email ||
+      !password ||
+      !onboarding?.phone
+    ) {
       throw new Error("Datos obligatorios incompletos");
     }
 
@@ -54,12 +59,13 @@ exports.registerFirst = async (req, res) => {
     const slug = `${baseSlug}-${crypto.randomUUID().slice(0, 6)}`;
 
     const finalPhoneAlt =
-      phone_alt && phone_alt.trim() !== "" ? phone_alt : phone;
+      onboarding.phone_alt && onboarding.phone_alt.trim() !== ""
+        ? onboarding.phone_alt
+        : onboarding.phone;
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const welcomeText =
-      `Hola 👋 soy el bot de ${name}, ¿en qué puedo ayudarte?`;
+    const welcomeText = `Hola 👋 soy el bot de ${name}, ¿en qué puedo ayudarte?`;
 
     const userExists = await User.findOne({
       email: normalizedEmail
@@ -79,8 +85,8 @@ exports.registerFirst = async (req, res) => {
 
     /* ───────── USER ───────── */
     const finalOnboarding = {
-      ...(onboarding || {}),
-      phone,
+      ...onboarding,
+      phone: onboarding.phone,
       phone_alt: finalPhoneAlt
     };
 
@@ -100,10 +106,8 @@ exports.registerFirst = async (req, res) => {
       public_id: crypto.randomUUID(),
       welcome_message: welcomeText,
       welcome_delay: 2,
-      show_welcome_on_mobile: false,
       status: "active",
       avatar: process.env.DEFAULT_CHATBOT_AVATAR,
-      uploaded_avatars: [],
       primary_color: "#2563eb",
       secondary_color: "#111827",
       launcher_text: "¿Te ayudo?",
@@ -129,13 +133,7 @@ exports.registerFirst = async (req, res) => {
       node_type: "text",
       content: welcomeText,
       order: 0,
-      parent_node_id: null,
-      next_node_id: null,
       typing_time: 2,
-      variable_key: null,
-      validation: null,
-      crm_field_key: null,
-      link_action: null,
       is_draft: true
     }], { session });
 
@@ -165,10 +163,7 @@ exports.registerFirst = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role
-      },
-      chatbot,
-      flow,
-      start_node: startNode
+      }
     });
 
   } catch (error) {
@@ -179,25 +174,21 @@ exports.registerFirst = async (req, res) => {
   }
 };
 
-
 // Registro de usuario (por subdominio)
 exports.register = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    const accountId = req.account._id;
-    const {
-      name,
-      email,
-      password,
-      phone,
-      phone_alt,
-      role = "CLIENT",
-      onboarding
-    } = req.body;
+    if (!req.account?._id) {
+      return res.status(400).json({ message: "Cuenta no resuelta" });
+    }
 
-    if (!name || !email || !password || !phone) {
+    const accountId = req.account._id;
+    const { name, email, password, role = "CLIENT", onboarding } = req.body;
+
+    // ✅ VALIDACIÓN CORRECTA
+    if (!name || !email || !password || !onboarding?.phone) {
       return res.status(400).json({
         message: "Datos obligatorios incompletos"
       });
@@ -217,38 +208,34 @@ exports.register = async (req, res) => {
     }).session(session);
 
     if (userExists) {
-      await session.abortTransaction();
-      session.endSession();
       return res.status(409).json({
         message: "El email ya está registrado en esta cuenta"
       });
     }
 
     const finalPhoneAlt =
-      phone_alt && phone_alt.trim() !== "" ? phone_alt : phone;
+      onboarding.phone_alt && onboarding.phone_alt.trim() !== ""
+        ? onboarding.phone_alt
+        : onboarding.phone;
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const finalOnboarding = {
-      ...(onboarding || {}),
-      phone,
+      ...onboarding,
+      phone: onboarding.phone,
       phone_alt: finalPhoneAlt
     };
 
-    const [user] = await User.create(
-      [{
-        account_id: accountId,
-        name,
-        email: normalizedEmail,
-        password: hashedPassword,
-        role,
-        onboarding: finalOnboarding
-      }],
-      { session }
-    );
+    const [user] = await User.create([{
+      account_id: accountId,
+      name,
+      email: normalizedEmail,
+      password: hashedPassword,
+      role,
+      onboarding: finalOnboarding
+    }], { session });
 
     await session.commitTransaction();
-    session.endSession();
 
     res.status(201).json({
       id: user._id,
@@ -259,12 +246,10 @@ exports.register = async (req, res) => {
 
   } catch (error) {
     await session.abortTransaction();
-    session.endSession();
-
     console.error("REGISTER ERROR:", error);
-    res.status(500).json({
-      message: "Error al registrar usuario"
-    });
+    res.status(500).json({ message: "Error al registrar usuario" });
+  } finally {
+    session.endSession();
   }
 };
 
