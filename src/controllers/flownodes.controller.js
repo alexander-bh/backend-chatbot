@@ -25,25 +25,28 @@ exports.createNode = async (req, res) => {
       validation
     } = req.body;
 
-    if (!flow_id || !mongoose.Types.ObjectId.isValid(flow_id)) {
+    if (!mongoose.Types.ObjectId.isValid(flow_id)) {
       throw new Error("flow_id requerido o inválido");
     }
 
     await getEditableFlow(flow_id, req.user.account_id);
 
-    await validateCreateNode({
-      flow_id,
-      node_type,
-      content,
-      variable_key
-    });
+    await validateCreateNode(req.body);
 
     if (typing_time < 0 || typing_time > 10) {
       throw new Error("typing_time inválido");
     }
 
-    if (node_type === "options" && options.length === 0) {
-      throw new Error("Options requerido para node_type options");
+    if (node_type === "options") {
+      if (!Array.isArray(options) || options.length === 0) {
+        throw new Error("Options requerido para node_type options");
+      }
+
+      for (const opt of options) {
+        if (!opt.label || !opt.value) {
+          throw new Error("Cada opción requiere label y value");
+        }
+      }
     }
 
     const order = await FlowNode.countDocuments({
@@ -68,7 +71,7 @@ exports.createNode = async (req, res) => {
           options:
             node_type === "options"
               ? options.map((o, i) => ({
-                  label: o.label?.trim(),
+                  label: o.label.trim(),
                   value: o.value,
                   order: o.order ?? i,
                   next_node_id: null
@@ -112,7 +115,7 @@ exports.connectNode = async (req, res) => {
     if (source.node_type === "options") {
       const { option_index, next_node_id } = req.body;
 
-      if (typeof option_index !== "number" || !source.options?.[option_index]) {
+      if (!Number.isInteger(option_index) || !source.options?.[option_index]) {
         return res.status(400).json({ message: "Opción inválida" });
       }
 
@@ -125,7 +128,6 @@ exports.connectNode = async (req, res) => {
       return res.status(400).json({ message: "Nodo destino inválido" });
     }
 
-    // VALIDAR QUE EL TARGET EXISTE
     const target = await FlowNode.findOne({
       _id: targetId,
       flow_id: source.flow_id,
@@ -137,14 +139,13 @@ exports.connectNode = async (req, res) => {
     }
 
     if (source.node_type === "options") {
-      const { option_index } = req.body;
-      source.options[option_index].next_node_id = targetId;
+      source.options[req.body.option_index].next_node_id = targetId;
     } else {
       source.next_node_id = targetId;
     }
 
     source.is_draft = true;
-    await source.save();
+    await source.save({ validateModifiedOnly: true });
 
     await updateStartNode(source.flow_id, req.user.account_id);
 
@@ -222,7 +223,7 @@ exports.updateNode = async (req, res) => {
         label: o.label?.trim(),
         value: o.value,
         order: o.order ?? i,
-        next_node_id: o.next_node_id ?? null
+        next_node_id: o.next_node_id ?? node.options?.[i]?.next_node_id ?? null
       }));
     }
 
