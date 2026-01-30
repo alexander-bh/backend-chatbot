@@ -19,7 +19,6 @@ const FlowSchema = new Schema(
       required: true
     },
 
-    // Estado
     status: {
       type: String,
       enum: ["draft", "active", "archived"],
@@ -32,10 +31,9 @@ const FlowSchema = new Schema(
       default: null
     },
 
-    // Versionado
     version: {
       type: Number,
-      required: true
+      default: 1
     },
 
     base_flow_id: {
@@ -44,13 +42,16 @@ const FlowSchema = new Schema(
       default: null
     },
 
-    published_at: Date
+    published_at: {
+      type: Date,
+      default: null
+    }
   },
   { timestamps: true }
 );
 
-// Índices útiles
+// Índices correctos
 FlowSchema.index({ account_id: 1 });
-FlowSchema.index({ chatbot_id: 1, is_active: 1 });
+FlowSchema.index({ chatbot_id: 1, status: 1 });
 
 module.exports = model("Flow", FlowSchema);
