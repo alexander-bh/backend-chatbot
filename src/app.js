@@ -12,33 +12,39 @@ app.get("/ping", (req, res) => {
   res.json({ ok: true });
 });
 
-// middlewares globales
+// middlewares globales seguros
 app.use(require("./middlewares/multerError.middleware"));
 app.use(require("./middlewares/mongo.middleware.js"));
 
-/* ───────── RUTAS PÚBLICAS ───────── */
-// NO account
+/* ───────── RUTAS PÚBLICAS (NO requieren cuenta) ───────── */
+
+// auth (registro inicial, login, etc)
 app.use("/api/auth", require("./routes/auth.routes.js"));
+
+// chatbot público
 app.use("/api/public-chatbot", require("./routes/public-chatbot.routes.js"));
 
-/* ───────── RUTAS CON CUENTA ───────── */
-app.use(resolveAccount);
+/* ───────── RUTAS PRIVADAS (requieren cuenta) ───────── */
 
-// cuenta / usuarios
-app.use("/api/accounts", require("./routes/account.routes.js"));
-app.use("/api/users", require("./routes/user.routes.js"));
-app.use("/api/admin", require("./routes/admin.routes.js"));
+// cuentas y usuarios
+app.use("/api/accounts", resolveAccount, require("./routes/account.routes.js"));
+app.use("/api/users", resolveAccount, require("./routes/user.routes.js"));
+app.use("/api/admin", resolveAccount, require("./routes/admin.routes.js"));
 
-// chatbots
-app.use("/api/chatbots", require("./routes/chatbots.routes.js"));
-app.use("/api/flows", require("./routes/flows.routes.js"));
-app.use("/api/flownodes", require("./routes/flow.nodes.routes.js"));
+// chatbots y flujos
+app.use("/api/chatbots", resolveAccount, require("./routes/chatbots.routes.js"));
+app.use("/api/flows", resolveAccount, require("./routes/flows.routes.js"));
+app.use("/api/flownodes", resolveAccount, require("./routes/flow.nodes.routes.js"));
 
 // CRM
-app.use("/api/crm-fields", require("./routes/crmfields.routes"));
-app.use("/api/meta", require("./routes/meta.routes.js"));
+app.use("/api/crm-fields", resolveAccount, require("./routes/crmfields.routes"));
+app.use("/api/meta", resolveAccount, require("./routes/meta.routes.js"));
 
 // conversaciones
-app.use("/api/conversations", require("./routes/conversationSession.routes.js"));
+app.use(
+  "/api/conversations",
+  resolveAccount,
+  require("./routes/conversationSession.routes.js")
+);
 
 module.exports = app;

@@ -4,11 +4,13 @@ exports.resolveAccount = async (req, res, next) => {
   try {
     const slug =
       req.headers["x-account-slug"] ||
-      req.body.account_slug;
+      req.body?.account_slug ||
+      req.query?.account_slug;
 
+    // Si no se requiere cuenta (rutas públicas o técnicas)
     if (!slug) {
       return res.status(400).json({
-        message: "Account slug requerido"
+        message: "account_slug requerido"
       });
     }
 
