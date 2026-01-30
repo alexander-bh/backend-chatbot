@@ -26,6 +26,10 @@ exports.createNode = async (req, res) => {
       validation
     } = req.body;
 
+    if (!flow_id || !mongoose.Types.ObjectId.isValid(flow_id)) {
+      throw new Error("flow_id requerido o inválido");
+    }
+
     await getEditableFlow(flow_id, req.user.account_id);
 
     await validateCreateNode({
@@ -39,8 +43,8 @@ exports.createNode = async (req, res) => {
       throw new Error("typing_time inválido");
     }
 
-    if (node_type === "options" && !options.length) {
-      throw new Error("Options requeridas");
+    if (node_type === "options" && options.length === 0) {
+      throw new Error("Options requerido para node_type options");
     }
 
     const order = await FlowNode.countDocuments({
@@ -48,29 +52,34 @@ exports.createNode = async (req, res) => {
       account_id: req.user.account_id
     }).session(session);
 
-    const [node] = await FlowNode.create([{
-      account_id: req.user.account_id,
-      flow_id,
-      node_type,
-      content: content ?? null,
-      order,
-      typing_time,
-      parent_node_id: null,
-      variable_key: variable_key ?? null,
-      crm_field_key: crm_field_key ?? null,
-      validation: validation ?? null,
-      link_action: link_action ? normalizeLinkAction(link_action) : null,
-      next_node_id: null,
-      options: node_type === "options"
-        ? options.map((o, i) => ({
-            label: o.label?.trim(),
-            value: o.value,
-            order: o.order ?? i,
-            next_node_id: null
-          }))
-        : [],
-      is_draft: true
-    }], { session });
+    const [node] = await FlowNode.create(
+      [
+        {
+          account_id: req.user.account_id,
+          flow_id,
+          node_type,
+          content: content ?? null,
+          order,
+          typing_time,
+          variable_key: variable_key ?? null,
+          crm_field_key: crm_field_key ?? null,
+          validation: validation ?? null,
+          link_action: link_action ? normalizeLinkAction(link_action) : null,
+          next_node_id: null,
+          options:
+            node_type === "options"
+              ? options.map((o, i) => ({
+                  label: o.label?.trim(),
+                  value: o.value,
+                  order: o.order ?? i,
+                  next_node_id: null
+                }))
+              : [],
+          is_draft: true
+        }
+      ],
+      { session }
+    );
 
     await updateStartNode(flow_id, req.user.account_id, session);
 
@@ -84,7 +93,6 @@ exports.createNode = async (req, res) => {
     session.endSession();
   }
 };
-
 
 // Conectar nodos 
 exports.connectNode = async (req, res) => {
@@ -371,24 +379,11 @@ exports.reorderNodes = async (req, res) => {
   try {
     const { flow_id, nodes } = req.body;
 
-    if (!flow_id || !mongoose.Types.ObjectId.isValid(flow_id)) {
-      throw new Error("flow_id inválido");
-    }
-
     if (!Array.isArray(nodes) || nodes.length === 0) {
       throw new Error("nodes inválido");
     }
 
     await getEditableFlow(flow_id, req.user.account_id);
-
-    const total = await FlowNode.countDocuments({
-      flow_id,
-      account_id: req.user.account_id
-    });
-
-    if (nodes.length !== total) {
-      throw new Error("Orden incompleto");
-    }
 
     session.startTransaction();
 
@@ -413,6 +408,7 @@ exports.reorderNodes = async (req, res) => {
     await updateStartNode(flow_id, req.user.account_id, session);
 
     await session.commitTransaction();
+
     res.json({ message: "Orden actualizado correctamente" });
 
   } catch (error) {
@@ -422,6 +418,5 @@ exports.reorderNodes = async (req, res) => {
     session.endSession();
   }
 };
-
 
 
