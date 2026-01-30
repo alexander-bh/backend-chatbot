@@ -70,7 +70,6 @@ exports.createFlow = async (req, res) => {
   }
 };
 
-
 //Obtener flow por ID
 exports.getFlowById = async (req, res) => {
   try {
@@ -103,7 +102,6 @@ exports.getFlowById = async (req, res) => {
     res.status(500).json({ message: "Error al obtener flow" });
   }
 };
-
 
 // Obtener flows por chatbot
 exports.getFlowsByChatbot = async (req, res) => {
@@ -187,7 +185,6 @@ exports.deleteFlow = async (req, res) => {
   }
 };
 
-
 // Guardar flow
 exports.saveFlow = async (req, res) => {
   const session = await mongoose.startSession();
@@ -197,6 +194,11 @@ exports.saveFlow = async (req, res) => {
 
     const flowId = req.params.id;
     const { nodes, start_node_id } = req.body;
+
+    // 🔥 VALIDACIONES BASE
+    if (!mongoose.Types.ObjectId.isValid(flowId)) {
+      throw new Error("flowId inválido");
+    }
 
     if (!Array.isArray(nodes) || nodes.length === 0) {
       throw new Error("Nodes array requerido");
@@ -208,54 +210,83 @@ exports.saveFlow = async (req, res) => {
 
     const flow = await getEditableFlow(flowId, req.user.account_id);
 
-    // 🔢 Orden seguro
+    // 🔥 VALIDAR NODE TYPES
+    const ALLOWED_TYPES = [
+      "text","question","email","phone","number","options","link"
+    ];
+
+    nodes.forEach(n => {
+      if (!ALLOWED_TYPES.includes(n.node_type)) {
+        throw new Error(`node_type inválido: ${n.node_type}`);
+      }
+    });
+
+    // 🔥 VALIDAR VARIABLE_KEY DUPLICADO
+    const variableKeys = new Set();
+    nodes.forEach(n => {
+      if (n.variable_key) {
+        if (variableKeys.has(n.variable_key)) {
+          throw new Error(`variable_key duplicado: ${n.variable_key}`);
+        }
+        variableKeys.add(n.variable_key);
+      }
+    });
+
+    // 🔢 Orden estable
     nodes
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
       .forEach((node, index) => {
         node.order = index;
       });
 
-    // 🗺 MAP DE IDS (FIX DEFINITIVO)
+    // 🗺 ID MAP
     const idMap = new Map();
+    const validOldIds = new Set();
+
     nodes.forEach(node => {
-      const tempKey = node._id
+      const oldId = node._id
         ? String(node._id)
         : new mongoose.Types.ObjectId().toString();
 
-      idMap.set(tempKey, new mongoose.Types.ObjectId());
-      node.__temp_id = tempKey;
+      validOldIds.add(oldId);
+      idMap.set(oldId, new mongoose.Types.ObjectId());
+      node.__old_id = oldId;
     });
 
+    // 🧹 DELETE
     await FlowNode.deleteMany(
       { flow_id: flowId, account_id: req.user.account_id },
       { session }
     );
 
+    // 🆕 REBUILD
     const docs = nodes.map(node => ({
-      _id: idMap.get(node.__temp_id),
+      _id: idMap.get(node.__old_id),
       account_id: req.user.account_id,
       flow_id: flowId,
       parent_node_id: null,
       order: node.order,
       node_type: node.node_type,
-      content: node.content,
-      variable_key: node.variable_key || null,
+      content: node.content ?? null,
+      variable_key: node.variable_key ?? null,
       typing_time: node.typing_time ?? 2,
-      crm_field_key: node.crm_field_key || null,
+      crm_field_key: node.crm_field_key ?? null,
       is_draft: true,
       end_conversation: node.end_conversation ?? false,
 
-      next_node_id: node.next_node_id
-        ? idMap.get(String(node.next_node_id)) || null
-        : null,
+      next_node_id:
+        node.next_node_id && validOldIds.has(String(node.next_node_id))
+          ? idMap.get(String(node.next_node_id))
+          : null,
 
       options: (node.options || []).map(opt => ({
-        label: opt.label,
-        value: opt.value,
-        order: opt.order ?? 0,
-        next_node_id: opt.next_node_id
-          ? idMap.get(String(opt.next_node_id)) || null
-          : null
+        label: opt?.label ?? "",
+        value: opt?.value ?? "",
+        order: opt?.order ?? 0,
+        next_node_id:
+          opt?.next_node_id && validOldIds.has(String(opt.next_node_id))
+            ? idMap.get(String(opt.next_node_id))
+            : null
       })),
 
       link_action: node.link_action || undefined,
@@ -263,6 +294,7 @@ exports.saveFlow = async (req, res) => {
     }));
 
     const realStartId = idMap.get(String(start_node_id));
+
     if (!realStartId) {
       throw new Error("start_node_id no pertenece al flow");
     }
@@ -282,7 +314,8 @@ exports.saveFlow = async (req, res) => {
 
   } catch (err) {
     await session.abortTransaction();
-    res.status(400).json({
+
+    res.status(err.code === 11000 ? 409 : 400).json({
       success: false,
       message: err.message
     });
