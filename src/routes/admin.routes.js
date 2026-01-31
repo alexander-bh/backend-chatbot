@@ -2,25 +2,33 @@ const express = require("express");
 const router = express.Router();
 const auth = require("../middlewares/auth.middleware");
 const role = require("../middlewares/role.middleware");
-const userController = require("../controllers/user.controller");
+const adminController = require("../controllers/admin.controller");
 
-router.get(
-  "/dashboard",
-  auth,
-  role("ADMIN"),
-  (req, res) => {
-    res.json({
-      message: "Bienvenido ADMIN",
-      user: req.user
-    });
-  }
-);
+router.use(auth);
+router.use(role("ADMIN"));
 
-router.get(
-  "/users",
-  auth,
-  role("ADMIN"),
-  userController.getUsers
-);
+router.get("/dashboard", adminController.getDashboard);
+
+// users
+router.get("/users", adminController.getAllUsers);
+router.get("/users/:id", adminController.getUserDetail);
+router.put("/users/:id", adminController.updateAnyUser);
+router.delete("/users/:id", adminController.deleteAnyUser);
+
+// accounts
+router.get("/accounts", adminController.getAllAccounts);
+
+// chatbots
+router.get("/chatbots", adminController.getAllChatbots);
+router.get("/chatbots/:id", adminController.getChatbotDetail);
+router.delete("/chatbots/:id", adminController.deleteAnyChatbot);
+
+// flows
+router.get("/chatbots/:chatbotId/flows", adminController.getFlowsByChatbot);
+router.get("/flows/:id", adminController.getFlowDetail);
+
+// soporte
+router.post("/impersonate/:id", adminController.impersonateUser);
 
 module.exports = router;
+

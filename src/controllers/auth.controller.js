@@ -92,7 +92,7 @@ exports.registerFirst = async (req, res, next) => {
       name,
       email: normalizedEmail,
       password: hashedPassword,
-      role: "ADMIN",
+      role: "CLIENT",
       onboarding: finalOnboarding
     }], { session });
 

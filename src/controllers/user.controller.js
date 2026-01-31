@@ -24,7 +24,12 @@ exports.getProfile = async (req, res) => {
 // Obterner los datos de usario 
 exports.getUsers = async (req, res) => {
   try {
-    const users = await User.find().select("-password");
+    const order = req.query.order === "asc" ? 1 : -1;
+
+    const users = await User.find()
+      .select("_id name email role created_at")
+      .sort({ created_at: order });
+
     res.json(users);
   } catch (error) {
     res.status(500).json({ error: error.message });
