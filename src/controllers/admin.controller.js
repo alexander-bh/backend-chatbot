@@ -4,53 +4,41 @@ const Account = require("../models/Account");
 const Chatbot = require("../models/Chatbot");
 const Flow = require("../models/Flow");
 const FlowNode = require("../models/FlowNode");
+const AuditLog = require("../models/AuditLog");
+const auditService = require("../services/audit.service");
+
 
 /* ─────────────────────────────────────
    DASHBOARD
 ───────────────────────────────────── */
 exports.getDashboard = async (req, res) => {
-    try {
-        const admin = await User.findById(req.user.id)
-            .select("-password");
+  try {
+    const admin = await User.findById(req.user.id).select("-password");
 
-        if (!admin || admin.role !== "ADMIN") {
-            return res.status(403).json({
-                message: "No autorizado"
-            });
-        }
-
-        const [
-            users,
-            accounts,
-            chatbots,
-            flows
-        ] = await Promise.all([
-            User.countDocuments(),
-            Account.countDocuments(),
-            Chatbot.countDocuments(),
-            Flow.countDocuments()
-        ]);
-
-        res.json({
-            admin,
-            users,
-            accounts,
-            chatbots,
-            flows
-        });
-    } catch (err) {
-        res.status(500).json({ message: err.message });
+    if (!admin || admin.role !== "ADMIN") {
+      return res.status(403).json({ message: "No autorizado" });
     }
+
+    const [users, accounts, chatbots, flows] = await Promise.all([
+      User.countDocuments(),
+      Account.countDocuments(),
+      Chatbot.countDocuments(),
+      Flow.countDocuments()
+    ]);
+
+    res.json({ admin, users, accounts, chatbots, flows });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 };
+
 
 /* ─────────────────────────────────────
    USERS
 ───────────────────────────────────── */
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await User.find({
-      _id: { $ne: req.user.id } // 👈 excluye al admin logueado
-    })
+    const users = await User.find({ _id: { $ne: req.user.id } })
       .select("-password")
       .sort({ created_at: -1 });
 
@@ -61,40 +49,65 @@ exports.getAllUsers = async (req, res) => {
 };
 
 exports.getUserDetail = async (req, res) => {
-    try {
-        const user = await User.findById(req.params.id)
-            .select("-password");
-
-        if (!user) {
-            return res.status(404).json({
-                message: "Usuario no encontrado"
-            });
-        }
-
-        res.json(user);
-    } catch (err) {
-        res.status(400).json({ message: err.message });
+  try {
+    const user = await User.findById(req.params.id).select("-password");
+    if (!user) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
     }
+    res.json(user);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
 };
 
 exports.updateAnyUser = async (req, res) => {
-    try {
-        const user = await User.findByIdAndUpdate(
-            req.params.id,
-            { $set: req.body },
-            { new: true, runValidators: true }
-        ).select("-password");
+  try {
+    const targetUserId = req.params.id;
+    const loggedAdminId = req.user.id;
 
-        if (!user) {
-            return res.status(404).json({
-                message: "Usuario no encontrado"
-            });
-        }
-
-        res.json(user);
-    } catch (err) {
-        res.status(400).json({ message: err.message });
+    const user = await User.findById(targetUserId);
+    if (!user) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
     }
+
+    const before = user.toObject();
+
+    if (req.body.role && targetUserId === loggedAdminId) {
+      return res.status(400).json({ message: "No puedes cambiar tu propio rol" });
+    }
+
+    if (req.body.role && user.role === "ADMIN") {
+      return res.status(403).json({
+        message: "No se puede modificar el rol de un administrador"
+      });
+    }
+
+    if (req.body.role === "ADMIN") {
+      return res.status(403).json({
+        message: "El rol ADMIN solo puede asignarse desde la base de datos"
+      });
+    }
+
+    delete req.body.password;
+    delete req.body._id;
+    delete req.body.role;
+
+    Object.assign(user, req.body);
+    await user.save();
+
+    await auditService.log({
+      req,
+      targetType: "USER",
+      targetId: user._id,
+      action: "UPDATE",
+      before,
+      after: user.toObject()
+    });
+
+    res.json(user);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
 };
 
 exports.deleteAnyUser = async (req, res) => {
@@ -106,26 +119,36 @@ exports.deleteAnyUser = async (req, res) => {
     }
 
     const user = await User.findById(req.params.id);
-
     if (!user) {
-      return res.status(404).json({
-        message: "Usuario no encontrado"
-      });
+      return res.status(404).json({ message: "Usuario no encontrado" });
     }
 
+    if (user.role === "ADMIN") {
+      const admins = await User.countDocuments({ role: "ADMIN" });
+      if (admins <= 1) {
+        return res.status(400).json({
+          message: "No se puede eliminar el último administrador"
+        });
+      }
+    }
+
+    const before = user.toObject();
     await user.deleteOne();
 
-    res.json({
-      message: "Usuario eliminado correctamente"
+    await auditService.log({
+      req,
+      targetType: "USER",
+      targetId: user._id,
+      action: "DELETE",
+      before,
+      after: null
     });
 
+    res.json({ message: "Usuario eliminado correctamente" });
   } catch (error) {
-    res.status(500).json({
-      message: error.message
-    });
+    res.status(500).json({ message: error.message });
   }
 };
-
 
 /* ─────────────────────────────────────
    ACCOUNTS
@@ -170,47 +193,42 @@ exports.getChatbotDetail = async (req, res) => {
 };
 
 exports.deleteAnyChatbot = async (req, res) => {
-    const session = await mongoose.startSession();
-    session.startTransaction();
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-    try {
-        const chatbot = await Chatbot.findById(req.params.id)
-            .session(session);
+  let before;
 
-        if (!chatbot) {
-            throw new Error("Chatbot no encontrado");
-        }
+  try {
+    const chatbot = await Chatbot.findById(req.params.id).session(session);
+    if (!chatbot) throw new Error("Chatbot no encontrado");
 
-        const flows = await Flow.find({
-            chatbot_id: chatbot._id
-        }).session(session);
+    before = chatbot.toObject();
 
-        const flowIds = flows.map(f => f._id);
+    const flows = await Flow.find({ chatbot_id: chatbot._id }).session(session);
+    const flowIds = flows.map(f => f._id);
 
-        await FlowNode.deleteMany(
-            { flow_id: { $in: flowIds } },
-            { session }
-        );
+    await FlowNode.deleteMany({ flow_id: { $in: flowIds } }, { session });
+    await Flow.deleteMany({ chatbot_id: chatbot._id }, { session });
+    await Chatbot.deleteOne({ _id: chatbot._id }, { session });
 
-        await Flow.deleteMany(
-            { chatbot_id: chatbot._id },
-            { session }
-        );
+    await session.commitTransaction();
 
-        await Chatbot.deleteOne(
-            { _id: chatbot._id },
-            { session }
-        );
+    await auditService.log({
+      req,
+      targetType: "CHATBOT",
+      targetId: chatbot._id,
+      action: "DELETE",
+      before,
+      after: null
+    });
 
-        await session.commitTransaction();
-        res.json({ message: "Chatbot eliminado por admin" });
-
-    } catch (err) {
-        await session.abortTransaction();
-        res.status(500).json({ message: err.message });
-    } finally {
-        session.endSession();
-    }
+    res.json({ message: "Chatbot eliminado por admin" });
+  } catch (err) {
+    await session.abortTransaction();
+    res.status(500).json({ message: err.message });
+  } finally {
+    session.endSession();
+  }
 };
 
 /* ─────────────────────────────────────
@@ -251,23 +269,90 @@ exports.getFlowDetail = async (req, res) => {
    IMPERSONATE (SOPORTE)
 ───────────────────────────────────── */
 exports.impersonateUser = async (req, res) => {
-    try {
-        const user = await User.findById(req.params.id);
-
-        if (!user) {
-            return res.status(404).json({
-                message: "Usuario no encontrado"
-            });
-        }
-
-        res.json({
-            message: "Impersonación permitida",
-            impersonate: {
-                user_id: user._id,
-                account_id: user.account_id
-            }
-        });
-    } catch (err) {
-        res.status(500).json({ message: err.message });
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
     }
+
+    await auditService.log({
+      req,
+      targetType: "USER",
+      targetId: user._id,
+      action: "IMPERSONATE",
+      before: null,
+      after: null
+    });
+
+    res.json({
+      message: "Impersonación permitida",
+      impersonate: {
+        user_id: user._id,
+        account_id: user.account_id
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 };
+
+/* ─────────────────────────────────────
+   AUDITORIAS
+───────────────────────────────────── */
+exports.getAuditLogs = async (req, res) => {
+  try {
+    const {
+      actor,
+      target,
+      targetType,
+      action,
+      from,
+      to,
+      page = 1,
+      limit = 50
+    } = req.query;
+
+    const query = {};
+
+    if (actor) query.actor_id = actor;
+    if (target) query.target_id = target;
+    if (action) query.action = action;
+
+    if (targetType) {
+      const allowed = ["USER", "CHATBOT", "FLOW"];
+      if (!allowed.includes(targetType)) {
+        return res.status(400).json({ message: "targetType inválido" });
+      }
+      query.target_type = targetType;
+    }
+
+    if (from || to) {
+      query.created_at = {};
+      if (from) query.created_at.$gte = new Date(from);
+      if (to) query.created_at.$lte = new Date(to);
+    }
+
+    const logs = await AuditLog.find(query)
+      .populate("actor_id", "name email role")
+      .sort({ created_at: -1 })
+      .skip((page - 1) * limit)
+      .limit(Math.min(Number(limit), 100));
+
+    const total = await AuditLog.countDocuments(query);
+
+    res.json({
+      data: logs,
+      meta: {
+        total,
+        page: Number(page),
+        limit: Number(limit),
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+

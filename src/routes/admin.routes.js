@@ -12,7 +12,7 @@ router.get("/dashboard", adminController.getDashboard);
 // users
 router.get("/users", adminController.getAllUsers);
 router.get("/users/:id", adminController.getUserDetail);
-router.put("/users/:id", adminController.updateAnyUser);
+router.put("/users/:id", role("ADMIN"),adminController.updateAnyUser);
 router.delete("/users/:id", adminController.deleteAnyUser);
 
 // accounts
@@ -29,6 +29,14 @@ router.get("/flows/:id", adminController.getFlowDetail);
 
 // soporte
 router.post("/impersonate/:id", adminController.impersonateUser);
+
+//auditorias 
+router.get(
+  "/audit",
+  auth,
+  role("ADMIN"),
+  adminController.getAuditLogs
+);
 
 module.exports = router;
 
