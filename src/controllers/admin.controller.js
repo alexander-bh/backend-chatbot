@@ -47,15 +47,17 @@ exports.getDashboard = async (req, res) => {
    USERS
 ───────────────────────────────────── */
 exports.getAllUsers = async (req, res) => {
-    try {
-        const users = await User.find()
-            .select("-password")
-            .sort({ created_at: -1 });
+  try {
+    const users = await User.find({
+      _id: { $ne: req.user.id } // 👈 excluye al admin logueado
+    })
+      .select("-password")
+      .sort({ created_at: -1 });
 
-        res.json(users);
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 };
 
 exports.getUserDetail = async (req, res) => {
