@@ -98,13 +98,34 @@ exports.updateAnyUser = async (req, res) => {
 };
 
 exports.deleteAnyUser = async (req, res) => {
-    try {
-        await User.findByIdAndDelete(req.params.id);
-        res.json({ message: "Usuario eliminado" });
-    } catch (err) {
-        res.status(500).json({ message: err.message });
+  try {
+    if (req.user.id === req.params.id) {
+      return res.status(400).json({
+        message: "No puedes eliminar tu propio usuario"
+      });
     }
+
+    const user = await User.findById(req.params.id);
+
+    if (!user) {
+      return res.status(404).json({
+        message: "Usuario no encontrado"
+      });
+    }
+
+    await user.deleteOne();
+
+    res.json({
+      message: "Usuario eliminado correctamente"
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      message: error.message
+    });
+  }
 };
+
 
 /* ─────────────────────────────────────
    ACCOUNTS
