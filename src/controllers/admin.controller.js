@@ -110,6 +110,9 @@ exports.updateAnyUser = async (req, res) => {
 };
 
 exports.deleteAnyUser = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     if (req.user.id === req.params.id) {
       return res.status(400).json({
@@ -117,11 +120,12 @@ exports.deleteAnyUser = async (req, res) => {
       });
     }
 
-    const user = await User.findById(req.params.id);
+    const user = await User.findById(req.params.id).session(session);
     if (!user) {
       return res.status(404).json({ message: "Usuario no encontrado" });
     }
 
+    // 🚫 No eliminar último admin
     if (user.role === "ADMIN") {
       const admins = await User.countDocuments({ role: "ADMIN" });
       if (admins <= 1) {
@@ -132,20 +136,72 @@ exports.deleteAnyUser = async (req, res) => {
     }
 
     const before = user.toObject();
-    await user.deleteOne();
 
+    /* ───────── ELIMINACIÓN EN CASCADA ───────── */
+
+    // 1️⃣ Chatbots del usuario
+    const chatbots = await Chatbot.find({
+      account_id: user.account_id
+    }).session(session);
+
+    const chatbotIds = chatbots.map(c => c._id);
+
+    // 2️⃣ Flows
+    const flows = await Flow.find({
+      chatbot_id: { $in: chatbotIds }
+    }).session(session);
+
+    const flowIds = flows.map(f => f._id);
+
+    // 3️⃣ Flow nodes
+    await FlowNode.deleteMany(
+      { flow_id: { $in: flowIds } },
+      { session }
+    );
+
+    // 4️⃣ Flows
+    await Flow.deleteMany(
+      { _id: { $in: flowIds } },
+      { session }
+    );
+
+    // 5️⃣ Chatbots
+    await Chatbot.deleteMany(
+      { _id: { $in: chatbotIds } },
+      { session }
+    );
+
+    // 6️⃣ Usuario
+    await User.deleteOne(
+      { _id: user._id },
+      { session }
+    );
+
+    // 7️⃣ Auditoría
     await auditService.log({
       req,
       targetType: "USER",
       targetId: user._id,
       action: "DELETE",
       before,
-      after: null
+      after: null,
+      meta: {
+        cascade: ["CHATBOT", "FLOW", "FLOW_NODE"]
+      }
     });
 
-    res.json({ message: "Usuario eliminado correctamente" });
+    await session.commitTransaction();
+    session.endSession();
+
+    res.json({
+      message: "Usuario y recursos asociados eliminados correctamente"
+    });
+
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    await session.abortTransaction();
+    session.endSession();
+    console.error("DELETE USER ERROR:", error);
+    res.status(500).json({ message: "Error al eliminar usuario" });
   }
 };
 
