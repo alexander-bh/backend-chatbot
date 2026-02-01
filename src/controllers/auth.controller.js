@@ -10,6 +10,8 @@ const FlowNode = require("../models/FlowNode");
 const PasswordResetToken = require("../models/PasswordResetToken");
 const { generateToken } = require("../utils/jwt");
 const { sendResetPasswordEmail } = require("../services/email.service");
+const auditService = require("../services/audit.service");
+const { sendPasswordChangedAlert } = require("../services/password-alert.service");
 
 const generateOTP = () =>
   Math.floor(100000 + Math.random() * 900000).toString();
@@ -396,6 +398,28 @@ exports.resetPassword = async (req, res) => {
     user.password = await bcrypt.hash(new_password, 10);
     await user.save();
 
+    await auditService.log({
+      req,
+      actorId: user._id,
+      targetType: "USER",
+      targetId: user._id,
+      action: "RESET_PASSWORD",
+      before: null,
+      after: null,
+      meta: {
+        method: "code"
+      }
+    });
+
+    try {
+      await sendPasswordChangedAlert(user, {
+        ip: req.ip,
+        device: req.headers["user-agent"]
+      });
+    } catch (err) {
+      console.warn("PASSWORD ALERT EMAIL FAILED:", err.message);
+    }
+
     await PasswordResetToken.findByIdAndDelete(resetRecord._id);
     await PasswordResetToken.deleteMany({ user_id: user._id });
 
@@ -447,6 +471,25 @@ exports.changePassword = async (req, res) => {
 
     user.password = await bcrypt.hash(new_password, 10);
     await user.save();
+
+    await auditService.log({
+      req,
+      targetType: "USER",
+      targetId: user._id,
+      action: "CHANGE_PASSWORD",
+      before: null,
+      after: null
+    });
+
+    try {
+      await sendPasswordChangedAlert(user, {
+        ip: req.ip,
+        device: req.headers["user-agent"]
+      });
+    } catch (err) {
+      console.warn("EMAIL ALERT FAILED:", err.message);
+    }
+
 
     await Token.deleteMany({ user_id: user._id });
 

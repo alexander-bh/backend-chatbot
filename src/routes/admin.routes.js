@@ -22,6 +22,7 @@ router.get("/accounts", adminController.getAllAccounts);
 router.get("/chatbots", adminController.getAllChatbots);
 router.get("/chatbots/:id", adminController.getChatbotDetail);
 router.delete("/chatbots/:id", adminController.deleteAnyChatbot);
+router.put("/chatbots/:id", adminController.updateAnyChatbot);
 
 // flows
 router.get("/chatbots/:chatbotId/flows", adminController.getFlowsByChatbot);
@@ -31,12 +32,7 @@ router.get("/flows/:id", adminController.getFlowDetail);
 router.post("/impersonate/:id", adminController.impersonateUser);
 
 //auditorias 
-router.get(
-  "/audit",
-  auth,
-  role("ADMIN"),
-  adminController.getAuditLogs
-);
+router.get("/audit",auth,role("ADMIN"),adminController.getAuditLogs);
 
 module.exports = router;
 

@@ -32,7 +32,6 @@ exports.getDashboard = async (req, res) => {
   }
 };
 
-
 /* ─────────────────────────────────────
    USERS
 ───────────────────────────────────── */
@@ -228,6 +227,63 @@ exports.deleteAnyChatbot = async (req, res) => {
     res.status(500).json({ message: err.message });
   } finally {
     session.endSession();
+  }
+};
+
+exports.updateAnyChatbot = async (req, res) => {
+  try {
+    const chatbot = await Chatbot.findById(req.params.id);
+
+    if (!chatbot) {
+      return res.status(404).json({
+        message: "Chatbot no encontrado"
+      });
+    }
+
+    const before = chatbot.toObject();
+
+    // ✅ Lista blanca de campos editables por admin
+    const allowedFields = [
+      "name",
+      "status",
+      "is_enabled",
+      "welcome_message",
+      "welcome_delay",
+      "show_welcome_on_mobile",
+      "avatar",
+      "primary_color",
+      "secondary_color",
+      "launcher_text",
+      "position",
+      "input_placeholder",
+      "show_branding"
+    ];
+
+    // 🔒 Aplicar solo campos permitidos
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) {
+        chatbot[field] = req.body[field];
+      }
+    }
+
+    await chatbot.save();
+
+    // 🧾 Auditoría
+    await auditService.log({
+      req,
+      targetType: "CHATBOT",
+      targetId: chatbot._id,
+      action: "UPDATE",
+      before,
+      after: chatbot.toObject()
+    });
+
+    res.json(chatbot);
+
+  } catch (error) {
+    res.status(400).json({
+      message: error.message
+    });
   }
 };
 
