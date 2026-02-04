@@ -115,13 +115,25 @@ exports.listChatbots = async (req, res) => {
     })
       .select("public_id name status is_enabled avatar created_at")
       .sort({ created_at: -1 })
+      .lean();
 
-    res.json(chatbots);
+    const formatted = chatbots.map(bot => ({
+      ...bot,
+      created_at: new Date(bot.created_at).toLocaleString("es-MX", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      })
+    }));
+
+    res.json(formatted);
   } catch (error) {
-    console.error("LIST CHATBOTS ERROR:", error);
     res.status(500).json({ message: "Error al listar chatbots" });
   }
 };
+
 
 // ═══════════════════════════════════════════════════════════
 // OBTENER CHATBOT POR ID

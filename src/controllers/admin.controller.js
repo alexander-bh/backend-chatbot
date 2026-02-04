@@ -223,15 +223,26 @@ exports.getAllAccounts = async (req, res) => {
    CHATBOTS
 ───────────────────────────────────── */
 exports.getAllChatbots = async (req, res) => {
-    try {
-        const chatbots = await Chatbot.find()
-            .sort({ created_at: -1 });
+  try {
+    const chatbots = await Chatbot.find().sort({ created_at: -1 });
 
-        res.json(chatbots);
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
+    const formatted = chatbots.map(chatbot => ({
+      ...chatbot.toObject(),
+      created_at: new Date(chatbot.created_at).toLocaleString("es-MX", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      })
+    }));
+
+    res.json(formatted);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 };
+
 
 exports.getChatbotDetail = async (req, res) => {
     try {
