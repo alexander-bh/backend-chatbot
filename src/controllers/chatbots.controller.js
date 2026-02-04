@@ -8,15 +8,14 @@ const {
   getBaseName,
   generateCopyName
 } = require("../utils/chatbotName.helper");
-const MAX_AVATARS = 50;
 
-// Crear chatbot
+// ═══════════════════════════════════════════════════════════
+// CREAR CHATBOT
+// ═══════════════════════════════════════════════════════════
 exports.createChatbot = async (req, res) => {
   const session = await mongoose.startSession();
-
   try {
     session.startTransaction();
-
     const {
       name,
       welcome_message,
@@ -24,29 +23,47 @@ exports.createChatbot = async (req, res) => {
       show_welcome_on_mobile
     } = req.body;
 
-    if (!name) throw new Error("El nombre es obligatorio");
-
-    if (welcome_delay !== undefined &&
-        (welcome_delay < 0 || welcome_delay > 10)) {
-      throw new Error("welcome_delay inválido");
+    // ─────────── VALIDACIONES ───────────
+    if (!req.user?.account_id) {
+      await session.abortTransaction();
+      return res.status(401).json({ message: "Usuario no autenticado" });
     }
 
-    const welcomeText =
-      welcome_message || "Hola 👋 ¿en qué puedo ayudarte?";
+    if (!name || typeof name !== "string" || !name.trim()) {
+      await session.abortTransaction();
+      return res.status(400).json({ message: "Nombre inválido" });
+    }
 
-    /* ───── CHATBOT ───── */
-    const [chatbot] = await Chatbot.create([{
+    if (name.length > 60) {
+      await session.abortTransaction();
+      return res.status(400).json({ message: "El nombre es demasiado largo" });
+    }
+
+    if (welcome_delay !== undefined && (welcome_delay < 0 || welcome_delay > 10)) {
+      await session.abortTransaction();
+      return res.status(400).json({ message: "welcome_delay inválido" });
+    }
+
+    // ─────────── CREAR CHATBOT ───────────
+    const welcomeText =
+      typeof welcome_message === "string" && welcome_message.trim()
+        ? welcome_message
+        : "Hola 👋 ¿en qué puedo ayudarte?";
+
+    const chatbot = new Chatbot({
       account_id: req.user.account_id,
       public_id: crypto.randomUUID(),
-      name,
+      name: name.trim(),
       welcome_message: welcomeText,
-      welcome_delay,
-      show_welcome_on_mobile,
-      status: "inactive",
-      is_enabled: false
-    }], { session });
+      welcome_delay: welcome_delay ?? 2,
+      show_welcome_on_mobile: show_welcome_on_mobile ?? true,
+      status: "active",
+      is_enabled: true
+    });
 
-    /* ───── FLOW ───── */
+    await chatbot.save({ session });
+
+    // ─────────── CREAR FLOW INICIAL ───────────
     const [flow] = await Flow.create([{
       account_id: req.user.account_id,
       chatbot_id: chatbot._id,
@@ -55,7 +72,7 @@ exports.createChatbot = async (req, res) => {
       version: 1
     }], { session });
 
-    /* ───── START NODE ───── */
+    // ─────────── CREAR NODO INICIAL ───────────
     const [startNode] = await FlowNode.create([{
       account_id: req.user.account_id,
       flow_id: flow._id,
@@ -65,10 +82,6 @@ exports.createChatbot = async (req, res) => {
       typing_time: 2,
       parent_node_id: null,
       next_node_id: null,
-      variable_key: null,
-      validation: null,
-      crm_field_key: null,
-      link_action: null,
       is_draft: true
     }], { session });
 
@@ -77,26 +90,30 @@ exports.createChatbot = async (req, res) => {
 
     await session.commitTransaction();
 
-    res.status(201).json({
-      chatbot,
-      flow,
-      start_node: startNode
-    });
+    res.status(201).json({ chatbot, flow, start_node: startNode });
 
   } catch (error) {
     await session.abortTransaction();
+    console.error("CREATE CHATBOT ERROR:", error);
     res.status(500).json({ message: error.message });
   } finally {
     session.endSession();
   }
 };
 
-// Listar chatbot
+// ═══════════════════════════════════════════════════════════
+// LISTAR CHATBOTS
+// ═══════════════════════════════════════════════════════════
 exports.listChatbots = async (req, res) => {
   try {
+    if (!req.user?.account_id) {
+      return res.status(401).json({ message: "Usuario no autenticado" });
+    }
+
     const chatbots = await Chatbot.find({
       account_id: req.user.account_id
     })
+      .select("public_id name status is_enabled avatar created_at")
       .sort({ created_at: -1 })
       .lean();
 
@@ -107,13 +124,21 @@ exports.listChatbots = async (req, res) => {
   }
 };
 
-//Obtener chatbot por id
+// ═══════════════════════════════════════════════════════════
+// OBTENER CHATBOT POR ID
+// ═══════════════════════════════════════════════════════════
 exports.getChatbotById = async (req, res) => {
   try {
+    if (!req.user?.account_id) {
+      return res.status(401).json({ message: "Usuario no autenticado" });
+    }
+
     const chatbot = await Chatbot.findOne({
       _id: req.params.id,
       account_id: req.user.account_id
-    }).lean();
+    })
+      .select("-install_token -verified_domains")
+      .lean();
 
     if (!chatbot) {
       return res.status(404).json({ message: "Chatbot no encontrado" });
@@ -126,9 +151,15 @@ exports.getChatbotById = async (req, res) => {
   }
 };
 
-// Editor
+// ═══════════════════════════════════════════════════════════
+// DATOS DEL EDITOR
+// ═══════════════════════════════════════════════════════════
 exports.getChatbotEditorData = async (req, res) => {
   try {
+    if (!req.user?.account_id) {
+      return res.status(401).json({ message: "Usuario no autenticado" });
+    }
+
     const chatbot = await Chatbot.findOne({
       _id: req.params.id,
       account_id: req.user.account_id
@@ -161,9 +192,15 @@ exports.getChatbotEditorData = async (req, res) => {
   }
 };
 
-// Actualizar chatbot + configuracion
+// ═══════════════════════════════════════════════════════════
+// ACTUALIZAR CHATBOT
+// ═══════════════════════════════════════════════════════════
 exports.updateChatbot = async (req, res) => {
   try {
+    if (!req.user?.account_id) {
+      return res.status(401).json({ message: "Usuario no autenticado" });
+    }
+
     const chatbot = await Chatbot.findOne({
       _id: req.params.id,
       account_id: req.user.account_id
@@ -173,75 +210,98 @@ exports.updateChatbot = async (req, res) => {
       return res.status(404).json({ message: "Chatbot no encontrado" });
     }
 
-    // Asegurar array
-    if (!Array.isArray(chatbot.uploaded_avatars)) {
-      chatbot.uploaded_avatars = [];
+    const {
+      name,
+      welcome_message,
+      welcome_delay,
+      show_welcome_on_mobile,
+      primary_color,
+      secondary_color,
+      launcher_text,
+      input_placeholder,
+      position,
+      show_branding,
+      is_enabled,
+      status,
+      avatar
+    } = req.body;
+
+    // ─────────── ACTUALIZAR CAMPOS ───────────
+    if (name !== undefined) {
+      if (!name.trim() || name.length > 60) {
+        return res.status(400).json({ message: "Nombre inválido" });
+      }
+      chatbot.name = name.trim();
     }
 
-    /* ───── AVATAR SUBIDO ───── */
+    if (welcome_message !== undefined) chatbot.welcome_message = welcome_message;
+    if (welcome_delay !== undefined) {
+      if (welcome_delay < 0 || welcome_delay > 10) {
+        return res.status(400).json({ message: "welcome_delay inválido" });
+      }
+      chatbot.welcome_delay = welcome_delay;
+    }
+    if (show_welcome_on_mobile !== undefined) chatbot.show_welcome_on_mobile = show_welcome_on_mobile;
+    if (primary_color !== undefined) chatbot.primary_color = primary_color;
+    if (secondary_color !== undefined) chatbot.secondary_color = secondary_color;
+    if (launcher_text !== undefined) chatbot.launcher_text = launcher_text;
+    if (input_placeholder !== undefined) chatbot.input_placeholder = input_placeholder;
+    if (position !== undefined) chatbot.position = position;
+    if (show_branding !== undefined) chatbot.show_branding = show_branding;
+    if (is_enabled !== undefined) chatbot.is_enabled = is_enabled;
+    if (status !== undefined) chatbot.status = status;
+
+    // ─────────── AVATAR POR ARCHIVO (upload) ───────────
     if (req.file) {
       const avatarUrl = req.file.path;
-
       chatbot.avatar = avatarUrl;
 
-      const exists = chatbot.uploaded_avatars.some(
-        a => a.url === avatarUrl
-      );
+      if (!Array.isArray(chatbot.uploaded_avatars)) {
+        chatbot.uploaded_avatars = [];
+      }
 
-      if (!exists) {
-        // 🔴 LIMITE DE AVATARES
-        if (chatbot.uploaded_avatars.length >= MAX_AVATARS) {
-          // elimina el más antiguo
-          chatbot.uploaded_avatars.shift();
+      chatbot.uploaded_avatars.push({
+        id: crypto.randomUUID(),
+        label: `Avatar ${chatbot.uploaded_avatars.length + 1}`,
+        url: avatarUrl,
+        created_at: new Date()
+      });
+    }
+
+    // ─────────── AVATAR POR URL (selección) ───────────
+    if (avatar && !req.file) {
+      // Validar que sea una URL válida o del sistema
+      const isSystemAvatar = avatars.some(a => a.url === avatar);
+      const isUploadedAvatar = chatbot.uploaded_avatars?.some(a => a.url === avatar);
+
+      if (!isSystemAvatar && !isUploadedAvatar) {
+        try {
+          new URL(avatar);
+        } catch {
+          return res.status(400).json({ message: "URL de avatar inválida" });
         }
+      }
 
-        chatbot.uploaded_avatars.push({
-          id: crypto.randomUUID(),
-          label: `Avatar ${chatbot.uploaded_avatars.length + 1}`,
-          url: avatarUrl,
-          created_at: new Date()
+      chatbot.avatar = avatar;
+    }
+
+    if (req.body.allowed_domains !== undefined) {
+      if (!Array.isArray(req.body.allowed_domains)) {
+        return res.status(400).json({
+          message: "allowed_domains debe ser un arreglo"
         });
       }
-    }
 
-    /* ───── AVATAR DEL SISTEMA ───── */
-    else if (req.body.avatar) {
-      if (!req.body.avatar.startsWith("http")) {
-        return res.status(400).json({ message: "Avatar inválido" });
-      }
-      chatbot.avatar = req.body.avatar;
+      chatbot.allowed_domains = req.body.allowed_domains
+        .map(d => d.trim().toLowerCase())
+        .filter(Boolean);
     }
-
-    /* ───── RESTO DE SETTINGS ───── */
-    chatbot.name = req.body.name ?? chatbot.name;
-    chatbot.status = req.body.status ?? chatbot.status;
-    chatbot.welcome_message =
-      req.body.welcome_message ?? chatbot.welcome_message;
-    chatbot.primary_color =
-      req.body.primary_color ?? chatbot.primary_color;
-    chatbot.secondary_color =
-      req.body.secondary_color ?? chatbot.secondary_color;
-    chatbot.launcher_text =
-      req.body.launcher_text ?? chatbot.launcher_text;
-    chatbot.is_enabled =
-      req.body.is_enabled ?? chatbot.is_enabled;
-    chatbot.position =
-      req.body.position ?? chatbot.position;
-    chatbot.input_placeholder =
-      req.body.input_placeholder ?? chatbot.input_placeholder;
-    chatbot.show_branding =
-      req.body.show_branding ?? chatbot.show_branding;
-    chatbot.welcome_delay =
-      req.body.welcome_delay ?? chatbot.welcome_delay;
-    chatbot.show_welcome_on_mobile =
-      req.body.show_welcome_on_mobile ??
-      chatbot.show_welcome_on_mobile;
 
     await chatbot.save();
 
     res.json({
-      avatar: chatbot.avatar,
-      uploaded_avatars: chatbot.uploaded_avatars
+      message: "Chatbot actualizado correctamente",
+      chatbot
     });
   } catch (error) {
     console.error("UPDATE CHATBOT ERROR:", error);
@@ -249,58 +309,87 @@ exports.updateChatbot = async (req, res) => {
   }
 };
 
-// Eliminar
+// ═══════════════════════════════════════════════════════════
+// ELIMINAR CHATBOT
+// ═══════════════════════════════════════════════════════════
 exports.deleteChatbot = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
+    if (!req.user?.account_id) {
+      await session.abortTransaction();
+      return res.status(401).json({ message: "Usuario no autenticado" });
+    }
+
     const chatbot = await Chatbot.findOne({
       _id: req.params.id,
       account_id: req.user.account_id
     }).session(session);
 
     if (!chatbot) {
+      await session.abortTransaction();
       return res.status(404).json({ message: "Chatbot no encontrado" });
     }
 
+    // ─────────── OBTENER FLOWS ───────────
     const flows = await Flow.find({
-      chatbot_id: chatbot._id
+      chatbot_id: chatbot._id,
+      account_id: req.user.account_id
     }).session(session);
 
     const flowIds = flows.map(f => f._id);
 
-    await FlowNode.deleteMany({ flow_id: { $in: flowIds }, account_id: req.user.account_id }, { session });
-    await Flow.deleteMany({ chatbot_id: chatbot._id, account_id: req.user.account_id }, { session });
+    // ─────────── ELIMINAR EN CASCADA ───────────
+    await FlowNode.deleteMany(
+      { flow_id: { $in: flowIds }, account_id: req.user.account_id },
+      { session }
+    );
+
+    await Flow.deleteMany(
+      { chatbot_id: chatbot._id, account_id: req.user.account_id },
+      { session }
+    );
+
     await Chatbot.deleteOne({ _id: chatbot._id }, { session });
 
     await session.commitTransaction();
-    session.endSession();
-
     res.json({ message: "Chatbot eliminado correctamente" });
+
   } catch (error) {
     await session.abortTransaction();
-    session.endSession();
     console.error("DELETE CHATBOT ERROR:", error);
     res.status(500).json({ message: "Error al eliminar chatbot" });
+  } finally {
+    session.endSession();
   }
 };
 
-// Duplicar el chatabot 
+// ═══════════════════════════════════════════════════════════
+// DUPLICAR CHATBOT COMPLETO
+// ═══════════════════════════════════════════════════════════
 exports.duplicateChatbotFull = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    /* ───────── CHATBOT ORIGEN ───────── */
+    if (!req.user?.account_id) {
+      await session.abortTransaction();
+      return res.status(401).json({ message: "Usuario no autenticado" });
+    }
+
+    // ─────────── CHATBOT ORIGEN ───────────
     const original = await Chatbot.findOne({
       _id: req.params.id,
       account_id: req.user.account_id
     }).session(session);
 
-    if (!original) throw new Error("Chatbot no encontrado");
+    if (!original) {
+      await session.abortTransaction();
+      return res.status(404).json({ message: "Chatbot no encontrado" });
+    }
 
-    /* ───────── NUEVO CHATBOT ───────── */
+    // ─────────── NUEVO CHATBOT ───────────
     const baseName = getBaseName(original.name);
     const newName = await generateCopyName(
       baseName,
@@ -308,7 +397,7 @@ exports.duplicateChatbotFull = async (req, res) => {
       session
     );
 
-    const [newChatbot] = await Chatbot.create([{
+    const newChatbot = new Chatbot({
       account_id: req.user.account_id,
       public_id: crypto.randomUUID(),
       name: newName,
@@ -321,13 +410,15 @@ exports.duplicateChatbotFull = async (req, res) => {
       input_placeholder: original.input_placeholder,
       position: original.position,
       show_branding: original.show_branding,
-      status: "active",
+      status: "draft", // ✅ Mejor empezar como draft
       is_enabled: false,
-      avatar: process.env.DEFAULT_CHATBOT_AVATAR,
-      uploaded_avatars: []
-    }], { session });
+      avatar: original.avatar || process.env.DEFAULT_CHATBOT_AVATAR,
+      uploaded_avatars: [] // ✅ No copiar avatars subidos (evita duplicación)
+    });
 
-    /* ───────── FLOWS ───────── */
+    await newChatbot.save({ session });
+
+    // ─────────── COPIAR FLOWS ───────────
     const originalFlows = await Flow.find({
       chatbot_id: original._id,
       account_id: req.user.account_id
@@ -349,7 +440,7 @@ exports.duplicateChatbotFull = async (req, res) => {
       flowIdMap.set(String(flow._id), createdFlow);
     }
 
-    /* ───────── NODES ───────── */
+    // ─────────── COPIAR NODES ───────────
     const originalNodes = await FlowNode.find({
       flow_id: { $in: originalFlows.map(f => f._id) },
       account_id: req.user.account_id
@@ -357,28 +448,20 @@ exports.duplicateChatbotFull = async (req, res) => {
 
     const nodeIdMap = new Map();
 
-    /* PASO 1 — crear nodos base */
+    // PASO 1: Crear nodos base
     for (const node of originalNodes) {
       const [createdNode] = await FlowNode.create([{
         account_id: req.user.account_id,
         flow_id: flowIdMap.get(String(node.flow_id))._id,
-
         node_type: node.node_type,
         content: node.content,
-
         order: node.order ?? 0,
-
-        parent_node_id: node.parent_node_id
-          ? nodeIdMap.get(String(node.parent_node_id)) || null
-          : null,
-
+        parent_node_id: null, // Se actualiza en PASO 2
         typing_time: node.typing_time ?? 2,
-
         variable_key: node.variable_key ?? null,
         validation: node.validation ?? null,
         crm_field_key: node.crm_field_key ?? null,
         link_action: node.link_action ?? null,
-
         options: [],
         is_draft: true
       }], { session });
@@ -386,32 +469,35 @@ exports.duplicateChatbotFull = async (req, res) => {
       nodeIdMap.set(String(node._id), createdNode._id);
     }
 
-    /* PASO 2 — reconstruir OPTIONS */
+    // PASO 2: Reconstruir relaciones (parent_node_id y options)
     for (const node of originalNodes) {
-      if (!node.options?.length) continue;
-
       const newNodeId = nodeIdMap.get(String(node._id));
       const newNode = await FlowNode.findById(newNodeId).session(session);
 
-      newNode.options = node.options.map(opt => ({
-        label: opt.label,
-        next_node_id: opt.next_node_id
-          ? nodeIdMap.get(String(opt.next_node_id))
-          : null
-      }));
+      // Actualizar parent_node_id
+      if (node.parent_node_id) {
+        newNode.parent_node_id = nodeIdMap.get(String(node.parent_node_id)) || null;
+      }
+
+      // Reconstruir options
+      if (node.options?.length) {
+        newNode.options = node.options.map(opt => ({
+          label: opt.label,
+          next_node_id: opt.next_node_id
+            ? nodeIdMap.get(String(opt.next_node_id))
+            : null
+        }));
+      }
 
       await newNode.save({ session });
     }
 
-    /* ───────── START NODE ───────── */
+    // ─────────── ASIGNAR START NODES ───────────
     for (const flow of originalFlows) {
       if (!flow.start_node_id) continue;
 
       const newFlow = flowIdMap.get(String(flow._id));
-
-      newFlow.start_node_id =
-        nodeIdMap.get(String(flow.start_node_id)) || null;
-
+      newFlow.start_node_id = nodeIdMap.get(String(flow.start_node_id)) || null;
       await newFlow.save({ session });
     }
 
@@ -431,10 +517,15 @@ exports.duplicateChatbotFull = async (req, res) => {
   }
 };
 
-
-// Avatar disponibles
+// ═══════════════════════════════════════════════════════════
+// OBTENER AVATARS DISPONIBLES
+// ═══════════════════════════════════════════════════════════
 exports.getAvailableAvatars = async (req, res) => {
   try {
+    if (!req.user?.account_id) {
+      return res.status(401).json({ message: "Usuario no autenticado" });
+    }
+
     const chatbot = await Chatbot.findOne({
       _id: req.params.id,
       account_id: req.user.account_id
@@ -455,9 +546,15 @@ exports.getAvailableAvatars = async (req, res) => {
   }
 };
 
-// Eliminar Avatar 
+// ═══════════════════════════════════════════════════════════
+// ELIMINAR AVATAR SUBIDO
+// ═══════════════════════════════════════════════════════════
 exports.deleteAvatar = async (req, res) => {
   try {
+    if (!req.user?.account_id) {
+      return res.status(401).json({ message: "Usuario no autenticado" });
+    }
+
     const chatbot = await Chatbot.findOne({
       _id: req.params.id,
       account_id: req.user.account_id
@@ -472,6 +569,7 @@ exports.deleteAvatar = async (req, res) => {
       return res.status(400).json({ message: "avatarUrl requerido" });
     }
 
+    // ─────────── VALIDAR QUE NO SEA DEL SISTEMA ───────────
     if (avatars.some(a => a.url === avatarUrl)) {
       return res.status(400).json({
         message: "No se puede eliminar un avatar del sistema"
@@ -488,6 +586,7 @@ exports.deleteAvatar = async (req, res) => {
       return res.status(404).json({ message: "Avatar no encontrado" });
     }
 
+    // ─────────── SI ERA EL ACTIVO, RESETEAR ───────────
     if (chatbot.avatar === avatarUrl) {
       chatbot.avatar = process.env.DEFAULT_CHATBOT_AVATAR || avatars[0]?.url;
     }
@@ -495,7 +594,7 @@ exports.deleteAvatar = async (req, res) => {
     await chatbot.save();
 
     res.json({
-      message: "Avatar eliminado",
+      message: "Avatar eliminado correctamente",
       avatar: chatbot.avatar,
       uploaded_avatars: chatbot.uploaded_avatars
     });

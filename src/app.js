@@ -1,7 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 
-const app = express(); // ✅ ESTO FALTABA
+const app = express();
 
 // ───────── MIDDLEWARES NORMALES ─────────
 app.use(cors());
@@ -25,6 +25,7 @@ app.use("/api/users", require("./routes/user.routes.js"));
 app.use("/api/admin", require("./routes/admin.routes.js"));
 
 app.use("/api/chatbots", require("./routes/chatbots.routes.js"));
+app.use("/api/chatbot-integration",require("./routes/chatbotIntegration.routes.js"));
 app.use("/api/flows", require("./routes/flows.routes.js"));
 app.use("/api/flownodes", require("./routes/flow.nodes.routes.js"));
 
@@ -45,6 +46,5 @@ app.use((err, req, res, next) => {
     message: err.message || "Error interno del servidor"
   });
 });
-
 
 module.exports = app;

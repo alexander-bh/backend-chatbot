@@ -6,6 +6,8 @@ exports.reconnectParents = async (
   account_id,
   session
 ) => {
+  if (!deletedNode) return [];
+
   const nextId = deletedNode.next_node_id || null;
   const reconnections = [];
 
@@ -28,15 +30,23 @@ exports.reconnectParents = async (
     if (parent.next_node_id?.equals(deletedNode._id)) {
       parent.next_node_id = nextId;
       touched = true;
-      reconnections.push({ from: parent._id, to: nextId, type: "direct" });
+      reconnections.push({
+        from: parent._id,
+        to: nextId,
+        type: "direct"
+      });
     }
 
-    if (parent.node_type === "options") {
+    if (parent.node_type === "options" && Array.isArray(parent.options)) {
       parent.options.forEach(opt => {
         if (opt.next_node_id?.equals(deletedNode._id)) {
           opt.next_node_id = nextId;
           touched = true;
-          reconnections.push({ from: parent._id, to: nextId, type: "option" });
+          reconnections.push({
+            from: parent._id,
+            to: nextId,
+            type: "option"
+          });
         }
       });
     }

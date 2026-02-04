@@ -15,18 +15,19 @@ exports.validateNodePayload = payload => {
     content,
     options,
     typing_time,
-    variable_key
+    variable_key,
+    link_action
   } = payload;
 
   if (flow_id && !mongoose.Types.ObjectId.isValid(flow_id)) {
     throw new Error("flow_id inválido");
   }
 
-  if (!ALLOWED_NODE_TYPES.includes(node_type)) {
+  if (!node_type || !ALLOWED_NODE_TYPES.includes(node_type)) {
     throw new Error("node_type inválido");
   }
 
-  // 🧠 Content requerido según tipo
+  // 🧠 Content requerido
   if (
     ["message", "question", "input"].includes(node_type) &&
     (!content || typeof content !== "string")
@@ -45,10 +46,18 @@ exports.validateNodePayload = payload => {
         throw new Error(`label inválido en option ${i}`);
       }
 
-      if (opt.value === undefined) {
-        throw new Error(`value requerido en option ${i}`);
+      if (
+        opt.value === undefined ||
+        !["string", "number"].includes(typeof opt.value)
+      ) {
+        throw new Error(`value inválido en option ${i}`);
       }
     });
+  }
+
+  // ⚡ Action
+  if (node_type === "action" && !link_action) {
+    throw new Error("link_action requerido para nodos action");
   }
 
   // ⏱ typing_time

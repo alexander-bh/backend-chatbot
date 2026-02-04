@@ -98,7 +98,7 @@ exports.registerFirst = async (req, res, next) => {
       onboarding: finalOnboarding
     }], { session });
 
-    const [chatbot] = await Chatbot.create([{
+    const chatbot = new Chatbot({
       account_id: account._id,
       name: `Bot de ${name}`,
       public_id: crypto.randomUUID(),
@@ -113,7 +113,9 @@ exports.registerFirst = async (req, res, next) => {
       is_enabled: true,
       input_placeholder: "Escribe tu mensaje…",
       show_branding: true
-    }], { session });
+    })
+
+    await chatbot.save({ session });
 
     const [flow] = await Flow.create([{
       account_id: account._id,
@@ -249,7 +251,7 @@ exports.register = async (req, res) => {
 };
 
 // Login
-exports.loginAutoAccount = async (req, res) => {
+exports.login = async (req, res) => {
   const { email, password } = req.body;
 
   const user = await User.findOne({
@@ -260,12 +262,20 @@ exports.loginAutoAccount = async (req, res) => {
     return res.status(401).json({ message: "Credenciales inválidas" });
   }
 
+  if (user.status === "inactive") {
+    return res.status(403).json({ message: "Usuario inactivo" });
+  }
+
+  const account = await Account.findById(user.account_id);
+
+  if (!account || account.status !== "active") {
+    return res.status(403).json({ message: "Cuenta suspendida" });
+  }
+
   const valid = await bcrypt.compare(password, user.password);
   if (!valid) {
     return res.status(401).json({ message: "Credenciales inválidas" });
   }
-
-  const account = await Account.findById(user.account_id);
 
   const token = generateToken({
     id: user._id,
@@ -279,9 +289,7 @@ exports.loginAutoAccount = async (req, res) => {
     expires_at: new Date(Date.now() + 86400000)
   });
 
-  res.json({
-    token
-  });
+  res.json({ token });
 };
 
 // Recuperacion de contraseña
@@ -346,19 +354,10 @@ exports.forgotPassword = async (req, res) => {
 //Resetar la contraseña
 exports.resetPassword = async (req, res) => {
   try {
-
     const { email, code, new_password } = req.body;
 
-    if (!email) {
-      return res.status(400).json({
-        message: "Email requerido"
-      });
-    }
-
-    if (!code || !new_password || new_password.length < 6) {
-      return res.status(400).json({
-        message: "Datos inválidos"
-      });
+    if (!email || !code || !new_password || new_password.length < 6) {
+      return res.status(400).json({ message: "Datos inválidos" });
     }
 
     const user = await User.findOne({
@@ -366,9 +365,7 @@ exports.resetPassword = async (req, res) => {
     }).select("+password");
 
     if (!user) {
-      return res.status(400).json({
-        message: "Código inválido o expirado"
-      });
+      return res.status(400).json({ message: "Código inválido o expirado" });
     }
 
     const resetRecord = await PasswordResetToken.findOne({
@@ -377,10 +374,9 @@ exports.resetPassword = async (req, res) => {
     });
 
     if (!resetRecord) {
-      return res.status(400).json({
-        message: "Código inválido o expirado"
-      });
+      return res.status(400).json({ message: "Código inválido o expirado" });
     }
+
     if (resetRecord.attempts >= 5) {
       return res.status(403).json({
         message: "Demasiados intentos. Solicita un nuevo código."
@@ -398,40 +394,14 @@ exports.resetPassword = async (req, res) => {
     user.password = await bcrypt.hash(new_password, 10);
     await user.save();
 
-    await auditService.log({
-      req,
-      actorId: user._id,
-      targetType: "USER",
-      targetId: user._id,
-      action: "RESET_PASSWORD",
-      before: null,
-      after: null,
-      meta: {
-        method: "code"
-      }
-    });
-
-    try {
-      await sendPasswordChangedAlert(user, {
-        ip: req.ip,
-        device: req.headers["user-agent"]
-      });
-    } catch (err) {
-      console.warn("PASSWORD ALERT EMAIL FAILED:", err.message);
-    }
-
-    await PasswordResetToken.findByIdAndDelete(resetRecord._id);
     await PasswordResetToken.deleteMany({ user_id: user._id });
+    await Token.deleteMany({ user_id: user._id });
 
-    res.json({
-      message: "Contraseña restablecida correctamente"
-    });
+    res.json({ message: "Contraseña restablecida correctamente" });
 
   } catch (error) {
     console.error("RESET PASSWORD ERROR:", error);
-    res.status(500).json({
-      message: "Error al restablecer contraseña"
-    });
+    res.status(500).json({ message: "Error al restablecer contraseña" });
   }
 };
 
@@ -508,18 +478,31 @@ exports.changePassword = async (req, res) => {
 // Actualizar 
 exports.updateProfile = async (req, res) => {
   const session = await mongoose.startSession();
-  session.startTransaction();
 
   try {
+    session.startTransaction();
+
     const user = await User.findById(req.user.id).session(session);
     if (!user) {
-      return res.status(404).json({ message: "Usuario no encontrado" });
+      throw new Error("Usuario no encontrado");
     }
 
     const { name, email, phone, phone_alt } = req.body;
 
     if (name) user.name = name;
-    if (email) user.email = email.toLowerCase().trim();
+
+    if (email) {
+      const exists = await User.findOne({
+        email: email.toLowerCase().trim(),
+        _id: { $ne: user._id }
+      }).session(session);
+
+      if (exists) {
+        throw new Error("Email ya en uso");
+      }
+
+      user.email = email.toLowerCase().trim();
+    }
 
     if (phone || phone_alt) {
       user.onboarding ||= {};
@@ -531,22 +514,16 @@ exports.updateProfile = async (req, res) => {
 
     await user.save({ session });
     await session.commitTransaction();
-    session.endSession();
 
     res.json({
       message: "Perfil actualizado correctamente",
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        onboarding: user.onboarding
-      }
+      user
     });
 
   } catch (error) {
     await session.abortTransaction();
+    res.status(400).json({ message: error.message });
+  } finally {
     session.endSession();
-    console.error("UPDATE PROFILE ERROR:", error);
-    res.status(500).json({ message: "Error al actualizar perfil" });
   }
 };

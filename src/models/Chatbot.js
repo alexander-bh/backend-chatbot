@@ -1,4 +1,5 @@
 const { Schema, model, models } = require("mongoose");
+const crypto = require("crypto");
 
 const ChatbotSchema = new Schema({
   account_id: {
@@ -7,14 +8,55 @@ const ChatbotSchema = new Schema({
     required: true
   },
 
-  public_id: { type: String, unique: true },
+  public_id: { type: String, unique: true, required: true },
 
   name: { type: String, required: true },
 
   status: {
     type: String,
+    enum: ["active", "inactive", "draft"],
     default: "active"
   },
+
+  is_enabled: {
+    type: Boolean,
+    default: true
+  },
+
+  /* ───────── INSTALLATION & SECURITY ───────── */
+
+  allowed_domains: {
+    type: [String],
+    default: [],
+    index: true
+  },
+
+  verified_domains: {
+    type: [String],
+    default: [],
+    validate: {
+      validator: v => v.length <= 20,
+      message: "Máximo 20 dominios verificados"
+    }
+  },
+
+  installation_status: {
+    type: String,
+    enum: ["pending", "verified"],
+    default: "pending"
+  },
+
+  last_verified_at: {
+    type: Date
+  },
+
+  install_token: {
+    type: String,
+    unique: true
+  },
+
+
+  /* ───────── SETTINGS EMBEBIDOS ───────── */
 
   welcome_message: {
     type: String,
@@ -24,7 +66,8 @@ const ChatbotSchema = new Schema({
   welcome_delay: {
     type: Number,
     default: 2,
-    min: 0
+    min: 0,
+    max: 10
   },
 
   show_welcome_on_mobile: {
@@ -32,8 +75,6 @@ const ChatbotSchema = new Schema({
     default: true
   },
 
-
-  /* ───────── SETTINGS EMBEBIDOS ───────── */
   avatar: {
     type: String,
     default: process.env.DEFAULT_CHATBOT_AVATAR
@@ -41,8 +82,9 @@ const ChatbotSchema = new Schema({
 
   uploaded_avatars: [
     {
+      id: String,
+      label: String,
       url: String,
-      public_id: String,
       created_at: { type: Date, default: Date.now }
     }
   ],
@@ -60,11 +102,6 @@ const ChatbotSchema = new Schema({
   launcher_text: {
     type: String,
     default: "¿Te ayudo?"
-  },
-
-  is_enabled: {
-    type: Boolean,
-    default: true
   },
 
   position: {
@@ -89,11 +126,28 @@ const ChatbotSchema = new Schema({
     type: Boolean,
     default: true
   },
+}, { timestamps: { createdAt: "created_at", updatedAt: "updated_at" } });
 
-  created_at: {
-    type: Date,
-    default: Date.now
+/* ───────── NORMALIZADOR DE DOMINIOS ───────── */
+ChatbotSchema.pre("save", function () {
+  // Normaliza los dominios permitidos
+  if (Array.isArray(this.allowed_domains)) {
+    this.allowed_domains = this.allowed_domains
+      .filter(Boolean)
+      .map(domain =>
+        domain
+          .replace(/^https?:\/\//, "")
+          .replace(/\/$/, "")
+          .toLowerCase()
+      );
   }
+
+  // Genera token de instalación si no existe
+  if (!this.install_token) {
+    this.install_token = crypto.randomBytes(24).toString("hex");
+  }
+
+  // ✅ No se llama next() cuando usas timestamps en las opciones del Schema
 });
 
 ChatbotSchema.index({ account_id: 1, created_at: -1 });
