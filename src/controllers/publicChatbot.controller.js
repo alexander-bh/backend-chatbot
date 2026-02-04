@@ -1,4 +1,4 @@
-// controllers/publicChatbot.controller.js
+const mongoose = require("mongoose");
 const ConversationSession = require("../models/ConversationSession");
 const Flow = require("../models/Flow");
 const FlowNode = require("../models/FlowNode");
@@ -8,6 +8,12 @@ const renderNode = require("../utils/renderNode");
 exports.startConversation = async (req, res) => {
   try {
     const { public_id } = req.params;
+
+    if (!public_id) {
+      return res.status(400).json({
+        message: "public_id requerido"
+      });
+    }
 
     /* ───────── CHATBOT ───────── */
     const chatbot = await Chatbot.findOne({
@@ -24,12 +30,32 @@ exports.startConversation = async (req, res) => {
     /* ───────── FLOW PUBLICADO ───────── */
     const flow = await Flow.findOne({
       chatbot_id: chatbot._id,
-      is_active: true
+      account_id: chatbot.account_id,
+      status: "active"
     }).sort({ updatedAt: -1 });
 
-    if (!flow || !flow.start_node_id) {
+    if (!flow) {
       return res.status(404).json({
-        message: "Chatbot sin flujo activo"
+        message: "Chatbot sin flujo publicado"
+      });
+    }
+
+    if (!flow.start_node_id) {
+      return res.status(500).json({
+        message: "El flujo publicado no tiene nodo inicial"
+      });
+    }
+
+    /* ───────── NODO INICIAL ───────── */
+    const startNode = await FlowNode.findOne({
+      _id: flow.start_node_id,
+      flow_id: flow._id,
+      account_id: chatbot.account_id
+    });
+
+    if (!startNode) {
+      return res.status(500).json({
+        message: "Nodo inicial inválido"
       });
     }
 
@@ -38,23 +64,17 @@ exports.startConversation = async (req, res) => {
       account_id: chatbot.account_id,
       chatbot_id: chatbot._id,
       flow_id: flow._id,
-      current_node_id: flow.start_node_id,
+      current_node_id: startNode._id,
       variables: {},
-      mode: "production"
+      mode: "production",
+      is_completed: false
     });
 
-    /* ───────── NODO INICIAL ───────── */
-    const node = await FlowNode.findById(flow.start_node_id);
-    if (!node) {
-      return res.status(500).json({
-        message: "Nodo inicial no encontrado"
-      });
-    }
+    return res.json(renderNode(startNode, session._id));
 
-    res.json(renderNode(node, session._id));
   } catch (error) {
     console.error("public startConversation error:", error);
-    res.status(500).json({
+    return res.status(500).json({
       message: "Error al iniciar conversación"
     });
   }

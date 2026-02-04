@@ -22,6 +22,5 @@ exports.sendResetPasswordEmail = async (user, code) => {
   });
 };
 
-
 //chatbot_proyect2026
 //wulg zuxy wkfv ipyd

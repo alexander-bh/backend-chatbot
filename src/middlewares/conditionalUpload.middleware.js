@@ -8,6 +8,6 @@ module.exports = function conditionalUpload(req, res, next) {
     return upload.single("avatar")(req, res, next);
   }
 
-  // Si no es multipart, seguimos normal
   next();
 };
+

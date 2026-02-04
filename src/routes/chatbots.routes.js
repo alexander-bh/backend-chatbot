@@ -5,6 +5,12 @@ const auth = require("../middlewares/auth.middleware");
 const role = require("../middlewares/role.middleware");
 const conditionalUpload = require("../middlewares/conditionalUpload.middleware");
 
+console.log({
+  auth: typeof auth,
+  role: typeof role,
+  conditionalUpload: typeof conditionalUpload
+});
+
 //crear chatbot
 router.post("/", auth, role("ADMIN", "CLIENT"), chatbotController.createChatbot);
 //listar chatbots
@@ -18,25 +24,10 @@ router.get("/:id",auth,role("ADMIN", "CLIENT"),chatbotController.getChatbotById)
 // obtener datos completos del editor
 router.get("/:id/editor",auth,role("ADMIN", "CLIENT"),chatbotController.getChatbotEditorData);
 //Actualizar chatbot 
-router.put(
-  "/:id/settings",
-  auth,
-  conditionalUpload,
-  chatbotController.updateChatbot
-);
+router.put("/:id/settings",auth,conditionalUpload,chatbotController.updateChatbot);
 // Obtener avatares disponibles
-router.get(
-  "/:id/avatars",
-  auth,
-  chatbotController.getAvailableAvatars
-);
-
+router.get("/:id/avatars", auth,chatbotController.getAvailableAvatars);
 // Eliminar avatar 
-router.delete(
-  "/:id/deleteAvatar",
-  auth,
-  chatbotController.deleteAvatar
-);
-
+router.delete("/:id/deleteAvatar",auth,chatbotController.deleteAvatar);
 
 module.exports = router;

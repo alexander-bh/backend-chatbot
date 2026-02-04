@@ -80,7 +80,22 @@ const FlowNodeSchema = new Schema(
     crm_field_key: { type: String, default: null },
     is_draft: { type: Boolean, default: true },
 
-    meta: { type: Schema.Types.Mixed, default: {} },
+    meta: {
+      type: new Schema(
+        {
+          notify: {
+            enabled: { type: Boolean, default: false },
+            type: { type: String },
+            subject: { type: String },
+            template: { type: String },
+            send_once: { type: Boolean, default: true },
+            recipients: { type: [String], default: [] }
+          }
+        },
+        { _id: false, strict: false }
+      ),
+      default: {}
+    },
     end_conversation: { type: Boolean, default: false }
   },
   { timestamps: true }
@@ -90,6 +105,8 @@ FlowNodeSchema.index(
   { flow_id: 1, order: 1 },
   { unique: true }
 );
+
 FlowNodeSchema.index({ flow_id: 1, next_node_id: 1 });
+FlowNodeSchema.index({ "meta.notify.enabled": 1 });
 
 module.exports = model("FlowNode", FlowNodeSchema);

@@ -60,7 +60,7 @@ const detectCycle = async ({
 // ─────────────────────────────────────────────
 // Crear nodo
 // ─────────────────────────────────────────────
-exports.createNode = async (data, account_id, session) => {
+exports.createNode = async ({ data, account_id, session }) => {
 
   const flowId = toObjectId(data.flow_id, "flow_id");
   const accountId = toObjectId(account_id, "account_id");
@@ -69,9 +69,11 @@ exports.createNode = async (data, account_id, session) => {
 
   const order = await getNextOrder(flowId, accountId, session);
 
+  const { flow_id, account_id: _, ...safeData } = data;
+
   const [node] = await FlowNode.create(
     [{
-      ...data,
+      ...safeData,
       flow_id: flowId,
       account_id: accountId,
       order,
@@ -105,7 +107,7 @@ exports.getNodesByFlow = async (flow_id, account_id) => {
 // ─────────────────────────────────────────────
 // Actualizar nodo
 // ─────────────────────────────────────────────
-exports.updateNode = async ({ nodeId, data, account_id }) => {
+exports.updateNode = async ({ nodeId, data, account_id, session }) => {
 
   const nodeObjectId = toObjectId(nodeId, "nodeId");
   const accountObjectId = toObjectId(account_id, "account_id");
@@ -113,7 +115,7 @@ exports.updateNode = async ({ nodeId, data, account_id }) => {
   const existing = await FlowNode.findOne({
     _id: nodeObjectId,
     account_id: accountObjectId
-  });
+  }).session(session);
 
   if (!existing) throw new Error("Nodo no encontrado");
 
@@ -125,7 +127,7 @@ exports.updateNode = async ({ nodeId, data, account_id }) => {
       account_id: accountObjectId
     },
     data,
-    { new: true }
+    { new: true, session }
   );
 
   return updated;
@@ -142,8 +144,8 @@ exports.connectNode = async ({
   session
 }) => {
 
-  const sourceId = toObjectId(sourceNodeId);
-  const accountId = toObjectId(account_id);
+  const sourceId = toObjectId(sourceNodeId, "sourceNodeId");
+  const accountId = toObjectId(account_id, "account_id");
 
   const source = await FlowNode.findOne({
     _id: sourceId,
@@ -157,8 +159,7 @@ exports.connectNode = async ({
   let targetObjectId = null;
 
   if (targetNodeId) {
-
-    targetObjectId = toObjectId(targetNodeId);
+    targetObjectId = toObjectId(targetNodeId, "targetNodeId");
 
     const target = await FlowNode.findOne({
       _id: targetObjectId,
@@ -171,7 +172,6 @@ exports.connectNode = async ({
       throw new Error("No puedes conectar nodos de diferentes flows");
     }
 
-    // 🔥 ANTI LOOP CHECK
     const wouldCreateLoop = await detectCycle({
       startNodeId: targetObjectId,
       targetSearchId: sourceId,
@@ -185,11 +185,18 @@ exports.connectNode = async ({
   }
 
   if (optionIndex === undefined) {
+    // conexión directa
     source.next_node_id = targetObjectId;
   } else {
-    if (!source.options?.[optionIndex]) {
+    // conexión por opción
+    if (
+      !Array.isArray(source.options) ||
+      optionIndex < 0 ||
+      optionIndex >= source.options.length
+    ) {
       throw new Error("Opción inválida");
     }
+
     source.options[optionIndex].next_node_id = targetObjectId;
   }
 
@@ -201,21 +208,20 @@ exports.connectNode = async ({
 // ─────────────────────────────────────────────
 // Eliminar nodo (cascada + reconexión)
 // ─────────────────────────────────────────────
-exports.deleteNode = async (nodeId, account_id, session) => {
+exports.deleteNode = async ({ nodeId, account_id, session }) => {
 
   const nodeObjectId = toObjectId(nodeId, "nodeId");
   const accountObjectId = toObjectId(account_id, "account_id");
 
   const node = await FlowNode.findOne(
-    {
-      _id: nodeObjectId,
-      account_id: accountObjectId
-    },
+    { _id: nodeObjectId, account_id: accountObjectId },
     null,
     { session }
   );
 
   if (!node) throw new Error("Nodo no encontrado");
+
+  await getEditableFlow(node.flow_id, accountObjectId);
 
   return exports.deleteNodeCascade(node, accountObjectId, session);
 };
@@ -274,10 +280,14 @@ exports.deleteNodeCascade = async (node, account_id, session) => {
 // ─────────────────────────────────────────────
 // Reordenar nodos (drag & drop)
 // ─────────────────────────────────────────────
-exports.reorderNodes = async (flow_id, nodes, account_id, session) => {
+exports.reorderNodes = async ({ flow_id, nodes, account_id, session }) => {
 
   const flowId = toObjectId(flow_id, "flow_id");
   const accountId = toObjectId(account_id, "account_id");
+
+  if (!Array.isArray(nodes)) {
+    throw new Error("Formato de nodos inválido");
+  }
 
   await getEditableFlow(flowId, accountId);
 
@@ -287,7 +297,7 @@ exports.reorderNodes = async (flow_id, nodes, account_id, session) => {
 // ─────────────────────────────────────────────
 // Duplicar 
 // ─────────────────────────────────────────────
-exports.duplicateNode = async (nodeId, account_id, session) => {
+exports.duplicateNode = async ({ nodeId, account_id, session }) => {
 
   const nodeObjectId = toObjectId(nodeId, "nodeId");
   const accountObjectId = toObjectId(account_id, "account_id");
@@ -326,6 +336,7 @@ exports.duplicateNode = async (nodeId, account_id, session) => {
       link_action: original.link_action,
       validation: original.validation,
       crm_field_key: original.crm_field_key,
+      meta: original.meta ? { ...original.meta } : undefined,
       is_draft: true,
       end_conversation: original.end_conversation
     }],
@@ -336,3 +347,4 @@ exports.duplicateNode = async (nodeId, account_id, session) => {
 
   return newNode;
 };
+

@@ -50,6 +50,7 @@ const FlowSchema = new Schema(
   { timestamps: true }
 );
 
+
 // Índices correctos
 FlowSchema.index({ account_id: 1 });
 FlowSchema.index({ chatbot_id: 1, status: 1 });

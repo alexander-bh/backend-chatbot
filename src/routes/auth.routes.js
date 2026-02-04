@@ -9,7 +9,7 @@ const rateLimit = require("express-rate-limit");
 router.post("/register-first", authCtrl.registerFirst);
 
 // Login
-router.post("/login", authCtrl.loginAutoAccount);
+router.post("/login", authCtrl.login);
 
 // Crear usuarios dentro de una cuenta (solo ADMIN)
 router.post(
@@ -36,3 +36,4 @@ router.post("/forgot-password", forgotLimiter, authCtrl.forgotPassword);
 router.post("/reset-password", authCtrl.resetPassword);
 
 module.exports = router;
+

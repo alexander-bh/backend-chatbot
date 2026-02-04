@@ -15,13 +15,13 @@ const storage = new CloudinaryStorage({
   cloudinary,
   params: async () => ({
     folder: "chatbots/avatars",
-    resource_type: "image", // ✅ acepta cualquier imagen
+    resource_type: "image",
     transformation: [
       {
         width: 256,
         height: 256,
         crop: "fill",
-        gravity: "auto" // mejor que face para logos / iconos
+        gravity: "auto"
       }
     ]
   })
@@ -32,7 +32,7 @@ const uploadAvatar = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 2 * 1024 * 1024 // 2MB
+    fileSize: 2 * 1024 * 1024
   }
 });
 
