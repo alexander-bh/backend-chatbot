@@ -9,97 +9,97 @@ const {
   generateCopyName
 } = require("../utils/chatbotName.helper");
 
-  // ═══════════════════════════════════════════════════════════
-  // CREAR CHATBOT
-  // ═══════════════════════════════════════════════════════════
-  exports.createChatbot = async (req, res) => {
-    const session = await mongoose.startSession();
-    try {
-      session.startTransaction();
-      const {
-        name,
-        welcome_message,
-        welcome_delay,
-        show_welcome_on_mobile
-      } = req.body;
+// ═══════════════════════════════════════════════════════════
+// CREAR CHATBOT
+// ═══════════════════════════════════════════════════════════
+exports.createChatbot = async (req, res) => {
+  const session = await mongoose.startSession();
+  try {
+    session.startTransaction();
+    const {
+      name,
+      welcome_message,
+      welcome_delay,
+      show_welcome_on_mobile
+    } = req.body;
 
-      // ─────────── VALIDACIONES ───────────
-      if (!req.user?.account_id) {
-        await session.abortTransaction();
-        return res.status(401).json({ message: "Usuario no autenticado" });
-      }
-
-      if (!name || typeof name !== "string" || !name.trim()) {
-        await session.abortTransaction();
-        return res.status(400).json({ message: "Nombre inválido" });
-      }
-
-      if (name.length > 60) {
-        await session.abortTransaction();
-        return res.status(400).json({ message: "El nombre es demasiado largo" });
-      }
-
-      if (welcome_delay !== undefined && (welcome_delay < 0 || welcome_delay > 10)) {
-        await session.abortTransaction();
-        return res.status(400).json({ message: "welcome_delay inválido" });
-      }
-
-      // ─────────── CREAR CHATBOT ───────────
-      const welcomeText =
-        typeof welcome_message === "string" && welcome_message.trim()
-          ? welcome_message
-          : "Hola 👋 ¿en qué puedo ayudarte?";
-
-      const chatbot = new Chatbot({
-        account_id: req.user.account_id,
-        public_id: crypto.randomUUID(),
-        name: name.trim(),
-        welcome_message: welcomeText,
-        welcome_delay: welcome_delay ?? 2,
-        show_welcome_on_mobile: show_welcome_on_mobile ?? true,
-        status: "active",
-        is_enabled: true
-      });
-
-      await chatbot.save({ session });
-
-      // ─────────── CREAR FLOW INICIAL ───────────
-      const [flow] = await Flow.create([{
-        account_id: req.user.account_id,
-        chatbot_id: chatbot._id,
-        name: "Flujo principal",
-        status: "draft",
-        version: 1
-      }], { session });
-
-      // ─────────── CREAR NODO INICIAL ───────────
-      const [startNode] = await FlowNode.create([{
-        account_id: req.user.account_id,
-        flow_id: flow._id,
-        node_type: "text",
-        content: welcomeText,
-        order: 0,
-        typing_time: 2,
-        parent_node_id: null,
-        next_node_id: null,
-        is_draft: true
-      }], { session });
-
-      flow.start_node_id = startNode._id;
-      await flow.save({ session });
-
-      await session.commitTransaction();
-
-      res.status(201).json({ chatbot, flow, start_node: startNode });
-
-    } catch (error) {
+    // ─────────── VALIDACIONES ───────────
+    if (!req.user?.account_id) {
       await session.abortTransaction();
-      console.error("CREATE CHATBOT ERROR:", error);
-      res.status(500).json({ message: error.message });
-    } finally {
-      session.endSession();
+      return res.status(401).json({ message: "Usuario no autenticado" });
     }
-  };
+
+    if (!name || typeof name !== "string" || !name.trim()) {
+      await session.abortTransaction();
+      return res.status(400).json({ message: "Nombre inválido" });
+    }
+
+    if (name.length > 60) {
+      await session.abortTransaction();
+      return res.status(400).json({ message: "El nombre es demasiado largo" });
+    }
+
+    if (welcome_delay !== undefined && (welcome_delay < 0 || welcome_delay > 10)) {
+      await session.abortTransaction();
+      return res.status(400).json({ message: "welcome_delay inválido" });
+    }
+
+    // ─────────── CREAR CHATBOT ───────────
+    const welcomeText =
+      typeof welcome_message === "string" && welcome_message.trim()
+        ? welcome_message
+        : "Hola 👋 ¿en qué puedo ayudarte?";
+
+    const chatbot = new Chatbot({
+      account_id: req.user.account_id,
+      public_id: crypto.randomUUID(),
+      name: name.trim(),
+      welcome_message: welcomeText,
+      welcome_delay: welcome_delay ?? 2,
+      show_welcome_on_mobile: show_welcome_on_mobile ?? true,
+      status: "active",
+      is_enabled: true
+    });
+
+    await chatbot.save({ session });
+
+    // ─────────── CREAR FLOW INICIAL ───────────
+    const [flow] = await Flow.create([{
+      account_id: req.user.account_id,
+      chatbot_id: chatbot._id,
+      name: "Flujo principal",
+      status: "draft",
+      version: 1
+    }], { session });
+
+    // ─────────── CREAR NODO INICIAL ───────────
+    const [startNode] = await FlowNode.create([{
+      account_id: req.user.account_id,
+      flow_id: flow._id,
+      node_type: "text",
+      content: welcomeText,
+      order: 0,
+      typing_time: 2,
+      parent_node_id: null,
+      next_node_id: null,
+      is_draft: true
+    }], { session });
+
+    flow.start_node_id = startNode._id;
+    await flow.save({ session });
+
+    await session.commitTransaction();
+
+    res.status(201).json({ chatbot, flow, start_node: startNode });
+
+  } catch (error) {
+    await session.abortTransaction();
+    console.error("CREATE CHATBOT ERROR:", error);
+    res.status(500).json({ message: error.message });
+  } finally {
+    session.endSession();
+  }
+};
 
 // ═══════════════════════════════════════════════════════════
 // LISTAR CHATBOTS
