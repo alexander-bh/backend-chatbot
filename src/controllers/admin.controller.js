@@ -6,8 +6,7 @@ const Flow = require("../models/Flow");
 const FlowNode = require("../models/FlowNode");
 const AuditLog = require("../models/AuditLog");
 const auditService = require("../services/audit.service");
-const dayjs = require("dayjs");
-require("dayjs/locale/es");
+const formatDateAMPM = require("../utils/formatDate");
 
 
 /* ─────────────────────────────────────
@@ -49,9 +48,7 @@ exports.getAllUsers = async (req, res) => {
     const formattedUsers = users.map(user => ({
       ...user,
       created_at_raw: user.created_at,
-      created_at: dayjs(user.created_at)
-        .locale("es")
-        .format("DD/MM/YYYY HH:mm")
+      created_at: formatDateAMPM(user.created_at)
     }));
 
     res.json(formattedUsers);
@@ -223,19 +220,116 @@ exports.deleteAnyUser = async (req, res) => {
    ACCOUNTS
 ───────────────────────────────────── */
 exports.getAllAccounts = async (req, res) => {
-    try {
-        const accounts = await Account.find()
-            .sort({ created_at: -1 });
+  try {
+    const accounts = await Account.find()
+      .sort({ created_at: -1 });
 
-        res.json(accounts);
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
+    res.json(accounts);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 };
 
 /* ─────────────────────────────────────
    CHATBOTS
 ───────────────────────────────────── */
+exports.createChatbotForUser = async (req, res) => {
+  const session = await mongoose.startSession();
+
+  try {
+    session.startTransaction();
+
+    const {
+      user_id,
+      name,
+      welcome_message,
+      welcome_delay,
+      show_welcome_on_mobile
+    } = req.body;
+
+    // ───────── VALIDACIONES ─────────
+    if (!user_id) {
+      throw new Error("user_id es requerido");
+    }
+
+    const user = await User.findOne({
+      _id: user_id,
+      account_id: req.user.account_id
+    });
+
+    if (!user) {
+      throw new Error("Usuario no encontrado en esta cuenta");
+    }
+
+    if (!name || !name.trim()) {
+      throw new Error("Nombre inválido");
+    }
+
+    const welcomeText =
+      typeof welcome_message === "string" && welcome_message.trim()
+        ? welcome_message
+        : "Hola 👋 ¿en qué puedo ayudarte?";
+
+    // ───────── CREAR CHATBOT ─────────
+    const chatbot = new Chatbot({
+      account_id: req.user.account_id,
+      owner_user_id: user._id, // 👈 ASIGNACIÓN CLAVE
+      public_id: crypto.randomUUID(),
+      name: name.trim(),
+      welcome_message: welcomeText,
+      welcome_delay: welcome_delay ?? 2,
+      show_welcome_on_mobile: show_welcome_on_mobile ?? true,
+      status: "active",
+      is_enabled: true,
+      created_by_admin: req.user._id // opcional (auditoría)
+    });
+
+    await chatbot.save({ session });
+
+    // ───────── FLOW INICIAL ─────────
+    const [flow] = await Flow.create([{
+      account_id: req.user.account_id,
+      chatbot_id: chatbot._id,
+      name: "Flujo principal",
+      status: "draft",
+      version: 1
+    }], { session });
+
+    const [startNode] = await FlowNode.create([{
+      account_id: req.user.account_id,
+      flow_id: flow._id,
+      node_type: "text",
+      content: welcomeText,
+      order: 0,
+      typing_time: 2,
+      parent_node_id: null,
+      next_node_id: null,
+      is_draft: true
+    }], { session });
+
+    flow.start_node_id = startNode._id;
+    await flow.save({ session });
+
+    await session.commitTransaction();
+
+    res.status(201).json({
+      message: "Chatbot creado y asignado correctamente",
+      chatbot,
+      owner: {
+        id: user._id,
+        name: user.name,
+        email: user.email
+      }
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    res.status(400).json({ message: error.message });
+  } finally {
+    session.endSession();
+  }
+};
+
 exports.getAllChatbots = async (req, res) => {
   try {
     const chatbots = await Chatbot.find().sort({ created_at: -1 });
@@ -258,17 +352,17 @@ exports.getAllChatbots = async (req, res) => {
 };
 
 exports.getChatbotDetail = async (req, res) => {
-    try {
-        const chatbot = await Chatbot.findById(req.params.id);
-        if (!chatbot) {
-            return res.status(404).json({
-                message: "Chatbot no encontrado"
-            });
-        }
-        res.json(chatbot);
-    } catch (err) {
-        res.status(400).json({ message: err.message });
+  try {
+    const chatbot = await Chatbot.findById(req.params.id);
+    if (!chatbot) {
+      return res.status(404).json({
+        message: "Chatbot no encontrado"
+      });
     }
+    res.json(chatbot);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
 };
 
 exports.deleteAnyChatbot = async (req, res) => {
@@ -371,34 +465,34 @@ exports.updateAnyChatbot = async (req, res) => {
    FLOWS
 ───────────────────────────────────── */
 exports.getFlowsByChatbot = async (req, res) => {
-    try {
-        const flows = await Flow.find({
-            chatbot_id: req.params.chatbotId
-        });
+  try {
+    const flows = await Flow.find({
+      chatbot_id: req.params.chatbotId
+    });
 
-        res.json(flows);
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
+    res.json(flows);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 };
 
 exports.getFlowDetail = async (req, res) => {
-    try {
-        const flow = await Flow.findById(req.params.id);
-        if (!flow) {
-            return res.status(404).json({
-                message: "Flow no encontrado"
-            });
-        }
-
-        const nodes = await FlowNode.find({
-            flow_id: flow._id
-        });
-
-        res.json({ flow, nodes });
-    } catch (err) {
-        res.status(500).json({ message: err.message });
+  try {
+    const flow = await Flow.findById(req.params.id);
+    if (!flow) {
+      return res.status(404).json({
+        message: "Flow no encontrado"
+      });
     }
+
+    const nodes = await FlowNode.find({
+      flow_id: flow._id
+    });
+
+    res.json({ flow, nodes });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 };
 
 /* ─────────────────────────────────────
@@ -483,9 +577,7 @@ exports.getAuditLogs = async (req, res) => {
     const formattedLogs = logs.map(log => ({
       ...log,
       created_at_raw: log.created_at,
-      created_at: dayjs(log.created_at)
-        .locale("es")
-        .format("DD/MM/YYYY HH:mm:ss")
+      created_at: formatDateAMPM(log.created_at)
     }));
 
     res.json({
