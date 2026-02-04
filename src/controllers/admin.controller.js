@@ -6,6 +6,8 @@ const Flow = require("../models/Flow");
 const FlowNode = require("../models/FlowNode");
 const AuditLog = require("../models/AuditLog");
 const auditService = require("../services/audit.service");
+const dayjs = require("dayjs");
+require("dayjs/locale/es");
 
 
 /* ─────────────────────────────────────
@@ -37,12 +39,24 @@ exports.getDashboard = async (req, res) => {
 ───────────────────────────────────── */
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await User.find({ _id: { $ne: req.user.id } })
+    const users = await User.find({
+      _id: { $ne: req.user.id }
+    })
       .select("-password")
-      .sort({ created_at: -1 });
+      .sort({ created_at: -1 })
+      .lean();
 
-    res.json(users);
+    const formattedUsers = users.map(user => ({
+      ...user,
+      created_at_raw: user.created_at,
+      created_at: dayjs(user.created_at)
+        .locale("es")
+        .format("DD/MM/YYYY HH:mm")
+    }));
+
+    res.json(formattedUsers);
   } catch (err) {
+    console.error("GET ALL USERS ERROR:", err);
     res.status(500).json({ message: err.message });
   }
 };
@@ -242,7 +256,6 @@ exports.getAllChatbots = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-
 
 exports.getChatbotDetail = async (req, res) => {
     try {
@@ -455,27 +468,37 @@ exports.getAuditLogs = async (req, res) => {
       if (to) query.created_at.$lte = new Date(to);
     }
 
+    const safeLimit = Math.min(Number(limit), 100);
+    const skip = (Number(page) - 1) * safeLimit;
+
     const logs = await AuditLog.find(query)
       .populate("actor_id", "name email role")
       .sort({ created_at: -1 })
-      .skip((page - 1) * limit)
-      .limit(Math.min(Number(limit), 100));
+      .skip(skip)
+      .limit(safeLimit)
+      .lean();
 
     const total = await AuditLog.countDocuments(query);
 
+    const formattedLogs = logs.map(log => ({
+      ...log,
+      created_at_raw: log.created_at,
+      created_at: dayjs(log.created_at)
+        .locale("es")
+        .format("DD/MM/YYYY HH:mm:ss")
+    }));
+
     res.json({
-      data: logs,
+      data: formattedLogs,
       meta: {
         total,
         page: Number(page),
-        limit: Number(limit),
-        pages: Math.ceil(total / limit)
+        limit: safeLimit,
+        pages: Math.ceil(total / safeLimit)
       }
     });
   } catch (error) {
+    console.error("AUDIT LOG ERROR:", error);
     res.status(500).json({ message: error.message });
   }
 };
-
-
-
