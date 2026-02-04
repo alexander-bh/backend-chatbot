@@ -115,7 +115,6 @@ exports.listChatbots = async (req, res) => {
     })
       .select("public_id name status is_enabled avatar created_at")
       .sort({ created_at: -1 })
-      .lean();
 
     res.json(chatbots);
   } catch (error) {
