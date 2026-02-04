@@ -150,6 +150,32 @@ ChatbotSchema.pre("save", function () {
   // ✅ No se llama next() cuando usas timestamps en las opciones del Schema
 });
 
+ChatbotSchema.virtual("created_at_short").get(function () {
+  if (!this.created_at) return null;
+
+  const d = this.created_at;
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const year = d.getFullYear();
+
+  return `${day}/${month}/${year}`;
+});
+ChatbotSchema.set("toJSON", {
+  virtuals: true,
+  versionKey: false,
+  transform: function (doc, ret) {
+    delete ret.id; // 👈 elimina duplicado
+    return ret;
+  }
+});
+ChatbotSchema.set("toObject", {
+  virtuals: true,
+  transform: function (doc, ret) {
+    delete ret.id;
+    return ret;
+  }
+});
+
 ChatbotSchema.index({ account_id: 1, created_at: -1 });
 
 module.exports = models.Chatbot || model("Chatbot", ChatbotSchema);
