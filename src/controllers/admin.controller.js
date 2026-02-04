@@ -239,64 +239,57 @@ exports.createChatbotForUser = async (req, res) => {
   try {
     session.startTransaction();
 
-    const {
-      user_id,
-      name,
-      welcome_message,
-      welcome_delay,
-      show_welcome_on_mobile
-    } = req.body;
+    const { account_id, name } = req.body;
 
     // ───────── VALIDACIONES ─────────
-    if (!user_id) {
-      throw new Error("user_id es requerido");
+    if (!account_id) {
+      throw new Error("account_id es requerido");
     }
 
-    const user = await User.findOne({
-      _id: user_id,
-      account_id: req.user.account_id
+    if (!name || typeof name !== "string" || !name.trim()) {
+      throw new Error("Nombre del chatbot inválido");
+    }
+
+    // ───────── BUSCAR USUARIO CLIENT DE LA CUENTA ─────────
+    const ownerUser = await User.findOne({
+      account_id,
+      role: "CLIENT"
     });
 
-    if (!user) {
-      throw new Error("Usuario no encontrado en esta cuenta");
+    if (!ownerUser) {
+      throw new Error("No existe un usuario CLIENT para esta cuenta");
     }
 
-    if (!name || !name.trim()) {
-      throw new Error("Nombre inválido");
-    }
-
-    const welcomeText =
-      typeof welcome_message === "string" && welcome_message.trim()
-        ? welcome_message
-        : "Hola 👋 ¿en qué puedo ayudarte?";
+    const welcomeText = "Hola 👋 ¿en qué puedo ayudarte?";
 
     // ───────── CREAR CHATBOT ─────────
     const chatbot = new Chatbot({
-      account_id: req.user.account_id,
-      owner_user_id: user._id, // 👈 ASIGNACIÓN CLAVE
+      account_id,
+      owner_user_id: ownerUser._id, // 👈 ASIGNADO POR CUENTA
       public_id: crypto.randomUUID(),
       name: name.trim(),
       welcome_message: welcomeText,
-      welcome_delay: welcome_delay ?? 2,
-      show_welcome_on_mobile: show_welcome_on_mobile ?? true,
+      welcome_delay: 2,
+      show_welcome_on_mobile: true,
       status: "active",
       is_enabled: true,
-      created_by_admin: req.user._id // opcional (auditoría)
+      created_by_admin: req.user._id
     });
 
     await chatbot.save({ session });
 
     // ───────── FLOW INICIAL ─────────
     const [flow] = await Flow.create([{
-      account_id: req.user.account_id,
+      account_id,
       chatbot_id: chatbot._id,
       name: "Flujo principal",
       status: "draft",
       version: 1
     }], { session });
 
+    // ───────── NODO INICIAL ─────────
     const [startNode] = await FlowNode.create([{
-      account_id: req.user.account_id,
+      account_id,
       flow_id: flow._id,
       node_type: "text",
       content: welcomeText,
@@ -316,9 +309,9 @@ exports.createChatbotForUser = async (req, res) => {
       message: "Chatbot creado y asignado correctamente",
       chatbot,
       owner: {
-        id: user._id,
-        name: user.name,
-        email: user.email
+        id: ownerUser._id,
+        name: ownerUser.name,
+        email: ownerUser.email
       }
     });
 
