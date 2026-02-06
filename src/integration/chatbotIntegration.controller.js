@@ -7,7 +7,6 @@ const findChatbotByPublicId = require("../services/findChatbotByPublicId.service
 const { signDomain } = require("../utils/domainSignature");
 const { isLocalhost } = require("../utils/domainValidation");
 const { domainMatches } = require("../utils/domainMatch");
-
 /**
  * Normaliza dominios / origins
  */
