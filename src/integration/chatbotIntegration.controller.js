@@ -54,11 +54,10 @@ exports.getInstallScript = async (req, res) => {
     }
 
     const domain = normalizeDomain(chatbot.allowed_domains[0]);
-
-    const baseUrl =
-      process.env.NODE_ENV === "development"
-        ? "http://localhost:3000"
-        : "https://backend-chatbot-omega.vercel.app";
+    const baseUrl = process.env.APP_BASE_URL;
+    //process.env.NODE_ENV === "development"
+    //  ? "http://localhost:3000"
+    //  : "https://backend-chatbot-omega.vercel.app";
 
     const timeWindow = Math.floor(Date.now() / 60000);
     const signature = signDomain(
@@ -157,10 +156,10 @@ exports.integrationScript = async (req, res) => {
       return res.status(403).send("// Firma inválida");
     }
 
-    const baseUrl =
-      process.env.NODE_ENV === "development"
-        ? "http://localhost:3000"
-        : "https://backend-chatbot-omega.vercel.app";
+    const baseUrl = process.env.APP_BASE_URL;
+    // process.env.NODE_ENV === "development"
+    //   ? "http://localhost:3000"
+    //   : "https://backend-chatbot-omega.vercel.app";
 
     res.setHeader("Content-Type", "application/javascript");
     res.send(`
@@ -184,7 +183,6 @@ exports.integrationScript = async (req, res) => {
     res.status(500).send("// Error interno");
   }
 };
-
 
 // ═══════════════════════════════════════════════════════════
 // MEJORADO: RENDER EMBED CON VALIDACIÓN DE DOMINIO
@@ -220,10 +218,10 @@ exports.renderEmbed = async (req, res) => {
       welcome_delay: welcomeDelay = 1
     } = chatbot;
 
-    const BASE_URL =
-      process.env.NODE_ENV === "development"
-        ? "http://localhost:3000"
-        : "https://backend-chatbot-omega.vercel.app";
+    const BASE_URL= process.env.APP_BASE_URL;
+    //  process.env.NODE_ENV === "development"
+    //    ? "http://localhost:3000"
+    //    : "https://backend-chatbot-omega.vercel.app";
 
     res.send(`<!DOCTYPE html>
 <html lang="es">
@@ -503,6 +501,5 @@ exports.removeAllowedDomain = async (req, res) => {
     });
   }
 };
-
 
 module.exports = exports;
