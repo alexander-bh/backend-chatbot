@@ -228,7 +228,11 @@ exports.renderEmbed = async (req, res) => {
 
 <style>
 body { margin:0;font-family:system-ui;background:#f9fafb; }
-.chat { display:flex;flex-direction:column;height:100vh; }
+.chat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
 .chat-header { background:${primaryColor};color:white;padding:12px 16px; }
 .chat-header-left { display:flex;align-items:center;gap:10px; }
 .chat-avatar { width:32px;height:32px;border-radius:50%;object-fit:cover; }
@@ -330,7 +334,7 @@ button { background:${primaryColor};color:white;border:none;padding:0 20px;curso
       <button id="sendBtn">Enviar</button>
     </footer>
   </div>
-</div
+</div>
 
 <script>
 const API_BASE = "${BASE_URL}";
@@ -400,7 +404,7 @@ function toggleInput(enabled) {
 /* ---------- CHAT ENGINE ---------- */
 async function startConversation() {
   const res = await fetch(
-    \`\${API_BASE}/api/public-chatbot/chatbot-conversation/\${PUBLIC_ID}/start\`,
+    \`${API_BASE}/api/public-chatbot/chatbot-conversation/${PUBLIC_ID}/start\`,
     { method: "POST" }
   );
 
@@ -444,7 +448,7 @@ async function sendToEngine(value) {
   showTyping();
 
   const res = await fetch(\`
-    \`\${API_BASE}/api/public-chatbot/chatbot-conversation/\${SESSION_ID}/next\`,
+    \`${API_BASE}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next\`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
