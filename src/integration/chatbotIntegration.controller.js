@@ -210,12 +210,13 @@ exports.renderEmbed = async (req, res) => {
     const {
       name: chatbotName,
       avatar = "",
-      primary_color: primaryColor = "#2563eb",
-      welcome_delay: welcomeDelay = 1
+      primary_color = "#2563eb",
+      welcome_delay = 1
     } = chatbot;
 
     const BASE_URL =
-      process.env.APP_BASE_URL || "https://backend-chatbot-omega.vercel.app";
+      process.env.APP_BASE_URL ||
+      "https://backend-chatbot-omega.vercel.app";
 
     res.setHeader("Content-Type", "text/html");
 
@@ -228,25 +229,24 @@ exports.renderEmbed = async (req, res) => {
 
 <style>
 body { margin:0;font-family:system-ui;background:#f9fafb; }
-.chat {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-.chat-header { background:${primaryColor};color:white;padding:12px 16px; }
+
+.chat { display:flex;flex-direction:column;height:100%; }
+.chat-header { background:${primary_color};color:#fff;padding:12px 16px; }
 .chat-header-left { display:flex;align-items:center;gap:10px; }
 .chat-avatar { width:32px;height:32px;border-radius:50%;object-fit:cover; }
+
 main { flex:1;padding:16px;overflow-y:auto; }
+
 footer { display:flex;border-top:1px solid #e5e7eb; }
 input { flex:1;padding:14px;border:none;outline:none; }
-button { background:${primaryColor};color:white;border:none;padding:0 20px;cursor:pointer; }
+button { background:${primary_color};color:white;border:none;padding:0 20px;cursor:pointer; }
 
 .msg { display:flex;gap:8px;margin-bottom:12px; }
 .msg.bot { align-items:flex-start; }
 .msg.user { justify-content:flex-end; }
 .msg-avatar { width:28px;height:28px;border-radius:50%;object-fit:cover; }
 .bubble { padding:10px 14px;border-radius:12px;max-width:75%;background:#e5e7eb; }
-.msg.user .bubble { background:${primaryColor};color:white; }
+.msg.user .bubble { background:${primary_color};color:white; }
 
 .options { display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px; }
 .options button {
@@ -256,62 +256,58 @@ button { background:${primaryColor};color:white;border:none;padding:0 20px;curso
   background:white;
   cursor:pointer;
 }
-/* ---------- WIDGET ---------- */
+
+/* WIDGET */
 .chat-widget {
-  position: fixed;
-  bottom: 90px;
-  right: 20px;
-  width: 360px;
-  height: 520px;
-  background: white;
-  border-radius: 14px;
-  box-shadow: 0 20px 40px rgba(0,0,0,.15);
-  overflow: hidden;
-  display: none;
-  flex-direction: column;
-  z-index: 9999;
+  position:fixed;
+  bottom:90px;
+  right:20px;
+  width:360px;
+  height:520px;
+  background:white;
+  border-radius:14px;
+  box-shadow:0 20px 40px rgba(0,0,0,.15);
+  overflow:hidden;
+  display:none;
+  flex-direction:column;
+  z-index:9999;
 }
+.chat-widget.open { display:flex; }
 
-.chat-widget.open {
-  display: flex;
-}
-
-/* ---------- BOTÓN FLOTANTE ---------- */
+/* BOTÓN */
 .chat-fab {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: ${primaryColor};
-  color: white;
-  border: none;
-  cursor: pointer;
-  box-shadow: 0 10px 20px rgba(0,0,0,.25);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10000;
+  position:fixed;
+  bottom:20px;
+  right:20px;
+  width:56px;
+  height:56px;
+  border-radius:50%;
+  background:${primary_color};
+  color:white;
+  border:none;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  box-shadow:0 10px 20px rgba(0,0,0,.25);
+  z-index:10000;
 }
-.chat-fab svg {
-  width: 26px;
-  height: 26px;
-  fill: white;
-}
-/* ---------- RESPONSIVE ---------- */
-@media (max-width: 480px) {
+.chat-fab svg { width:26px;height:26px;fill:white; }
+
+@media (max-width:480px) {
   .chat-widget {
-    width: 100%;
-    height: 100%;
-    right: 0;
-    bottom: 0;
-    border-radius: 0;
+    width:100%;
+    height:100%;
+    right:0;
+    bottom:0;
+    border-radius:0;
   }
 }
 </style>
 </head>
+
 <body>
+
 <button class="chat-fab" id="chatToggle">
   <svg viewBox="0 0 24 24">
     <path d="M2 3h20v14H6l-4 4V3z"/>
@@ -339,7 +335,8 @@ button { background:${primaryColor};color:white;border:none;padding:0 20px;curso
 <script>
 const API_BASE = "${BASE_URL}";
 const PUBLIC_ID = "${public_id}";
-const WELCOME_DELAY = ${welcomeDelay};
+const AVATAR = "${avatar}";
+const WELCOME_DELAY = ${welcome_delay};
 
 let SESSION_ID = null;
 let typingEl = null;
@@ -351,24 +348,23 @@ const sendBtn = document.getElementById("sendBtn");
 const chatWidget = document.getElementById("chatWidget");
 const chatToggle = document.getElementById("chatToggle");
 
-/* ---------- TOGGLE CHAT ---------- */
+/* TOGGLE */
 chatToggle.onclick = () => {
   chatWidget.classList.toggle("open");
-
   if (!started) {
     started = true;
     startConversation();
   }
 };
 
-/* ---------- UI ---------- */
+/* UI */
 function addMessage({ from, text }) {
   const msg = document.createElement("div");
-  msg.className = \`msg ${from}\`;
+  msg.className = \`msg \${from}\`;
 
   msg.innerHTML = \`
-    ${from === "bot" && "${avatar}" ? '<img src="${avatar}" class="msg-avatar" />' : ""}
-    <div class="bubble">${text}</div>
+    \${from === "bot" && AVATAR ? \`<img src="\${AVATAR}" class="msg-avatar" />\` : ""}
+    <div class="bubble">\${text}</div>
   \`;
 
   messages.appendChild(msg);
@@ -383,7 +379,7 @@ function showTyping() {
   typingEl = document.createElement("div");
   typingEl.className = "msg bot";
   typingEl.innerHTML = \`
-    ${avatar ? `<img src="${avatar}" class="msg-avatar" />` : ""}
+    \${AVATAR ? \`<img src="\${AVATAR}" class="msg-avatar" />\` : ""}
     <div class="bubble">Escribiendo…</div>
   \`;
   messages.appendChild(typingEl);
@@ -401,13 +397,12 @@ function toggleInput(enabled) {
   sendBtn.disabled = !enabled;
 }
 
-/* ---------- CHAT ENGINE ---------- */
+/* ENGINE */
 async function startConversation() {
   const res = await fetch(
-    \`${API_BASE}/api/public-chatbot/chatbot-conversation/${PUBLIC_ID}/start\`,
+    \`\${API_BASE}/api/public-chatbot/chatbot-conversation/\${PUBLIC_ID}/start\`,
     { method: "POST" }
   );
-
   const data = await res.json();
   SESSION_ID = data.session_id;
   renderNode(data);
@@ -448,7 +443,80 @@ async function sendToEngine(value) {
   showTyping();
 
   const res = await fetch(
-    \`${API_BASE}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next\`,
+    \`\${API_BASE}/api/public-chatbot/chatbot-conversation/\${SESSION_ID}/next\`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ input: value })
+    }
+  );
+
+  const data = await res.json();
+  hideTyping();
+
+  if (data.completed) {
+    addBotMessage("Conversación finalizada 👋");
+    toggleInput(false);
+    return;
+  }
+
+  renderNode(data);
+}
+
+/* SEND */
+sendBtn.onclick = () => {
+  const text = messageInput.value.trim();
+  if (!text || !SESSION_ID) return;
+  addUserMessage(text);
+  messageInput.value = "";
+  sendToEngine(text);
+};
+</script>
+</body>
+</html>`);
+  } catch (err) {
+    console.error("RENDER EMBED ERROR:", err);
+    res.status(500).send("Error al cargar el chatbot");
+  }
+};
+
+
+function renderNode(node) {
+  const delay = (node.typing_time ?? WELCOME_DELAY) * 1000;
+  showTyping();
+
+  setTimeout(() => {
+    hideTyping();
+    if (node.content) addBotMessage(node.content);
+    if (node.options?.length) renderOptions(node.options);
+    toggleInput(node.expects_input !== false);
+  }, delay);
+}
+
+function renderOptions(options) {
+  const container = document.createElement("div");
+  container.className = "options";
+
+  options.forEach(opt => {
+    const btn = document.createElement("button");
+    btn.textContent = opt.label;
+    btn.onclick = () => {
+      addUserMessage(opt.label);
+      container.remove();
+      sendToEngine(opt.value);
+    };
+    container.appendChild(btn);
+  });
+
+  messages.appendChild(container);
+  messages.scrollTop = messages.scrollHeight;
+}
+
+async function sendToEngine(value) {
+  showTyping();
+
+  const res = await fetch(
+    `${API_BASE}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
