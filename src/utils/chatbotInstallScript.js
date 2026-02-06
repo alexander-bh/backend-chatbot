@@ -5,7 +5,7 @@ module.exports = function getChatbotInstallScript({ domain, publicId, installTok
   const baseUrl =
     process.env.NODE_ENV === "development"
       ? "http://localhost:3000"
-      : "https://app.tudominio.com";
+      : "https://backend-chatbot-omega.vercel.app";
 
   return `<!-- Chatbot Script - ${normalizedDomain} -->
 <script>
