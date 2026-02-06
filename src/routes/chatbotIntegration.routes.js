@@ -28,10 +28,6 @@ router.get("/chatbot/:public_id.js", chatbotScriptLimiter, ctrl.integrationScrip
 );
 // Iframe embed
 router.get("/embed/:public_id", ctrl.renderEmbed);
-// Firma de dominio (auxiliar)
-router.get("/domain/sign", ctrl.generateDomainSignature);
-// verificacion de dominio
-router.get("/verify-domain", ctrl.verifyDomain);
 
 /* ────────────────────────────────────────────── */
 /* PRIVATE ROUTES (DASHBOARD) */
