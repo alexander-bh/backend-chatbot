@@ -217,6 +217,8 @@ exports.renderEmbed = async (req, res) => {
     const BASE_URL =
       process.env.APP_BASE_URL || "https://backend-chatbot-omega.vercel.app";
 
+    res.setHeader("Content-Type", "text/html");
+
     res.send(`<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -229,7 +231,7 @@ body { margin:0;font-family:system-ui;background:#f9fafb; }
 .chat { display:flex;flex-direction:column;height:100vh; }
 .chat-header { background:${primaryColor};color:white;padding:12px 16px; }
 .chat-header-left { display:flex;align-items:center;gap:10px; }
-.chat-avatar { width:32px;height:32px;border-radius:50%;background:white;object-fit:cover; }
+.chat-avatar { width:32px;height:32px;border-radius:50%;object-fit:cover; }
 main { flex:1;padding:16px;overflow-y:auto; }
 footer { display:flex;border-top:1px solid #e5e7eb; }
 input { flex:1;padding:14px;border:none;outline:none; }
@@ -238,9 +240,18 @@ button { background:${primaryColor};color:white;border:none;padding:0 20px;curso
 .msg { display:flex;gap:8px;margin-bottom:12px; }
 .msg.bot { align-items:flex-start; }
 .msg.user { justify-content:flex-end; }
-.msg-avatar { width:28px;height:28px;border-radius:50%; }
+.msg-avatar { width:28px;height:28px;border-radius:50%;object-fit:cover; }
 .bubble { padding:10px 14px;border-radius:12px;max-width:75%;background:#e5e7eb; }
 .msg.user .bubble { background:${primaryColor};color:white; }
+
+.options { display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px; }
+.options button {
+  padding:8px 12px;
+  border-radius:8px;
+  border:1px solid #e5e7eb;
+  background:white;
+  cursor:pointer;
+}
 </style>
 </head>
 
@@ -249,7 +260,7 @@ button { background:${primaryColor};color:white;border:none;padding:0 20px;curso
   <header class="chat-header">
     <div class="chat-header-left">
       ${avatar ? `<img src="${avatar}" class="chat-avatar" />` : ""}
-      <span>${chatbotName}</span>
+      <strong>${chatbotName}</strong>
     </div>
   </header>
 
@@ -257,7 +268,7 @@ button { background:${primaryColor};color:white;border:none;padding:0 20px;curso
 
   <footer>
     <input id="messageInput" placeholder="Escribe tu mensaje…" />
-    <button onclick="sendMessage()">Enviar</button>
+    <button id="sendBtn">Enviar</button>
   </footer>
 </div>
 
@@ -269,8 +280,11 @@ const WELCOME_DELAY = ${welcomeDelay};
 let SESSION_ID = null;
 let typingEl = null;
 
+const messages = document.getElementById("messages");
+const messageInput = document.getElementById("messageInput");
+const sendBtn = document.getElementById("sendBtn");
+
 function addMessage({ from, text }) {
-  const container = document.getElementById("messages");
   const msg = document.createElement("div");
   msg.className = \`msg \${from}\`;
 
@@ -279,64 +293,124 @@ function addMessage({ from, text }) {
     <div class="bubble">\${text}</div>
   \`;
 
-  container.appendChild(msg);
-  container.scrollTop = container.scrollHeight;
+  messages.appendChild(msg);
+  messages.scrollTop = messages.scrollHeight;
+}
+
+function addBotMessage(text) {
+  addMessage({ from: "bot", text });
+}
+
+function addUserMessage(text) {
+  addMessage({ from: "user", text });
 }
 
 function showTyping() {
-  const container = document.getElementById("messages");
+  if (typingEl) return;
+
   typingEl = document.createElement("div");
   typingEl.className = "msg bot";
   typingEl.innerHTML = \`
     ${avatar ? `<img src="${avatar}" class="msg-avatar" />` : ""}
     <div class="bubble">Escribiendo…</div>
   \`;
-  container.appendChild(typingEl);
-  container.scrollTop = container.scrollHeight;
+
+  messages.appendChild(typingEl);
+  messages.scrollTop = messages.scrollHeight;
 }
 
 function hideTyping() {
-  if (typingEl) typingEl.remove();
+  if (typingEl) {
+    typingEl.remove();
+    typingEl = null;
+  }
+}
+
+function toggleInput(enabled) {
+  messageInput.disabled = !enabled;
+  sendBtn.disabled = !enabled;
 }
 
 async function startConversation() {
-  const res = await fetch(\`\${API_BASE}/api/public-chatbot/chatbot-conversation/\${PUBLIC_ID}/start\`, {
-    method: "POST"
-  });
+  const res = await fetch(
+    \`\${API_BASE}/api/public-chatbot/chatbot-conversation/\${PUBLIC_ID}/start\`,
+    { method: "POST" }
+  );
+
   const data = await res.json();
   SESSION_ID = data.session_id;
 
-  if (data.message) {
-    showTyping();
-    setTimeout(() => {
-      hideTyping();
-      addMessage({ from: "bot", text: data.message });
-    }, WELCOME_DELAY * 1000);
-  }
+  renderNode(data);
 }
 
-async function sendMessage() {
-  const input = document.getElementById("messageInput");
-  const value = input.value.trim();
-  if (!value) return;
+function renderNode(node) {
+  const delay = (node.typing_time ?? WELCOME_DELAY) * 1000;
 
-  input.value = "";
-  addMessage({ from: "user", text: value });
   showTyping();
 
-  const res = await fetch(\`\${API_BASE}/api/public-chatbot/chatbot-conversation/\${SESSION_ID}/next\`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ input: value })
+  setTimeout(() => {
+    hideTyping();
+
+    if (node.content) addBotMessage(node.content);
+
+    if (node.options?.length) renderOptions(node.options);
+
+    toggleInput(node.expects_input !== false);
+  }, delay);
+}
+
+function renderOptions(options) {
+  const container = document.createElement("div");
+  container.className = "options";
+
+  options.forEach(opt => {
+    const btn = document.createElement("button");
+    btn.textContent = opt.label;
+    btn.onclick = () => {
+      addUserMessage(opt.label);
+      container.remove();
+      sendToEngine(opt.value);
+    };
+    container.appendChild(btn);
   });
 
+  messages.appendChild(container);
+  messages.scrollTop = messages.scrollHeight;
+}
+
+async function sendToEngine(value) {
+  showTyping();
+
+  const res = await fetch(
+    \`\${API_BASE}/api/public-chatbot/chatbot-conversation/\${SESSION_ID}/next\`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ input: value })
+    }
+  );
+
   const data = await res.json();
+
   hideTyping();
 
-  if (data.reply) {
-    addMessage({ from: "bot", text: data.reply });
+  if (data.completed) {
+    addBotMessage("Conversación finalizada 👋");
+    toggleInput(false);
+    return;
   }
+
+  renderNode(data);
 }
+
+sendBtn.onclick = () => {
+  const text = messageInput.value.trim();
+  if (!text || !SESSION_ID) return;
+
+  addUserMessage(text);
+  messageInput.value = "";
+  sendToEngine(text);
+};
 
 startConversation();
 </script>
@@ -347,7 +421,6 @@ startConversation();
     res.status(500).send("Error al cargar el chatbot");
   }
 };
-
 
 // ═══════════════════════════════════════════════════════════
 // ENVIAR CÓDIGO DE INSTALACIÓN POR EMAIL
