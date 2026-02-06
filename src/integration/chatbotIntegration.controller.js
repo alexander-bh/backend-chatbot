@@ -105,7 +105,14 @@ exports.integrationScript = async (req, res) => {
     const domain = normalizeDomain(d);
     const timeWindow = parseInt(w, 10);
 
-    if (Math.abs(Math.floor(Date.now() / 60000) - timeWindow) > 1) {
+    if (Number.isNaN(timeWindow)) {
+      return res.status(400).send("// Timestamp inválido");
+    }
+
+    const now = Math.floor(Date.now() / 60000);
+    const WINDOW = process.env.NODE_ENV === "development" ? 5 : 2;
+
+    if (Math.abs(now - timeWindow) > WINDOW) {
       return res.status(403).send("// Firma expirada");
     }
 
@@ -129,14 +136,24 @@ exports.integrationScript = async (req, res) => {
       return res.status(403).send("// Dominio no autorizado");
     }
 
-    const expectedSignature = signDomain(
-      domain,
-      chatbot.public_id,
-      chatbot.install_token,
-      timeWindow
-    );
+    // 🔐 Validación de firma con ventana deslizante
+    let valid = false;
 
-    if (expectedSignature !== s) {
+    for (let offset = -WINDOW; offset <= WINDOW; offset++) {
+      const expected = signDomain(
+        domain,
+        chatbot.public_id,
+        chatbot.install_token,
+        timeWindow + offset
+      );
+
+      if (expected === s) {
+        valid = true;
+        break;
+      }
+    }
+
+    if (!valid) {
       return res.status(403).send("// Firma inválida");
     }
 
@@ -167,6 +184,7 @@ exports.integrationScript = async (req, res) => {
     res.status(500).send("// Error interno");
   }
 };
+
 
 // ═══════════════════════════════════════════════════════════
 // MEJORADO: RENDER EMBED CON VALIDACIÓN DE DOMINIO
