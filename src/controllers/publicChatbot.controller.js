@@ -1,3 +1,4 @@
+//controllers/publicChatbot.controller
 const mongoose = require("mongoose");
 const ConversationSession = require("../models/ConversationSession");
 const Flow = require("../models/Flow");
@@ -76,6 +77,36 @@ exports.startConversation = async (req, res) => {
     console.error("public startConversation error:", error);
     return res.status(500).json({
       message: "Error al iniciar conversación"
+    });
+  }
+};
+
+exports.nextPublicStep = async (req, res) => {
+  try {
+    const { session_id } = req.params;
+    const { input } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(session_id)) {
+      return res.status(400).json({ message: "session_id inválido" });
+    }
+
+    const session = await ConversationSession.findById(session_id);
+    if (!session || session.is_completed) {
+      return res.json({ completed: true });
+    }
+
+    // 👉 reutilizamos EXACTAMENTE la lógica del engine
+    req.params.id = session_id;
+    req.body.input = input;
+
+    // delega al engine privado
+    const engine = require("./conversationsession.controller");
+    return engine.nextStep(req, res);
+
+  } catch (err) {
+    console.error("nextPublicStep:", err);
+    return res.status(500).json({
+      message: "Error en conversación pública"
     });
   }
 };

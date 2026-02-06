@@ -31,11 +31,7 @@ app.use("/api/flownodes", require("./routes/flow.nodes.routes.js"));
 
 app.use("/api/crm-fields", require("./routes/crmfields.routes"));
 app.use("/api/meta", require("./routes/meta.routes.js"));
-
-app.use(
-  "/api/conversations",
-  require("./routes/conversationSession.routes.js")
-);
+app.use("/api/conversations",require("./routes/conversationSession.routes.js"));
 
 // ───────── ERROR HANDLERS (AL FINAL SIEMPRE) ─────────
 app.use(require("./middlewares/multerError.middleware.js"));
