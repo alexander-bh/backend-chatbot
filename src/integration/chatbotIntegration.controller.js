@@ -447,7 +447,7 @@ function renderOptions(options) {
 async function sendToEngine(value) {
   showTyping();
 
-  const res = await fetch(\`
+  const res = await fetch(
     \`${API_BASE}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next\`,
     {
       method: "POST",
