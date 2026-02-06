@@ -32,8 +32,20 @@ exports.getInstallScript = async (req, res) => {
       req.user.account_id
     );
 
+    console.log("🔍 Chatbot encontrado:", {
+      public_id: chatbot?.public_id,
+      has_install_token: !!chatbot?.install_token,
+      install_token_value: chatbot?.install_token
+    });
+
     if (!chatbot) {
       return res.status(404).json({ message: "Chatbot no encontrado" });
+    }
+
+    // ✅ Genera install_token si no existe (backward compatibility)
+    if (!chatbot.install_token) {
+      chatbot.install_token = crypto.randomBytes(24).toString("hex");
+      await chatbot.save();
     }
 
     if (!chatbot.allowed_domains?.length) {
@@ -162,7 +174,7 @@ exports.integrationScript = async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 exports.renderEmbed = async (req, res) => {
   try {
-   const { public_id } = req.params;
+    const { public_id } = req.params;
     const domain = normalizeDomain(req.query.d || "");
 
     const chatbot = await Chatbot.findOne({
