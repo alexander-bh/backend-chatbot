@@ -1,27 +1,38 @@
 // utils/chatbotInstallScript.js
-module.exports = function getChatbotInstallScript({ domain, publicId, installToken }) {
-  const normalizedDomain = domain.replace(/^www\./, "").toLowerCase();
+module.exports = function getChatbotInstallScript({
+  domain,
+  publicId,
+  installToken
+}) {
+  const normalizedDomain = domain
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/\/$/, "")
+    .toLowerCase();
 
   const baseUrl =
     process.env.NODE_ENV === "development"
       ? "http://localhost:3000"
       : "https://backend-chatbot-omega.vercel.app";
 
-  return `<!-- Chatbot Script - ${normalizedDomain} -->
+  return `
 <script>
-(function(w, d) {
-  // Prevenir instalación duplicada
-  if (w.__CHATBOT_INSTALLED__) return;
-  w.__CHATBOT_INSTALLED__ = true;
-  // Generar timestamp actual (ventana de 1 minuto)
-  var timeWindow = Math.floor(Date.now() / 60000);  
-  var script = d.createElement("script");
-  script.src = "${baseUrl}/api/chatbot-integration/chatbot/${publicId}.js?d=${normalizedDomain}&t=${installToken}&w=" + timeWindow;
+(function () {
+  if (window.__CHATBOT_${publicId}__) return;
+  window.__CHATBOT_${publicId}__ = true;
+
+  var script = document.createElement("script");
+  script.src = "${baseUrl}/api/chatbot-integration/chatbot/${publicId}.js";
   script.async = true;
-  script.onerror = function() {
+  script.defer = true;
+  script.setAttribute("data-domain", "${normalizedDomain}");
+  script.setAttribute("data-token", "${installToken}");
+
+  script.onerror = function () {
     console.warn("[Chatbot] Error al cargar el script");
   };
-  d.head.appendChild(script);
-})(window, document);
+
+  document.head.appendChild(script);
+})();
 </script>`;
 };

@@ -19,7 +19,6 @@ module.exports = async function sendChatbotInstallEmail({
     <pre style="background:#111;color:#0f0;padding:12px;border-radius:6px;">
 ${script.replace(/</g, "&lt;").replace(/>/g, "&gt;")}
     </pre>
-
     <p>
       Este código debe insertarse en todas las páginas donde deseas que
       se muestre el chatbot.
