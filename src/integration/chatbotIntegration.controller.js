@@ -252,25 +252,85 @@ button { background:${primaryColor};color:white;border:none;padding:0 20px;curso
   background:white;
   cursor:pointer;
 }
+/* ---------- WIDGET ---------- */
+.chat-widget {
+  position: fixed;
+  bottom: 90px;
+  right: 20px;
+  width: 360px;
+  height: 520px;
+  background: white;
+  border-radius: 14px;
+  box-shadow: 0 20px 40px rgba(0,0,0,.15);
+  overflow: hidden;
+  display: none;
+  flex-direction: column;
+  z-index: 9999;
+}
+
+.chat-widget.open {
+  display: flex;
+}
+
+/* ---------- BOTÓN FLOTANTE ---------- */
+.chat-fab {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: ${primaryColor};
+  color: white;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 10px 20px rgba(0,0,0,.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+.chat-fab svg {
+  width: 26px;
+  height: 26px;
+  fill: white;
+}
+/* ---------- RESPONSIVE ---------- */
+@media (max-width: 480px) {
+  .chat-widget {
+    width: 100%;
+    height: 100%;
+    right: 0;
+    bottom: 0;
+    border-radius: 0;
+  }
+}
 </style>
 </head>
-
 <body>
-<div class="chat">
-  <header class="chat-header">
-    <div class="chat-header-left">
-      ${avatar ? `<img src="${avatar}" class="chat-avatar" />` : ""}
-      <strong>${chatbotName}</strong>
-    </div>
-  </header>
+<button class="chat-fab" id="chatToggle">
+  <svg viewBox="0 0 24 24">
+    <path d="M2 3h20v14H6l-4 4V3z"/>
+  </svg>
+</button>
 
-  <main id="messages"></main>
+<div class="chat-widget" id="chatWidget">
+  <div class="chat">
+    <header class="chat-header">
+      <div class="chat-header-left">
+        ${avatar ? `<img src="${avatar}" class="chat-avatar" />` : ""}
+        <strong>${chatbotName}</strong>
+      </div>
+    </header>
 
-  <footer>
-    <input id="messageInput" placeholder="Escribe tu mensaje…" />
-    <button id="sendBtn">Enviar</button>
-  </footer>
-</div>
+    <main id="messages"></main>
+
+    <footer>
+      <input id="messageInput" placeholder="Escribe tu mensaje…" />
+      <button id="sendBtn">Enviar</button>
+    </footer>
+  </div>
+</div
 
 <script>
 const API_BASE = "${BASE_URL}";
@@ -279,51 +339,57 @@ const WELCOME_DELAY = ${welcomeDelay};
 
 let SESSION_ID = null;
 let typingEl = null;
+let started = false;
 
 const messages = document.getElementById("messages");
 const messageInput = document.getElementById("messageInput");
 const sendBtn = document.getElementById("sendBtn");
+const chatWidget = document.getElementById("chatWidget");
+const chatToggle = document.getElementById("chatToggle");
 
+/* ---------- TOGGLE CHAT ---------- */
+chatToggle.onclick = () => {
+  chatWidget.classList.toggle("open");
+
+  if (!started) {
+    started = true;
+    startConversation();
+  }
+};
+
+/* ---------- UI ---------- */
 function addMessage({ from, text }) {
   const msg = document.createElement("div");
-  msg.className = \`msg \${from}\`;
+  msg.className = \`msg ${from}\`;
 
   msg.innerHTML = \`
-    \${from === "bot" && "${avatar}" ? '<img src="${avatar}" class="msg-avatar" />' : ""}
-    <div class="bubble">\${text}</div>
+    ${from === "bot" && "${avatar}" ? '<img src="${avatar}" class="msg-avatar" />' : ""}
+    <div class="bubble">${text}</div>
   \`;
 
   messages.appendChild(msg);
   messages.scrollTop = messages.scrollHeight;
 }
 
-function addBotMessage(text) {
-  addMessage({ from: "bot", text });
-}
-
-function addUserMessage(text) {
-  addMessage({ from: "user", text });
-}
+const addBotMessage = text => addMessage({ from: "bot", text });
+const addUserMessage = text => addMessage({ from: "user", text });
 
 function showTyping() {
   if (typingEl) return;
-
   typingEl = document.createElement("div");
   typingEl.className = "msg bot";
   typingEl.innerHTML = \`
     ${avatar ? `<img src="${avatar}" class="msg-avatar" />` : ""}
     <div class="bubble">Escribiendo…</div>
   \`;
-
   messages.appendChild(typingEl);
   messages.scrollTop = messages.scrollHeight;
 }
 
 function hideTyping() {
-  if (typingEl) {
-    typingEl.remove();
-    typingEl = null;
-  }
+  if (!typingEl) return;
+  typingEl.remove();
+  typingEl = null;
 }
 
 function toggleInput(enabled) {
@@ -331,6 +397,7 @@ function toggleInput(enabled) {
   sendBtn.disabled = !enabled;
 }
 
+/* ---------- CHAT ENGINE ---------- */
 async function startConversation() {
   const res = await fetch(
     \`\${API_BASE}/api/public-chatbot/chatbot-conversation/\${PUBLIC_ID}/start\`,
@@ -339,22 +406,17 @@ async function startConversation() {
 
   const data = await res.json();
   SESSION_ID = data.session_id;
-
   renderNode(data);
 }
 
 function renderNode(node) {
   const delay = (node.typing_time ?? WELCOME_DELAY) * 1000;
-
   showTyping();
 
   setTimeout(() => {
     hideTyping();
-
     if (node.content) addBotMessage(node.content);
-
     if (node.options?.length) renderOptions(node.options);
-
     toggleInput(node.expects_input !== false);
   }, delay);
 }
@@ -381,7 +443,7 @@ function renderOptions(options) {
 async function sendToEngine(value) {
   showTyping();
 
-  const res = await fetch(
+  const res = await fetch(\`
     \`\${API_BASE}/api/public-chatbot/chatbot-conversation/\${SESSION_ID}/next\`,
     {
       method: "POST",
@@ -391,7 +453,6 @@ async function sendToEngine(value) {
   );
 
   const data = await res.json();
-
   hideTyping();
 
   if (data.completed) {
@@ -403,16 +464,14 @@ async function sendToEngine(value) {
   renderNode(data);
 }
 
+/* ---------- SEND ---------- */
 sendBtn.onclick = () => {
   const text = messageInput.value.trim();
   if (!text || !SESSION_ID) return;
-
   addUserMessage(text);
   messageInput.value = "";
   sendToEngine(text);
 };
-
-startConversation();
 </script>
 </body>
 </html>`);
