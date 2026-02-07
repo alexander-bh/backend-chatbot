@@ -210,71 +210,135 @@ exports.renderEmbed = async (req, res) => {
       return res.status(403).send("Dominio no permitido");
     }
 
-    /* HEADERS */
+    /* ===============================
+       HEADERS
+    ================================ */
+
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("Cache-Control", "no-store");
+
+    // CSP más seguro
+    const cspDomains = allowedDomains.join(" ");
+
     res.setHeader(
       "Content-Security-Policy",
-      "frame-ancestors *"
+      `frame-ancestors 'self' ${cspDomains}`.trim()
     );
 
     const apiBase = process.env.APP_BASE_URL || "";
 
+    /* ===============================
+       RESPONSE
+    ================================ */
+
     res.send(`
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${chatbot.name}</title>
-  <link rel="stylesheet" href="/public/chatbot/embed.css" />
-</head>
-<body>
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>${chatbot.name}</title>
 
-<button class="chat-fab" id="chatToggle">
-  <span id="launcherText"></span>
-</button>
+        <link rel="stylesheet" href="/public/chatbot/embed.css" />
+      </head>
+      <body>
 
-<div class="chat-widget" id="chatWidget">
-  <div class="chat">
-    <header class="chat-header">
-      <img id="chatAvatar" class="chat-avatar" hidden />
-      <strong id="chatName">Chatbot</strong>
-    </header>
+      <!-- FAB BUTTON -->
+      <button
+        class="chat-fab"
+        id="chatToggle"
+        type="button"
+        aria-label="Abrir chat"
+      >
 
-    <main id="messages"></main>
+        <svg
+          class="chat-icon"
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 15a4 4 0 0 1-4 4H7l-4 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/>
+        </svg>
 
-    <footer>
-      <input id="messageInput" />
-      <button id="sendBtn">Enviar</button>
-    </footer>
-  </div>
-</div>
+      </button>
 
-<script>
-  window.__CHATBOT_CONFIG__ = {
-    apiBase: ${JSON.stringify(apiBase)},
-    publicId: ${JSON.stringify(public_id)},
 
-    name: ${JSON.stringify(chatbot.name)},
-    avatar: ${JSON.stringify(chatbot.avatar || "")},
-    welcomeMessage: ${JSON.stringify(chatbot.welcome_message || "")},
-    primaryColor: ${JSON.stringify(chatbot.primary_color || "#2563eb")},
-    secondaryColor: ${JSON.stringify(chatbot.secondary_color || "#111827")},
-    launcherText: ${JSON.stringify(chatbot.launcher_text || "")},
-    inputPlaceholder: ${JSON.stringify(chatbot.input_placeholder || "Escribe tu mensaje…")}
-  };
-</script>
+      <!-- CHAT WIDGET -->
+      <div class="chat-widget" id="chatWidget">
 
-<script src="/public/chatbot/embed.js" defer></script>
-</body>
-</html>
+        <div class="chat">
+
+          <header class="chat-header">
+            <img
+              id="chatAvatar"
+              class="chat-avatar"
+              hidden
+            />
+
+            <strong id="chatName">Chatbot</strong>
+          </header>
+
+
+          <main id="messages"></main>
+
+
+          <footer>
+            <input
+              id="messageInput"
+              placeholder="Escribe tu mensaje…"
+            />
+
+            <button id="sendBtn">
+              Enviar
+            </button>
+          </footer>
+
+        </div>
+      </div>
+
+
+      <!-- CONFIG -->
+      <script>
+        window.__CHATBOT_CONFIG__ = {
+          apiBase: ${JSON.stringify(apiBase)},
+          publicId: ${JSON.stringify(public_id)},
+
+          name: ${JSON.stringify(chatbot.name)},
+          avatar: ${JSON.stringify(chatbot.avatar || "")},
+
+          primaryColor: ${JSON.stringify(chatbot.primary_color || "#2563eb")},
+          secondaryColor: ${JSON.stringify(chatbot.secondary_color || "#111827")},
+
+          inputPlaceholder: ${JSON.stringify(
+            chatbot.input_placeholder || "Escribe tu mensaje…"
+          )}
+        };
+      </script>
+
+
+      <!-- SCRIPT -->
+      <script
+        src="/public/chatbot/embed.js"
+        defer
+      ></script>
+
+      </body>
+      </html>
     `);
+
   } catch (err) {
     console.error("RENDER EMBED ERROR:", err);
-    res.status(500).send("No se pudo cargar el chatbot");
+
+    res
+      .status(500)
+      .send("No se pudo cargar el chatbot");
   }
 };
+
 
 // ═══════════════════════════════════════════════════════════
 // ENVIAR CÓDIGO DE INSTALACIÓN POR EMAIL
