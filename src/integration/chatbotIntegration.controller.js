@@ -449,27 +449,35 @@ exports.removeAllowedDomain = async (req, res) => {
 
 exports.sendInstallationCode = async (req, res) => {
   try {
-    const { public_id } = req.params;
+    const { chatbotId } = req.params;
 
-    const chatbot = await Chatbot.findOne({ public_id });
+    const chatbot = await Chatbot.findById(chatbotId);
 
     if (!chatbot) {
-      return res.status(404).json({ error: "Chatbot no encontrado" });
+      return res.status(404).send("Chatbot no encontrado");
     }
 
+    if (chatbot.account_id.toString() !== req.user.account_id) {
+      return res.status(403).send("Sin permisos");
+    }
+
+    // Regenerar token
     chatbot.install_token = crypto.randomBytes(32).toString("hex");
     await chatbot.save();
 
     const baseUrl = getBaseUrl();
 
-    const script = `<script src="${baseUrl}/api/chatbot-integration/${public_id}/install" async></script>`;
+    const script = `<script src="${baseUrl}/api/chatbot-integration/${chatbot.public_id}/install" async></script>`;
 
-    res.json({ script });
+    // 👉 CLAVE: devolver TEXTO PLANO, no JSON
+    res.type("text/plain").send(script);
+
   } catch (err) {
     console.error("INSTALL CODE ERROR:", err);
-    res.status(500).json({ error: "Error interno" });
+    res.status(500).send("Error interno");
   }
 };
+
 
 /* =======================================================
    7) REGENERAR TOKEN DE INSTALACIÓN
