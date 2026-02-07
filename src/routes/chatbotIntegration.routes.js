@@ -4,7 +4,7 @@ const ctrl = require("../integration/chatbotIntegration.controller");
 const auth = require("../middlewares/auth.middleware");
 
 /* ────────────────────────────────────────────── */
-/* RATE LIMIT SOLO PARA SCRIPT */
+/* RATE LIMIT SOLO PARA SCRIPTS PÚBLICOS         */
 /* ────────────────────────────────────────────── */
 
 const chatbotScriptLimiter = rateLimit({
@@ -20,29 +20,38 @@ const chatbotScriptLimiter = rateLimit({
       .send(`console.warn("[Chatbot] Rate limit excedido");`);
   }
 });
+
 /* ────────────────────────────────────────────── */
-/* PUBLIC ROUTES (NO AUTH) */
+/* RUTAS PÚBLICAS (NO AUTH)                      */
 /* ────────────────────────────────────────────── */
-// Script embebible
-router.get("/chatbot/:public_id.js", chatbotScriptLimiter, ctrl.integrationScript
+
+// 1) SCRIPT DE INTEGRACIÓN (crea el iframe final)
+router.get(
+  "/integration/:public_id",
+  chatbotScriptLimiter,
+  ctrl.integrationScript
 );
-// Iframe embed
+
+// 2) IFRAME EMBED (HTML del chatbot)
 router.get("/embed/:public_id", ctrl.renderEmbed);
 
 /* ────────────────────────────────────────────── */
-/* PRIVATE ROUTES (DASHBOARD) */
+/* RUTAS PRIVADAS (DASHBOARD)                    */
 /* ────────────────────────────────────────────── */
 
 router.use(auth);
-// Obtener script de instalación
+
+// 3) INSTALACIÓN REAL  →  /:public_id/install
 router.get("/:public_id/install", ctrl.getInstallScript);
-// Enviar código de instalación por email
+
+// 4) GENERAR CÓDIGO DE INSTALACIÓN
 router.post("/:public_id/send-installation", ctrl.sendInstallationCode);
-// Dominios permitidos
+
+// 5) DOMINIOS PERMITIDOS
 router.post("/:public_id/domain/add", ctrl.addAllowedDomain);
 router.post("/:public_id/domain/remove", ctrl.removeAllowedDomain);
-// Token
-router.post("/:public_id/token/regenerate", ctrl.regenerateInstallToken);
 
+// 6) REGENERAR TOKEN (si lo usas)
+router.post("/:public_id/token/regenerate", ctrl.regenerateInstallToken);
 
 module.exports = router;

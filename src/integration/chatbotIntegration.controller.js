@@ -1,63 +1,106 @@
 const Chatbot = require("../models/Chatbot");
 const crypto = require("crypto");
-const sendChatbotInstallEmail = require("../services/sendChatbotInstallEmail.service");
-const findChatbotByPublicId = require("../services/findChatbotByPublicId.service");
 const { signDomain } = require("../utils/domainSignature");
 const { isLocalhost } = require("../utils/domainValidation");
 const { domainMatches } = require("../utils/domainMatch");
-/**
- * Normaliza dominios / origins
- */
-const normalizeDomain = (domain = "") =>
-  domain
-    .replace(/^https?:\/\//, "")
-    .replace(/^www\./, "")
-    .split("/")[0]
-    .toLowerCase();
+const isValidDomain = require("../utils/isValidDomain");
 
-/* ═══════════════════════════════════════════════════════════
-   OBTENER SCRIPT DE INSTALACIÓN
-   ═══════════════════════════════════════════════════════════ */
-exports.getInstallScript = async (req, res) => {
+/* =======================================================
+   UTILIDADES
+======================================================= */
+
+const normalizeDomain = (input = "") => {
   try {
-    if (!req.user?.account_id) {
-      return res.status(401).json({ message: "Usuario no autenticado" });
+    if (!input) return "";
+
+    input = input.trim().toLowerCase();
+
+    if (input.startsWith("*.")) {
+      let base = input.slice(2);
+      if (!/^https?:\/\//.test(base)) {
+        base = "https://" + base;
+      }
+      const url = new URL(base);
+      return "*." + url.hostname.replace(/^www\./, "");
     }
 
-    const chatbot = await findChatbotByPublicId(
-      req.params.public_id,
-      req.user.account_id
-    );
+    if (!/^https?:\/\//.test(input)) {
+      input = "https://" + input;
+    }
 
-    console.log("🔍 Chatbot encontrado:", {
-      public_id: chatbot?.public_id,
-      has_install_token: !!chatbot?.install_token,
-      install_token_value: chatbot?.install_token
+    const url = new URL(input);
+    return url.hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+};
+
+const escape = (str = "") =>
+  str.replace(/[&<>"']/g, m => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[m]);
+
+const getBaseUrl = () =>
+  process.env.APP_BASE_URL ||
+  "https://backend-chatbot-omega.vercel.app";
+
+const safeCompare = (a, b) => {
+  if (!a || !b) return false;
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+};
+
+/* =======================================================
+   1) GET INSTALL SCRIPT  → /:public_id/install
+======================================================= */
+exports.getInstallScript = async (req, res) => {
+  try {
+    const { public_id } = req.params;
+
+    const chatbot = await Chatbot.findOne({
+      public_id,
+      status: "active",
+      is_enabled: true
     });
 
     if (!chatbot) {
-      return res.status(404).json({ message: "Chatbot no encontrado" });
+      return res.status(404).send("// Chatbot no encontrado");
     }
 
-    // ✅ Genera install_token si no existe (backward compatibility)
-    if (!chatbot.install_token) {
-      chatbot.install_token = crypto.randomBytes(24).toString("hex");
-      await chatbot.save();
+    let origin = req.headers.origin || "";
+    if (!origin && req.headers.referer) {
+      try {
+        origin = new URL(req.headers.referer).origin;
+      } catch {
+        origin = "";
+      }
     }
 
-    if (!chatbot.allowed_domains?.length) {
-      return res.status(400).json({
-        message: "Agrega al menos un dominio permitido antes de instalar"
-      });
+    const domain = normalizeDomain(origin);
+
+    if (!domain) {
+      return res.status(400).send("// Dominio inválido");
     }
 
-    const domain = normalizeDomain(chatbot.allowed_domains[0]);
-    const baseUrl = process.env.APP_BASE_URL;
-    //process.env.NODE_ENV === "development"
-    //  ? "http://localhost:3000"
-    //  : "https://backend-chatbot-omega.vercel.app";
+    const allowLocalhost = process.env.NODE_ENV === "development";
+    const allowedDomains = chatbot.allowed_domains || [];
+
+    const allowed =
+      allowedDomains.some(d => domainMatches(domain, d)) ||
+      (allowLocalhost && isLocalhost(domain));
+
+    if (!allowed) {
+      return res.status(403).send("// Dominio no autorizado");
+    }
 
     const timeWindow = Math.floor(Date.now() / 60000);
+
     const signature = signDomain(
       domain,
       chatbot.public_id,
@@ -65,31 +108,49 @@ exports.getInstallScript = async (req, res) => {
       timeWindow
     );
 
-    const script = `
-<script>
-(function(w,d){
-  if(w.__CHATBOT_INSTALLED__) return;
-  w.__CHATBOT_INSTALLED__ = true;
+    const baseUrl = getBaseUrl();
+    const safeDomain = encodeURIComponent(domain);
 
-  var s = d.createElement("script");
-  s.src = "${baseUrl}/api/chatbot-integration/chatbot/${chatbot.public_id}.js" +
-          "?d=${domain}&t=${chatbot.install_token}&w=${timeWindow}&s=${signature}";
-  s.async = true;
-  d.head.appendChild(s);
-})(window,document);
-</script>`.trim();
+    res.type("application/javascript");
+    res.setHeader("Cache-Control", "no-store");
 
-    res.setHeader("Content-Type", "text/plain");
-    res.send(script);
-  } catch (error) {
-    console.error("GET INSTALL SCRIPT ERROR:", error);
-    res.status(500).json({ message: "Error generando script" });
+    res.send(`(function(){
+  if (window.__CHATBOT_INSTALLED__) return;
+  window.__CHATBOT_INSTALLED__ = true;
+
+  const iframe = document.createElement("iframe");
+
+  iframe.src =
+    "${baseUrl}/api/chatbot-integration/integration/${public_id}"
+    + "?d=${safeDomain}"
+    + "&t=${chatbot.install_token}"
+    + "&w=${timeWindow}"
+    + "&s=" + encodeURIComponent("${signature}");
+
+  iframe.style.cssText = \`
+    position:fixed;
+    bottom:20px;
+    right:20px;
+    width:380px;
+    height:600px;
+    border:none;
+    z-index:999999;
+  \`;
+
+  iframe.sandbox = "allow-scripts allow-same-origin allow-forms";
+  iframe.allow = "clipboard-write";
+
+  document.body.appendChild(iframe);
+})();`);
+  } catch (err) {
+    console.error("INSTALL SCRIPT:", err);
+    res.status(500).send("// Error interno");
   }
 };
 
-/* ═══════════════════════════════════════════════════════════
-   SCRIPT DE INTEGRACIÓN (LOADER)
-   ═══════════════════════════════════════════════════════════ */
+/* =======================================================
+   2) INTEGRATION SCRIPT
+======================================================= */
 exports.integrationScript = async (req, res) => {
   try {
     const { public_id } = req.params;
@@ -102,8 +163,8 @@ exports.integrationScript = async (req, res) => {
     const domain = normalizeDomain(d);
     const timeWindow = parseInt(w, 10);
 
-    if (Number.isNaN(timeWindow)) {
-      return res.status(400).send("// Timestamp inválido");
+    if (!domain || Number.isNaN(timeWindow)) {
+      return res.status(400).send("// Parámetros inválidos");
     }
 
     const now = Math.floor(Date.now() / 60000);
@@ -124,27 +185,28 @@ exports.integrationScript = async (req, res) => {
       return res.status(403).send("// Chatbot inválido");
     }
 
-    if (
-      !chatbot.allowed_domains.some(d =>
-        domainMatches(domain, d)
-      ) &&
-      !isLocalhost(domain)
-    ) {
+    const allowLocalhost = process.env.NODE_ENV === "development";
+    const allowedDomains = chatbot.allowed_domains || [];
+
+    const allowed =
+      allowedDomains.some(d => domainMatches(domain, d)) ||
+      (allowLocalhost && isLocalhost(domain));
+
+    if (!allowed) {
       return res.status(403).send("// Dominio no autorizado");
     }
 
-    // 🔐 Validación de firma con ventana deslizante
     let valid = false;
 
-    for (let offset = -WINDOW; offset <= WINDOW; offset++) {
+    for (let i = -WINDOW; i <= WINDOW; i++) {
       const expected = signDomain(
         domain,
         chatbot.public_id,
         chatbot.install_token,
-        timeWindow + offset
+        timeWindow + i
       );
 
-      if (expected === s) {
+      if (safeCompare(expected, s)) {
         valid = true;
         break;
       }
@@ -154,41 +216,50 @@ exports.integrationScript = async (req, res) => {
       return res.status(403).send("// Firma inválida");
     }
 
-    const baseUrl = process.env.APP_BASE_URL;
-    // process.env.NODE_ENV === "development"
-    //   ? "http://localhost:3000"
-    //   : "https://backend-chatbot-omega.vercel.app";
+    const baseUrl = getBaseUrl();
+    const safeDomain = encodeURIComponent(domain);
 
-    res.setHeader("Content-Type", "application/javascript");
-    res.send(`
-(function(){
+    res.type("application/javascript");
+    res.setHeader("Cache-Control", "no-store");
+
+    res.send(`(function(){
   var iframe = document.createElement("iframe");
-  iframe.src = "${baseUrl}/api/chatbot-integration/embed/${chatbot.public_id}?d=${domain}";
-  iframe.style.position = "fixed";
-  iframe.style.bottom = "20px";
-  iframe.style.right = "20px";
-  iframe.style.width = "380px";
-  iframe.style.height = "600px";
-  iframe.style.border = "none";
-  iframe.style.zIndex = "999999";
+
+  iframe.src =
+    "${baseUrl}/api/chatbot-integration/embed/${public_id}?d=${safeDomain}";
+
+  iframe.style.cssText = \`
+    position:fixed;
+    bottom:20px;
+    right:20px;
+    width:380px;
+    height:600px;
+    border:none;
+    z-index:999999;
+  \`;
+
+  iframe.sandbox = "allow-scripts allow-same-origin allow-forms";
   iframe.allow = "clipboard-write";
 
   document.body.appendChild(iframe);
-})();
-    `.trim());
-  } catch (error) {
-    console.error("INTEGRATION SCRIPT ERROR:", error);
+})();`);
+  } catch (err) {
+    console.error("INTEGRATION SCRIPT:", err);
     res.status(500).send("// Error interno");
   }
 };
 
-// ═══════════════════════════════════════════════════════════
-// MEJORADO: RENDER EMBED CON VALIDACIÓN DE DOMINIO
-// ═══════════════════════════════════════════════════════════
+/* =======================================================
+   3) RENDER EMBED (HTML)
+======================================================= */
 exports.renderEmbed = async (req, res) => {
   try {
     const { public_id } = req.params;
     const domain = normalizeDomain(req.query.d || "");
+
+    if (!domain) {
+      return res.status(400).send("Dominio inválido");
+    }
 
     const chatbot = await Chatbot.findOne({
       public_id,
@@ -200,358 +271,210 @@ exports.renderEmbed = async (req, res) => {
       return res.status(404).send("Chatbot no encontrado");
     }
 
+    const allowLocalhost = process.env.NODE_ENV === "development";
     const allowedDomains = chatbot.allowed_domains || [];
 
-    const domainAllowed =
+    const allowed =
       allowedDomains.some(d => domainMatches(domain, d)) ||
-      isLocalhost(domain);
+      (allowLocalhost && isLocalhost(domain));
 
-    if (!domainAllowed) {
+    if (!allowed) {
       return res.status(403).send("Dominio no permitido");
     }
 
-    /* ===============================
-       HEADERS
-    ================================ */
+    const apiOrigin = new URL(getBaseUrl()).origin;
 
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
-    res.setHeader("Cache-Control", "no-store");
-
-    // CSP más seguro
-    const cspDomains = allowedDomains.join(" ");
+    const frameAncestors = allowedDomains.length
+      ? allowedDomains
+          .map(d =>
+            d.startsWith("*.") 
+              ? `https://*.${d.slice(2)} http://*.${d.slice(2)}`
+              : `https://${d} http://${d}`
+          )
+          .join(" ")
+      : apiOrigin;
 
     res.setHeader(
       "Content-Security-Policy",
-      `frame-ancestors 'self' ${cspDomains}`.trim()
+      `default-src 'self';
+       frame-src ${apiOrigin};
+       connect-src 'self' ${apiOrigin};
+       frame-ancestors ${frameAncestors};`
+        .replace(/\s+/g, " ")
+        .trim()
     );
-
-    const apiBase = process.env.APP_BASE_URL || "";
-
-    /* ===============================
-       RESPONSE
-    ================================ */
 
     res.send(`
-      <!DOCTYPE html>
-      <html lang="es">
-      <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>${chatbot.name}</title>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>${escape(chatbot.name)}</title>
+  <link rel="stylesheet" href="/public/chatbot/embed.css" />
+</head>
+<body>
 
-        <link rel="stylesheet" href="/public/chatbot/embed.css" />
-      </head>
-      <body>
+<button class="chat-fab" id="chatToggle">💬</button>
 
-      <!-- FAB BUTTON -->
-      <button
-        class="chat-fab"
-        id="chatToggle"
-        type="button"
-        aria-label="Abrir chat"
-      >
+<div class="chat-widget" id="chatWidget">
+  <div class="chat">
+    <header class="chat-header">
+      <strong>${escape(chatbot.name)}</strong>
+    </header>
 
-        <svg
-          class="chat-icon"
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M21 15a4 4 0 0 1-4 4H7l-4 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/>
-        </svg>
+    <main id="messages"></main>
 
-      </button>
+    <footer>
+      <input id="messageInput" placeholder="Escribe tu mensaje…" />
+      <button id="sendBtn">Enviar</button>
+    </footer>
+  </div>
+</div>
 
+<script>
+window.__CHATBOT_CONFIG__ = {
+  apiBase: ${JSON.stringify(getBaseUrl())},
+  publicId: ${JSON.stringify(public_id)},
+  name: ${JSON.stringify(chatbot.name)},
+  avatar: ${JSON.stringify(chatbot.avatar || "")},
+  primaryColor: ${JSON.stringify(chatbot.primary_color || "#2563eb")},
+  secondaryColor: ${JSON.stringify(chatbot.secondary_color || "#111827")}
+};
+</script>
 
-      <!-- CHAT WIDGET -->
-      <div class="chat-widget" id="chatWidget">
-
-        <div class="chat">
-
-          <header class="chat-header">
-            <img
-              id="chatAvatar"
-              class="chat-avatar"
-              hidden
-            />
-
-            <strong id="chatName">Chatbot</strong>
-          </header>
-
-
-          <main id="messages"></main>
-
-
-          <footer>
-            <input
-              id="messageInput"
-              placeholder="Escribe tu mensaje…"
-            />
-
-            <button id="sendBtn">
-              Enviar
-            </button>
-          </footer>
-
-        </div>
-      </div>
-
-
-      <!-- CONFIG -->
-      <script>
-        window.__CHATBOT_CONFIG__ = {
-          apiBase: ${JSON.stringify(apiBase)},
-          publicId: ${JSON.stringify(public_id)},
-
-          name: ${JSON.stringify(chatbot.name)},
-          avatar: ${JSON.stringify(chatbot.avatar || "")},
-
-          primaryColor: ${JSON.stringify(chatbot.primary_color || "#2563eb")},
-          secondaryColor: ${JSON.stringify(chatbot.secondary_color || "#111827")},
-
-          inputPlaceholder: ${JSON.stringify(
-            chatbot.input_placeholder || "Escribe tu mensaje…"
-          )}
-        };
-      </script>
-
-
-      <!-- SCRIPT -->
-      <script
-        src="/public/chatbot/embed.js"
-        defer
-      ></script>
-
-      </body>
-      </html>
-    `);
-
+<script src="/public/chatbot/embed.js" defer></script>
+</body>
+</html>
+`);
   } catch (err) {
     console.error("RENDER EMBED ERROR:", err);
-
-    res
-      .status(500)
-      .send("No se pudo cargar el chatbot");
+    res.status(500).send("No se pudo cargar el chatbot");
   }
 };
 
-
-// ═══════════════════════════════════════════════════════════
-// ENVIAR CÓDIGO DE INSTALACIÓN POR EMAIL
-// ═══════════════════════════════════════════════════════════
-exports.sendInstallationCode = async (req, res) => {
-  try {
-    if (!req.user?.account_id) {
-      return res.status(401).json({ message: "Usuario no autenticado" });
-    }
-
-    const { email } = req.body;
-    const { public_id } = req.params;
-
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return res.status(400).json({ message: "Email inválido" });
-    }
-
-    const chatbot = await Chatbot.findOne({
-      public_id,
-      account_id: req.user.account_id,
-      status: "active"
-    });
-
-    if (!chatbot) {
-      return res.status(404).json({ message: "Chatbot no encontrado" });
-    }
-
-    if (!chatbot.allowed_domains?.length) {
-      return res.status(400).json({
-        message: "Configura al menos un dominio antes de enviar el código"
-      });
-    }
-
-    await sendChatbotInstallEmail({
-      to: email,
-      chatbotName: chatbot.name,
-      publicId: chatbot.public_id,
-      installToken: chatbot.install_token,
-      domain: chatbot.allowed_domains[0]
-    });
-
-    res.json({
-      success: true,
-      message: "Código de instalación enviado correctamente"
-    });
-
-  } catch (error) {
-    console.error("SEND INSTALLATION CODE ERROR:", error);
-    res.status(500).json({ message: "No se pudo enviar el correo" });
-  }
-};
-
-// ═══════════════════════════════════════════════════════════
-// REGENERAR TOKEN DE INSTALACIÓN
-// ═══════════════════════════════════════════════════════════
-exports.regenerateInstallToken = async (req, res) => {
-  try {
-    if (!req.user?.account_id) {
-      return res.status(401).json({ message: "Usuario no autenticado" });
-    }
-
-    const chatbot = await findChatbotByPublicId(
-      req.params.public_id,
-      req.user.account_id
-    );
-
-    if (!chatbot) {
-      return res.status(404).json({ message: "Chatbot no encontrado" });
-    }
-
-    chatbot.install_token = crypto.randomBytes(24).toString("hex");
-    chatbot.verified_domains = [];
-    chatbot.installation_status = "pending";
-
-    await chatbot.save();
-
-    res.json({
-      message: "Token regenerado correctamente",
-      install_token: chatbot.install_token
-    });
-
-  } catch (error) {
-    console.error("REGENERATE TOKEN ERROR:", error);
-    res.status(500).json({ message: "Error al regenerar token" });
-  }
-};
-
-// ═══════════════════════════════════════════════════════════
-// AGREGAR DOMINIO PERMITIDO
-// ═══════════════════════════════════════════════════════════
+/* =======================================================
+   4) AGREGAR DOMINIO
+======================================================= */
 exports.addAllowedDomain = async (req, res) => {
   try {
     if (!req.user?.account_id) {
-      return res.status(401).json({ message: "Usuario no autenticado" });
+      return res.status(401).json({ error: "No autorizado" });
     }
 
-    const { domain } = req.body;
-    if (!domain) {
-      return res.status(400).json({ message: "Dominio inválido" });
+    const { chatbotId } = req.params;
+    let { domain } = req.body;
+
+    domain = normalizeDomain(domain);
+
+    if (!domain || !isValidDomain(domain)) {
+      return res.status(400).json({ error: "Dominio inválido" });
     }
 
-    console.log("🔍 Buscando chatbot:");
-    console.log("  - public_id:", req.params.public_id);
-    console.log("  - account_id:", req.user.account_id);
-
-    const chatbot = await findChatbotByPublicId(
-      req.params.public_id,
-      req.user.account_id
-    );
+    const chatbot = await Chatbot.findById(chatbotId);
 
     if (!chatbot) {
-      const chatbotExists = await Chatbot.findOne({
-        public_id: req.params.public_id,
-        status: "active"
-      }).lean();
-
-      console.log("❌ Chatbot no encontrado con account_id");
-      console.log("  - ¿Existe sin validar account?", !!chatbotExists);
-      if (chatbotExists) {
-        console.log("  - account_id del chatbot:", chatbotExists.account_id);
-        console.log("  - account_id del usuario:", req.user.account_id);
-      }
-
-      return res.status(404).json({ message: "Chatbot no encontrado" });
+      return res.status(404).json({ error: "No encontrado" });
     }
 
-    const normalizedDomain = normalizeDomain(domain);
-
-    if (chatbot.allowed_domains.includes(normalizedDomain)) {
-      return res.status(400).json({ message: "Dominio ya agregado" });
+    if (chatbot.account_id.toString() !== req.user.account_id) {
+      return res.status(403).json({ error: "Sin permisos" });
     }
 
-    chatbot.allowed_domains.push(normalizedDomain);
+    chatbot.allowed_domains ||= [];
+
+    const exists = chatbot.allowed_domains.some(d =>
+      d === domain || domainMatches(domain, d)
+    );
+
+    if (exists) {
+      return res.status(409).json({ error: "Dominio ya existe" });
+    }
+
+    chatbot.allowed_domains.push(domain);
     await chatbot.save();
 
-    res.json({
-      message: "Dominio agregado correctamente",
-      allowed_domains: chatbot.allowed_domains
-    });
-
-  } catch (error) {
-    console.error("ADD DOMAIN ERROR:", error);
-    res.status(500).json({ message: "Error al agregar dominio" });
+    res.json({ success: true, domains: chatbot.allowed_domains });
+  } catch (err) {
+    console.error("ADD DOMAIN:", err);
+    res.status(500).json({ error: "Error interno" });
   }
 };
 
-// ═══════════════════════════════════════════════════════════
-// ELIMINAR DOMINIO PERMITIDO
-// ═══════════════════════════════════════════════════════════
+/* =======================================================
+   5) ELIMINAR DOMINIO
+======================================================= */
 exports.removeAllowedDomain = async (req, res) => {
   try {
-    // 🔐 Auth
     if (!req.user?.account_id) {
-      return res.status(401).json({ message: "Usuario no autenticado" });
+      return res.status(401).json({ error: "No autorizado" });
     }
 
-    // 📥 Input
-    const { domain } = req.body;
+    const { chatbotId } = req.params;
+    let { domain } = req.body;
+
+    domain = normalizeDomain(domain);
+
     if (!domain) {
-      return res.status(400).json({ message: "Dominio requerido" });
+      return res.status(400).json({ error: "Dominio inválido" });
     }
 
-    const normalizedDomain = normalizeDomain(domain);
-
-    // 🛑 Protección básica
-    if (["localhost", "127.0.0.1"].includes(normalizedDomain)) {
-      return res.status(400).json({
-        message: "No se puede eliminar este dominio"
-      });
-    }
-
-    // 🤖 Chatbot
-    const chatbot = await findChatbotByPublicId(
-      req.params.public_id,
-      req.user.account_id
-    );
+    const chatbot = await Chatbot.findById(chatbotId);
 
     if (!chatbot) {
-      return res.status(404).json({ message: "Chatbot no encontrado" });
+      return res.status(404).json({ error: "No encontrado" });
     }
 
-    // 🔎 Verifica existencia
-    const exists = chatbot.allowed_domains.includes(normalizedDomain);
-
-    if (!exists) {
-      return res.status(404).json({
-        message: "El dominio no está registrado"
-      });
+    if (chatbot.account_id.toString() !== req.user.account_id) {
+      return res.status(403).json({ error: "Sin permisos" });
     }
 
-    // 🧹 Limpieza
-    chatbot.allowed_domains = chatbot.allowed_domains.filter(
-      d => d !== normalizedDomain
-    );
+    const before = chatbot.allowed_domains.length;
 
-    chatbot.verified_domains = chatbot.verified_domains.filter(
-      d => d !== normalizedDomain
-    );
+    chatbot.allowed_domains = chatbot.allowed_domains.filter(d => {
+      if (d === domain) return false;
+
+      if (d.startsWith("*.")) {
+        const base = d.slice(2);
+        return !domain.endsWith("." + base);
+      }
+
+      return true;
+    });
+
+    if (before === chatbot.allowed_domains.length) {
+      return res.status(404).json({ error: "Dominio no encontrado" });
+    }
 
     await chatbot.save();
 
-    // ✅ OK
-    res.json({
-      message: "Dominio eliminado correctamente",
-      allowed_domains: chatbot.allowed_domains,
-      verified_domains: chatbot.verified_domains
-    });
+    res.json({ success: true, domains: chatbot.allowed_domains });
+  } catch (err) {
+    console.error("REMOVE DOMAIN:", err);
+    res.status(500).json({ error: "Error interno" });
+  }
+};
 
-  } catch (error) {
-    console.error("REMOVE DOMAIN ERROR:", error);
-    res.status(500).json({
-      message: "Error al eliminar dominio"
-    });
+/* =======================================================
+   6) GENERAR CÓDIGO DE INSTALACIÓN
+======================================================= */
+exports.sendInstallationCode = async (req, res) => {
+  try {
+    const { chatbotId } = req.params;
+    const chatbot = await Chatbot.findById(chatbotId);
+    if (!chatbot) {
+      return res.status(404).json({ error: "Chatbot no encontrado" });
+    }
+    if (chatbot.account_id.toString() !== req.user.account_id) {
+      return res.status(403).json({ error: "Sin permisos" });
+    }
+    chatbot.install_token = crypto.randomBytes(32).toString("hex");
+    await chatbot.save();
+    const baseUrl = getBaseUrl();
+    const script = `<script src="${baseUrl}/api/chatbot-integration/${chatbot.public_id}/install" async></script>`;
+    res.json({ script });
+  } catch (err) {
+    console.error("INSTALL CODE ERROR:", err);
+    res.status(500).json({ error: "Error interno" });
   }
 };
 
