@@ -22,18 +22,14 @@ const chatbotScriptLimiter = rateLimit({
 });
 
 /* ───────── RUTAS PÚBLICAS ───────── */
-
 router.get(
   "/integration/:public_id",
   chatbotScriptLimiter,
   ctrl.integrationScript
 );
-
 router.get("/embed/:public_id", ctrl.renderEmbed);
-
-// ✅ INSTALL DEBE SER PÚBLICO
+// INSTALL DEBE SER PÚBLICO
 router.get("/:public_id/install", ctrl.getInstallScript);
-
 /* ───────── RUTAS PRIVADAS ───────── */
 router.use(auth);
 
