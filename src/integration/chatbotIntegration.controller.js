@@ -24,13 +24,14 @@ const getBaseUrl = () =>
   process.env.APP_BASE_URL ||
   "https://backend-chatbot-omega.vercel.app";
 
+/*
 const safeCompare = (a, b) => {
   if (!a || !b) return false;
   const bufA = Buffer.from(a);
   const bufB = Buffer.from(b);
   if (bufA.length !== bufB.length) return false;
   return crypto.timingSafeEqual(bufA, bufB);
-};
+};*/
 
 /* =======================================================
    1) GET INSTALL SCRIPT  → /:public_id/install
@@ -50,7 +51,6 @@ exports.getInstallScript = async (req, res) => {
       return res.status(404).send("// Chatbot no encontrado");
     }
 
-    // ✅ FIX: origen más confiable
     const originHeader =
       req.headers.origin ||
       req.headers.referer ||
@@ -71,33 +71,21 @@ exports.getInstallScript = async (req, res) => {
       return res.status(403).send("// Dominio no autorizado");
     }
 
-    const timeWindow = Math.floor(Date.now() / 60000);
-
-    const signature = signDomain(
-      domain,
-      chatbot.public_id,
-      chatbot.install_token,
-      timeWindow
-    );
-
     const baseUrl = getBaseUrl();
     const safeDomain = encodeURIComponent(domain);
 
     res.type("application/javascript");
     res.setHeader("Cache-Control", "no-store");
 
+    // ✅ DIRECTO AL EMBED - SIN IFRAME INTERMEDIO
     res.send(`(function(){
   if (window.__CHATBOT_INSTALLED__) return;
   window.__CHATBOT_INSTALLED__ = true;
 
   var iframe = document.createElement("iframe");
-
-  iframe.src =
-    "${baseUrl}/api/chatbot-integration/integration/${public_id}"
-    + "?d=${safeDomain}"
-    + "&t=${chatbot.install_token}"
-    + "&w=${timeWindow}"
-    + "&s=" + encodeURIComponent("${signature}");
+  
+  // ✅ Apunta directo al embed
+  iframe.src = "${baseUrl}/api/chatbot-integration/embed/${public_id}?d=${safeDomain}";
 
   iframe.style.cssText = \`
     position:fixed;
@@ -106,11 +94,18 @@ exports.getInstallScript = async (req, res) => {
     width:380px;
     height:600px;
     border:none;
+    border-radius:12px;
+    box-shadow:0 4px 12px rgba(0,0,0,0.15);
     z-index:2147483647;
+    display:block;
   \`;
 
-  iframe.sandbox = "allow-scripts allow-same-origin allow-forms";
+  iframe.setAttribute("allow", "clipboard-write");
+  iframe.sandbox = "allow-scripts allow-same-origin allow-forms allow-popups";
+  
   document.body.appendChild(iframe);
+  
+  console.log('[Chatbot] Widget cargado correctamente');
 })();`);
   } catch (err) {
     console.error("INSTALL SCRIPT:", err);
@@ -121,7 +116,7 @@ exports.getInstallScript = async (req, res) => {
 /* =======================================================
    2) INTEGRATION SCRIPT
 ======================================================= */
-
+/*
 exports.integrationScript = async (req, res) => {
   try {
     const { public_id } = req.params;
@@ -216,7 +211,7 @@ exports.integrationScript = async (req, res) => {
     console.error("INTEGRATION SCRIPT:", err);
     res.status(500).send("// Error interno");
   }
-};
+};*/
 
 /* =======================================================
    3) RENDER EMBED (HTML)
@@ -254,6 +249,7 @@ exports.renderEmbed = async (req, res) => {
 
     const apiOrigin = new URL(getBaseUrl()).origin;
 
+    // ✅ CSP mejorado
     const frameAncestors = allowedDomains.length
       ? allowedDomains
         .map(d =>
@@ -262,25 +258,36 @@ exports.renderEmbed = async (req, res) => {
             : `https://${d} http://${d}`
         )
         .join(" ")
-      : apiOrigin;
+      : "*";
 
     res.setHeader(
       "Content-Security-Policy",
-      `default-src 'self';
-       frame-src ${apiOrigin};
-       connect-src 'self' ${apiOrigin};
-       frame-ancestors ${frameAncestors};`
-        .replace(/\s+/g, " ")
-        .trim()
+      `default-src 'self' ${apiOrigin}; ` +
+      `script-src 'self' 'unsafe-inline' ${apiOrigin}; ` +
+      `style-src 'self' 'unsafe-inline'; ` +
+      `img-src 'self' data: https:; ` +
+      `connect-src 'self' ${apiOrigin}; ` +
+      `frame-ancestors ${frameAncestors};`
     );
+    
+    res.setHeader("X-Frame-Options", "ALLOWALL");
 
     res.send(`
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${escape(chatbot.name)}</title>
   <link rel="stylesheet" href="/public/chatbot/embed.css" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: system-ui, -apple-system, sans-serif; 
+      overflow: hidden;
+      background: transparent;
+    }
+  </style>
 </head>
 <body>
 
@@ -310,9 +317,11 @@ window.__CHATBOT_CONFIG__ = {
   primaryColor: ${JSON.stringify(chatbot.primary_color || "#2563eb")},
   secondaryColor: ${JSON.stringify(chatbot.secondary_color || "#111827")}
 };
+
+console.log('[Chatbot Embed] Configuración cargada:', window.__CHATBOT_CONFIG__);
 </script>
 
-<script src="/public/chatbot/embed.js" defer></script>
+<script src="/public/chatbot/embed.js"></script>
 </body>
 </html>
 `);
@@ -360,7 +369,6 @@ exports.addAllowedDomain = async (req, res) => {
     res.status(500).json({ error: "Error interno" });
   }
 };
-
 
 /* =======================================================
    5) ELIMINAR DOMINIO
@@ -466,6 +474,5 @@ exports.regenerateInstallToken = async (req, res) => {
     res.status(500).json({ message: "Error al regenerar token" });
   }
 };
-
 
 module.exports = exports;
