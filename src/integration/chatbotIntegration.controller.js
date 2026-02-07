@@ -9,7 +9,7 @@ const { normalizeDomain } = require("../utils/domain.utils");
 /* =======================================================
    UTILIDADES
 ======================================================= */
-const escape = (str = "") =>
+const escapeHTML = (str = "") =>
   str.replace(/[&<>"']/g, m =>
     ({
       "&": "&amp;",
@@ -21,22 +21,11 @@ const escape = (str = "") =>
   );
 
 const getBaseUrl = () =>
-  process.env.APP_BASE_URL ||
-  "https://backend-chatbot-omega.vercel.app";
-
-/*
-const safeCompare = (a, b) => {
-  if (!a || !b) return false;
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  if (bufA.length !== bufB.length) return false;
-  return crypto.timingSafeEqual(bufA, bufB);
-};*/
+  process.env.APP_BASE_URL || "https://backend-chatbot-omega.vercel.app";
 
 /* =======================================================
    1) GET INSTALL SCRIPT  → /:public_id/install
 ======================================================= */
-
 exports.getInstallScript = async (req, res) => {
   try {
     const { public_id } = req.params;
@@ -45,26 +34,25 @@ exports.getInstallScript = async (req, res) => {
       public_id,
       status: "active",
       is_enabled: true
-    });
+    }).lean();
 
     if (!chatbot) {
       return res.status(404).send("// Chatbot no encontrado");
     }
 
-    const originHeader =
+    const rawOrigin =
       req.headers.origin ||
       req.headers.referer ||
-      req.query.d ||
       "";
 
-    const domain = normalizeDomain(originHeader);
+    const domain = normalizeDomain(rawOrigin);
 
     if (!domain) {
-      return res.status(400).send("// Dominio inválido");
+      return res.status(403).send("// Dominio no detectable");
     }
 
     const allowed =
-      chatbot.allowed_domains.some(d => normalizeDomain(d) === domain) ||
+      chatbot.allowed_domains.some(d => domainMatches(domain, d)) ||
       (process.env.NODE_ENV === "development" && isLocalhost(domain));
 
     if (!allowed) {
@@ -77,146 +65,41 @@ exports.getInstallScript = async (req, res) => {
     res.type("application/javascript");
     res.setHeader("Cache-Control", "no-store");
 
-    // ✅ DIRECTO AL EMBED - SIN IFRAME INTERMEDIO
     res.send(`(function(){
   if (window.__CHATBOT_INSTALLED__) return;
   window.__CHATBOT_INSTALLED__ = true;
 
   var iframe = document.createElement("iframe");
-  
-  // ✅ Apunta directo al embed
+
   iframe.src = "${baseUrl}/api/chatbot-integration/embed/${public_id}?d=${safeDomain}";
 
-  iframe.style.cssText = \`
-    position:fixed;
-    bottom:20px;
-    right:20px;
-    width:380px;
-    height:600px;
-    border:none;
-    border-radius:12px;
-    box-shadow:0 4px 12px rgba(0,0,0,0.15);
-    z-index:2147483647;
-    display:block;
-  \`;
+  iframe.style.cssText = [
+    "position:fixed",
+    "bottom:20px",
+    "right:20px",
+    "width:380px",
+    "height:600px",
+    "border:none",
+    "border-radius:12px",
+    "box-shadow:0 4px 12px rgba(0,0,0,0.15)",
+    "z-index:2147483647",
+    "background:transparent"
+  ].join(";");
 
+  iframe.sandbox = "allow-scripts allow-same-origin allow-forms";
   iframe.setAttribute("allow", "clipboard-write");
-  iframe.sandbox = "allow-scripts allow-same-origin allow-forms allow-popups";
-  
+
   document.body.appendChild(iframe);
-  
-  console.log('[Chatbot] Widget cargado correctamente');
 })();`);
   } catch (err) {
-    console.error("INSTALL SCRIPT:", err);
+    console.error("INSTALL SCRIPT ERROR:", err);
     res.status(500).send("// Error interno");
   }
 };
 
 /* =======================================================
-   2) INTEGRATION SCRIPT
-======================================================= */
-/*
-exports.integrationScript = async (req, res) => {
-  try {
-    const { public_id } = req.params;
-    const { d, t, w, s } = req.query;
-
-    if (!d || !t || !w || !s) {
-      return res.status(400).send("// Parámetros inválidos");
-    }
-
-    const domain = normalizeDomain(d);
-    const timeWindow = parseInt(w, 10);
-
-    if (!domain || Number.isNaN(timeWindow)) {
-      return res.status(400).send("// Parámetros inválidos");
-    }
-
-    const now = Math.floor(Date.now() / 60000);
-    const WINDOW = process.env.NODE_ENV === "development" ? 5 : 2;
-
-    if (Math.abs(now - timeWindow) > WINDOW) {
-      return res.status(403).send("// Firma expirada");
-    }
-
-    const chatbot = await Chatbot.findOne({
-      public_id,
-      install_token: t,
-      status: "active",
-      is_enabled: true
-    }).lean();
-
-    if (!chatbot) {
-      return res.status(403).send("// Chatbot inválido");
-    }
-
-    const allowed =
-      chatbot.allowed_domains.some(d => normalizeDomain(d) === domain) ||
-      (process.env.NODE_ENV === "development" && isLocalhost(domain));
-
-    if (!allowed) {
-      return res.status(403).send("// Dominio no autorizado");
-    }
-
-    let valid = false;
-
-    for (let i = -WINDOW; i <= WINDOW; i++) {
-      const expected = signDomain(
-        domain,
-        chatbot.public_id,
-        chatbot.install_token,
-        timeWindow + i
-      );
-
-      if (safeCompare(expected, s)) {
-        valid = true;
-        break;
-      }
-    }
-
-    if (!valid) {
-      return res.status(403).send("// Firma inválida");
-    }
-
-    const baseUrl = getBaseUrl();
-    const safeDomain = encodeURIComponent(domain);
-
-    res.type("application/javascript");
-    res.setHeader("Cache-Control", "no-store");
-
-    res.send(`(function(){
-  if (window.__CHATBOT_IFRAME__) return;
-  window.__CHATBOT_IFRAME__ = true;
-
-  var iframe = document.createElement("iframe");
-
-  iframe.src =
-    "${baseUrl}/api/chatbot-integration/embed/${public_id}?d=${safeDomain}";
-
-  iframe.style.cssText = \`
-    position:fixed;
-    bottom:20px;
-    right:20px;
-    width:380px;
-    height:600px;
-    border:none;
-    z-index:2147483647;
-  \`;
-
-  iframe.sandbox = "allow-scripts allow-same-origin allow-forms";
-  document.body.appendChild(iframe);
-})();`);
-  } catch (err) {
-    console.error("INTEGRATION SCRIPT:", err);
-    res.status(500).send("// Error interno");
-  }
-};*/
-
-/* =======================================================
    3) RENDER EMBED (HTML)
 ======================================================= */
-
 exports.renderEmbed = async (req, res) => {
   try {
     const { public_id } = req.params;
@@ -237,57 +120,54 @@ exports.renderEmbed = async (req, res) => {
     }
 
     const allowLocalhost = process.env.NODE_ENV === "development";
-    const allowedDomains = chatbot.allowed_domains || [];
 
     const allowed =
-      allowedDomains.some(d => domainMatches(domain, d)) ||
+      chatbot.allowed_domains.some(d => domainMatches(domain, d)) ||
       (allowLocalhost && isLocalhost(domain));
 
     if (!allowed) {
       return res.status(403).send("Dominio no permitido");
     }
 
+    if (!chatbot.allowed_domains.length && !allowLocalhost) {
+      return res.status(403).send("No hay dominios autorizados");
+    }
+
     const apiOrigin = new URL(getBaseUrl()).origin;
 
-    // ✅ CSP mejorado
-    const frameAncestors = allowedDomains.length
-      ? allowedDomains
-        .map(d =>
-          d.startsWith("*.")
-            ? `https://*.${d.slice(2)} http://*.${d.slice(2)}`
-            : `https://${d} http://${d}`
-        )
-        .join(" ")
-      : "*";
+    const frameAncestors = chatbot.allowed_domains
+      .map(d =>
+        d.startsWith("*.")
+          ? `https://*.${d.slice(2)}`
+          : `https://${d}`
+      )
+      .join(" ");
 
     res.setHeader(
       "Content-Security-Policy",
-      `default-src 'self' ${apiOrigin}; ` +
-      `script-src 'self' 'unsafe-inline' ${apiOrigin}; ` +
-      `style-src 'self' 'unsafe-inline'; ` +
-      `img-src 'self' data: https:; ` +
-      `connect-src 'self' ${apiOrigin}; ` +
-      `frame-ancestors ${frameAncestors};`
+      [
+        `default-src 'self' ${apiOrigin}`,
+        `script-src 'self' 'unsafe-inline' ${apiOrigin}`,
+        `style-src 'self' 'unsafe-inline'`,
+        `img-src 'self' data: https:`,
+        `connect-src 'self' ${apiOrigin}`,
+        `frame-ancestors ${frameAncestors}`
+      ].join("; ")
     );
-    
-    res.setHeader("X-Frame-Options", "ALLOWALL");
 
-    res.send(`
-<!DOCTYPE html>
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Referrer-Policy", "strict-origin");
+
+    res.send(`<!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${escape(chatbot.name)}</title>
-  <link rel="stylesheet" href="/public/chatbot/embed.css" />
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { 
-      font-family: system-ui, -apple-system, sans-serif; 
-      overflow: hidden;
-      background: transparent;
-    }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>${escapeHTML(chatbot.name)}</title>
+<link rel="stylesheet" href="/public/chatbot/embed.css" />
+<style>
+body{margin:0;font-family:system-ui;background:transparent;overflow:hidden}
+</style>
 </head>
 <body>
 
@@ -296,11 +176,9 @@ exports.renderEmbed = async (req, res) => {
 <div class="chat-widget" id="chatWidget">
   <div class="chat">
     <header class="chat-header">
-      <strong>${escape(chatbot.name)}</strong>
+      <strong>${escapeHTML(chatbot.name)}</strong>
     </header>
-
     <main id="messages"></main>
-
     <footer>
       <input id="messageInput" placeholder="Escribe tu mensaje…" />
       <button id="sendBtn">Enviar</button>
@@ -314,17 +192,13 @@ window.__CHATBOT_CONFIG__ = {
   publicId: ${JSON.stringify(public_id)},
   name: ${JSON.stringify(chatbot.name)},
   avatar: ${JSON.stringify(chatbot.avatar || "")},
-  primaryColor: ${JSON.stringify(chatbot.primary_color || "#2563eb")},
-  secondaryColor: ${JSON.stringify(chatbot.secondary_color || "#111827")}
+  primaryColor: ${JSON.stringify(chatbot.primary_color || "#2563eb")}
 };
-
-console.log('[Chatbot Embed] Configuración cargada:', window.__CHATBOT_CONFIG__);
 </script>
 
 <script src="/public/chatbot/embed.js"></script>
 </body>
-</html>
-`);
+</html>`);
   } catch (err) {
     console.error("RENDER EMBED ERROR:", err);
     res.status(500).send("No se pudo cargar el chatbot");
@@ -334,38 +208,38 @@ console.log('[Chatbot Embed] Configuración cargada:', window.__CHATBOT_CONFIG__
 /* =======================================================
    4) AGREGAR DOMINIO
 ======================================================= */
-
 exports.addAllowedDomain = async (req, res) => {
   try {
-    const { public_id } = req.params;
-    const { domain } = req.body;
+    if (!req.user?.account_id) {
+      return res.status(401).json({ error: "No autorizado" });
+    }
 
-    const chatbot = await Chatbot.findOne({ public_id });
+    const { public_id } = req.params;
+    const normalized = normalizeDomain(req.body.domain);
+
+    if (!normalized) {
+      return res.status(400).json({ error: "Dominio inválido" });
+    }
+
+    const chatbot = await Chatbot.findOne({
+      public_id,
+      account_id: req.user.account_id
+    });
 
     if (!chatbot) {
       return res.status(404).json({ error: "Chatbot no encontrado" });
     }
 
-    const normalized = normalizeDomain(domain);
-
-    const exists = chatbot.allowed_domains.some(
-      d => normalizeDomain(d) === normalized
-    );
-
-    if (exists) {
+    if (chatbot.allowed_domains.includes(normalized)) {
       return res.status(400).json({ error: "Dominio ya existe" });
     }
 
     chatbot.allowed_domains.push(normalized);
     await chatbot.save();
 
-    res.json({
-      message: "Dominio agregado",
-      allowed_domains: chatbot.allowed_domains
-    });
-
+    res.json({ success: true, domains: chatbot.allowed_domains });
   } catch (err) {
-    console.error(err);
+    console.error("ADD DOMAIN:", err);
     res.status(500).json({ error: "Error interno" });
   }
 };
@@ -373,39 +247,25 @@ exports.addAllowedDomain = async (req, res) => {
 /* =======================================================
    5) ELIMINAR DOMINIO
 ======================================================= */
-
 exports.removeAllowedDomain = async (req, res) => {
   try {
-    const { public_id } = req.params;
-    let { domain } = req.body;
-
-    domain = normalizeDomain(domain);
-
-    if (!domain) {
-      return res.status(400).json({ error: "Dominio inválido" });
+    if (!req.user?.account_id) {
+      return res.status(401).json({ error: "No autorizado" });
     }
 
-    const chatbot = await Chatbot.findOne({ public_id });
+    const { public_id } = req.params;
+    const domain = normalizeDomain(req.body.domain);
+
+    const chatbot = await Chatbot.findOne({
+      public_id,
+      account_id: req.user.account_id
+    });
 
     if (!chatbot) {
       return res.status(404).json({ error: "No encontrado" });
     }
 
-    const before = chatbot.allowed_domains.length;
-
-    chatbot.allowed_domains = chatbot.allowed_domains.filter(d => {
-      if (d === domain) return false;
-      if (d.startsWith("*.")) {
-        const base = d.slice(2);
-        return !domain.endsWith("." + base);
-      }
-      return true;
-    });
-
-    if (before === chatbot.allowed_domains.length) {
-      return res.status(404).json({ error: "Dominio no encontrado" });
-    }
-
+    chatbot.allowed_domains = chatbot.allowed_domains.filter(d => d !== domain);
     await chatbot.save();
 
     res.json({ success: true, domains: chatbot.allowed_domains });
