@@ -36,13 +36,15 @@ const normalizeDomain = (input = "") => {
 };
 
 const escape = (str = "") =>
-  str.replace(/[&<>"']/g, m => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
-  })[m]);
+  str.replace(/[&<>"']/g, m =>
+    ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    })[m]
+  );
 
 const getBaseUrl = () =>
   process.env.APP_BASE_URL ||
@@ -59,6 +61,7 @@ const safeCompare = (a, b) => {
 /* =======================================================
    1) GET INSTALL SCRIPT  → /:public_id/install
 ======================================================= */
+
 exports.getInstallScript = async (req, res) => {
   try {
     const { public_id } = req.params;
@@ -151,6 +154,7 @@ exports.getInstallScript = async (req, res) => {
 /* =======================================================
    2) INTEGRATION SCRIPT
 ======================================================= */
+
 exports.integrationScript = async (req, res) => {
   try {
     const { public_id } = req.params;
@@ -252,6 +256,7 @@ exports.integrationScript = async (req, res) => {
 /* =======================================================
    3) RENDER EMBED (HTML)
 ======================================================= */
+
 exports.renderEmbed = async (req, res) => {
   try {
     const { public_id } = req.params;
@@ -355,13 +360,10 @@ window.__CHATBOT_CONFIG__ = {
 /* =======================================================
    4) AGREGAR DOMINIO
 ======================================================= */
+
 exports.addAllowedDomain = async (req, res) => {
   try {
-    if (!req.user?.account_id) {
-      return res.status(401).json({ error: "No autorizado" });
-    }
-
-    const { chatbotId } = req.params;
+    const { public_id } = req.params;
     let { domain } = req.body;
 
     domain = normalizeDomain(domain);
@@ -370,14 +372,10 @@ exports.addAllowedDomain = async (req, res) => {
       return res.status(400).json({ error: "Dominio inválido" });
     }
 
-    const chatbot = await Chatbot.findById(chatbotId);
+    const chatbot = await Chatbot.findOne({ public_id });
 
     if (!chatbot) {
       return res.status(404).json({ error: "No encontrado" });
-    }
-
-    if (chatbot.account_id.toString() !== req.user.account_id) {
-      return res.status(403).json({ error: "Sin permisos" });
     }
 
     chatbot.allowed_domains ||= [];
@@ -403,13 +401,10 @@ exports.addAllowedDomain = async (req, res) => {
 /* =======================================================
    5) ELIMINAR DOMINIO
 ======================================================= */
+
 exports.removeAllowedDomain = async (req, res) => {
   try {
-    if (!req.user?.account_id) {
-      return res.status(401).json({ error: "No autorizado" });
-    }
-
-    const { chatbotId } = req.params;
+    const { public_id } = req.params;
     let { domain } = req.body;
 
     domain = normalizeDomain(domain);
@@ -418,26 +413,20 @@ exports.removeAllowedDomain = async (req, res) => {
       return res.status(400).json({ error: "Dominio inválido" });
     }
 
-    const chatbot = await Chatbot.findById(chatbotId);
+    const chatbot = await Chatbot.findOne({ public_id });
 
     if (!chatbot) {
       return res.status(404).json({ error: "No encontrado" });
-    }
-
-    if (chatbot.account_id.toString() !== req.user.account_id) {
-      return res.status(403).json({ error: "Sin permisos" });
     }
 
     const before = chatbot.allowed_domains.length;
 
     chatbot.allowed_domains = chatbot.allowed_domains.filter(d => {
       if (d === domain) return false;
-
       if (d.startsWith("*.")) {
         const base = d.slice(2);
         return !domain.endsWith("." + base);
       }
-
       return true;
     });
 
@@ -457,25 +446,67 @@ exports.removeAllowedDomain = async (req, res) => {
 /* =======================================================
    6) GENERAR CÓDIGO DE INSTALACIÓN
 ======================================================= */
+
 exports.sendInstallationCode = async (req, res) => {
   try {
-    const { chatbotId } = req.params;
-    const chatbot = await Chatbot.findById(chatbotId);
+    const { public_id } = req.params;
+
+    const chatbot = await Chatbot.findOne({ public_id });
+
     if (!chatbot) {
       return res.status(404).json({ error: "Chatbot no encontrado" });
     }
-    if (chatbot.account_id.toString() !== req.user.account_id) {
-      return res.status(403).json({ error: "Sin permisos" });
-    }
+
     chatbot.install_token = crypto.randomBytes(32).toString("hex");
     await chatbot.save();
+
     const baseUrl = getBaseUrl();
-    const script = `<script src="${baseUrl}/api/chatbot-integration/${chatbot.public_id}/install" async></script>`;
+
+    const script = `<script src="${baseUrl}/api/chatbot-integration/${public_id}/install" async></script>`;
+
     res.json({ script });
   } catch (err) {
     console.error("INSTALL CODE ERROR:", err);
     res.status(500).json({ error: "Error interno" });
   }
 };
+
+/* =======================================================
+   7) REGENERAR TOKEN DE INSTALACIÓN
+======================================================= */
+exports.regenerateInstallToken = async (req, res) => {
+  try {
+    if (!req.user?.account_id) {
+      return res.status(401).json({ message: "Usuario no autenticado" });
+    }
+
+    const { public_id } = req.params;
+
+    const chatbot = await Chatbot.findOne({
+      public_id,
+      account_id: req.user.account_id
+    });
+
+    if (!chatbot) {
+      return res.status(404).json({ message: "Chatbot no encontrado" });
+    }
+
+    chatbot.install_token = crypto.randomBytes(32).toString("hex");
+    chatbot.allowed_domains = [];
+    chatbot.installation_status = "pending";
+
+    await chatbot.save();
+
+    res.json({
+      message: "Token regenerado correctamente",
+      install_token: chatbot.install_token
+    });
+
+  } catch (err) {
+    console.error("REGENERATE TOKEN ERROR:", err);
+    res.status(500).json({ message: "Error al regenerar token" });
+  }
+};
+
 
 module.exports = exports;

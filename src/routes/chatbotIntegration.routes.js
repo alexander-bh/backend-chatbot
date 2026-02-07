@@ -54,4 +54,5 @@ router.post("/:public_id/domain/remove", ctrl.removeAllowedDomain);
 // 6) REGENERAR TOKEN (si lo usas)
 router.post("/:public_id/token/regenerate", ctrl.regenerateInstallToken);
 
+
 module.exports = router;
