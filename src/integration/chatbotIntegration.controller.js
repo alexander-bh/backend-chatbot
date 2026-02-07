@@ -1,9 +1,7 @@
 const Chatbot = require("../models/Chatbot");
 const crypto = require("crypto");
-
 const sendChatbotInstallEmail = require("../services/sendChatbotInstallEmail.service");
 const findChatbotByPublicId = require("../services/findChatbotByPublicId.service");
-
 const { signDomain } = require("../utils/domainSignature");
 const { isLocalhost } = require("../utils/domainValidation");
 const { domainMatches } = require("../utils/domainMatch");
@@ -198,358 +196,83 @@ exports.renderEmbed = async (req, res) => {
       is_enabled: true
     }).lean();
 
-    if (!chatbot) return res.status(404).send("Chatbot no encontrado");
+    if (!chatbot) {
+      return res.status(404).send("Chatbot no encontrado");
+    }
 
-    if (
-      !chatbot.allowed_domains.some(d => domainMatches(domain, d)) &&
-      !isLocalhost(domain)
-    ) {
+    const allowedDomains = chatbot.allowed_domains || [];
+
+    const domainAllowed =
+      allowedDomains.some(d => domainMatches(domain, d)) ||
+      isLocalhost(domain);
+
+    if (!domainAllowed) {
       return res.status(403).send("Dominio no permitido");
     }
 
-    const {
-      name: chatbotName,
-      avatar = "",
-      primary_color = "#2563eb",
-      welcome_delay = 1
-    } = chatbot;
+    /* HEADERS */
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader(
+      "Content-Security-Policy",
+      "frame-ancestors *"
+    );
 
-    const BASE_URL =
-      process.env.APP_BASE_URL ||
-      "https://backend-chatbot-omega.vercel.app";
+    const apiBase = process.env.APP_BASE_URL || "";
 
-    res.setHeader("Content-Type", "text/html");
-
-    res.send(`<!DOCTYPE html>
+    res.send(`
+<!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>${chatbotName}</title>
-
-<style>
-body { margin:0;font-family:system-ui;background:#f9fafb; }
-
-.chat { display:flex;flex-direction:column;height:100%; }
-.chat-header { background:${primary_color};color:#fff;padding:12px 16px; }
-.chat-header-left { display:flex;align-items:center;gap:10px; }
-.chat-avatar { width:32px;height:32px;border-radius:50%;object-fit:cover; }
-
-main { flex:1;padding:16px;overflow-y:auto; }
-
-footer { display:flex;border-top:1px solid #e5e7eb; }
-input { flex:1;padding:14px;border:none;outline:none; }
-button { background:${primary_color};color:white;border:none;padding:0 20px;cursor:pointer; }
-
-.msg { display:flex;gap:8px;margin-bottom:12px; }
-.msg.bot { align-items:flex-start; }
-.msg.user { justify-content:flex-end; }
-.msg-avatar { width:28px;height:28px;border-radius:50%;object-fit:cover; }
-.bubble { padding:10px 14px;border-radius:12px;max-width:75%;background:#e5e7eb; }
-.msg.user .bubble { background:${primary_color};color:white; }
-
-.options { display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px; }
-.options button {
-  padding:8px 12px;
-  border-radius:8px;
-  border:1px solid #e5e7eb;
-  background:white;
-  cursor:pointer;
-}
-
-/* WIDGET */
-.chat-widget {
-  position:fixed;
-  bottom:90px;
-  right:20px;
-  width:360px;
-  height:520px;
-  background:white;
-  border-radius:14px;
-  box-shadow:0 20px 40px rgba(0,0,0,.15);
-  overflow:hidden;
-  display:none;
-  flex-direction:column;
-  z-index:9999;
-}
-.chat-widget.open { display:flex; }
-
-/* BOTÓN */
-.chat-fab {
-  position:fixed;
-  bottom:20px;
-  right:20px;
-  width:56px;
-  height:56px;
-  border-radius:50%;
-  background:${primary_color};
-  color:white;
-  border:none;
-  cursor:pointer;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  box-shadow:0 10px 20px rgba(0,0,0,.25);
-  z-index:10000;
-}
-.chat-fab svg { width:26px;height:26px;fill:white; }
-
-@media (max-width:480px) {
-  .chat-widget {
-    width:100%;
-    height:100%;
-    right:0;
-    bottom:0;
-    border-radius:0;
-  }
-}
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${chatbot.name}</title>
+  <link rel="stylesheet" href="/public/chatbot/embed.css" />
 </head>
-
 <body>
 
 <button class="chat-fab" id="chatToggle">
-  <svg viewBox="0 0 24 24">
-    <path d="M2 3h20v14H6l-4 4V3z"/>
-  </svg>
+  <span id="launcherText"></span>
 </button>
 
 <div class="chat-widget" id="chatWidget">
   <div class="chat">
     <header class="chat-header">
-      <div class="chat-header-left">
-        ${avatar ? `<img src="${avatar}" class="chat-avatar" />` : ""}
-        <strong>${chatbotName}</strong>
-      </div>
+      <img id="chatAvatar" class="chat-avatar" hidden />
+      <strong id="chatName">Chatbot</strong>
     </header>
 
     <main id="messages"></main>
 
     <footer>
-      <input id="messageInput" placeholder="Escribe tu mensaje…" />
+      <input id="messageInput" />
       <button id="sendBtn">Enviar</button>
     </footer>
   </div>
 </div>
 
 <script>
-const API_BASE = "${BASE_URL}";
-const PUBLIC_ID = "${public_id}";
-const AVATAR = "${avatar}";
-const WELCOME_DELAY = ${welcome_delay};
+  window.__CHATBOT_CONFIG__ = {
+    apiBase: ${JSON.stringify(apiBase)},
+    publicId: ${JSON.stringify(public_id)},
 
-let SESSION_ID = null;
-let typingEl = null;
-let started = false;
-
-const messages = document.getElementById("messages");
-const messageInput = document.getElementById("messageInput");
-const sendBtn = document.getElementById("sendBtn");
-const chatWidget = document.getElementById("chatWidget");
-const chatToggle = document.getElementById("chatToggle");
-
-/* TOGGLE */
-chatToggle.onclick = () => {
-  chatWidget.classList.toggle("open");
-  if (!started) {
-    started = true;
-    startConversation();
-  }
-};
-
-/* UI */
-function addMessage({ from, text }) {
-  const msg = document.createElement("div");
-  msg.className = \`msg \${from}\`;
-
-  msg.innerHTML = \`
-    \${from === "bot" && AVATAR ? \`<img src="\${AVATAR}" class="msg-avatar" />\` : ""}
-    <div class="bubble">\${text}</div>
-  \`;
-
-  messages.appendChild(msg);
-  messages.scrollTop = messages.scrollHeight;
-}
-
-const addBotMessage = text => addMessage({ from: "bot", text });
-const addUserMessage = text => addMessage({ from: "user", text });
-
-function showTyping() {
-  if (typingEl) return;
-  typingEl = document.createElement("div");
-  typingEl.className = "msg bot";
-  typingEl.innerHTML = \`
-    \${AVATAR ? \`<img src="\${AVATAR}" class="msg-avatar" />\` : ""}
-    <div class="bubble">Escribiendo…</div>
-  \`;
-  messages.appendChild(typingEl);
-  messages.scrollTop = messages.scrollHeight;
-}
-
-function hideTyping() {
-  if (!typingEl) return;
-  typingEl.remove();
-  typingEl = null;
-}
-
-function toggleInput(enabled) {
-  messageInput.disabled = !enabled;
-  sendBtn.disabled = !enabled;
-}
-
-/* ENGINE */
-async function startConversation() {
-  const res = await fetch(
-    \`\${API_BASE}/api/public-chatbot/chatbot-conversation/\${PUBLIC_ID}/start\`,
-    { method: "POST" }
-  );
-  const data = await res.json();
-  SESSION_ID = data.session_id;
-  renderNode(data);
-}
-
-function renderNode(node) {
-  const delay = (node.typing_time ?? WELCOME_DELAY) * 1000;
-  showTyping();
-
-  setTimeout(() => {
-    hideTyping();
-    if (node.content) addBotMessage(node.content);
-    if (node.options?.length) renderOptions(node.options);
-    toggleInput(node.expects_input !== false);
-  }, delay);
-}
-
-function renderOptions(options) {
-  const container = document.createElement("div");
-  container.className = "options";
-
-  options.forEach(opt => {
-    const btn = document.createElement("button");
-    btn.textContent = opt.label;
-    btn.onclick = () => {
-      addUserMessage(opt.label);
-      container.remove();
-      sendToEngine(opt.value);
-    };
-    container.appendChild(btn);
-  });
-
-  messages.appendChild(container);
-  messages.scrollTop = messages.scrollHeight;
-}
-
-async function sendToEngine(value) {
-  showTyping();
-
-  const res = await fetch(
-    \`\${API_BASE}/api/public-chatbot/chatbot-conversation/\${SESSION_ID}/next\`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ input: value })
-    }
-  );
-
-  const data = await res.json();
-  hideTyping();
-
-  if (data.completed) {
-    addBotMessage("Conversación finalizada 👋");
-    toggleInput(false);
-    return;
-  }
-
-  renderNode(data);
-}
-
-/* SEND */
-sendBtn.onclick = () => {
-  const text = messageInput.value.trim();
-  if (!text || !SESSION_ID) return;
-  addUserMessage(text);
-  messageInput.value = "";
-  sendToEngine(text);
-};
+    name: ${JSON.stringify(chatbot.name)},
+    avatar: ${JSON.stringify(chatbot.avatar || "")},
+    welcomeMessage: ${JSON.stringify(chatbot.welcome_message || "")},
+    primaryColor: ${JSON.stringify(chatbot.primary_color || "#2563eb")},
+    secondaryColor: ${JSON.stringify(chatbot.secondary_color || "#111827")},
+    launcherText: ${JSON.stringify(chatbot.launcher_text || "")},
+    inputPlaceholder: ${JSON.stringify(chatbot.input_placeholder || "Escribe tu mensaje…")}
+  };
 </script>
+
+<script src="/public/chatbot/embed.js" defer></script>
 </body>
-</html>`);
+</html>
+    `);
   } catch (err) {
     console.error("RENDER EMBED ERROR:", err);
-    res.status(500).send("Error al cargar el chatbot");
-  }
-};
-
-
-function renderNode(node) {
-  const delay = (node.typing_time ?? WELCOME_DELAY) * 1000;
-  showTyping();
-
-  setTimeout(() => {
-    hideTyping();
-    if (node.content) addBotMessage(node.content);
-    if (node.options?.length) renderOptions(node.options);
-    toggleInput(node.expects_input !== false);
-  }, delay);
-}
-
-function renderOptions(options) {
-  const container = document.createElement("div");
-  container.className = "options";
-
-  options.forEach(opt => {
-    const btn = document.createElement("button");
-    btn.textContent = opt.label;
-    btn.onclick = () => {
-      addUserMessage(opt.label);
-      container.remove();
-      sendToEngine(opt.value);
-    };
-    container.appendChild(btn);
-  });
-
-  messages.appendChild(container);
-  messages.scrollTop = messages.scrollHeight;
-}
-
-async function sendToEngine(value) {
-  showTyping();
-
-  const res = await fetch(
-    `${API_BASE}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ input: value })
-    }
-  );
-
-  const data = await res.json();
-  hideTyping();
-
-  if (data.completed) {
-    addBotMessage("Conversación finalizada 👋");
-    toggleInput(false);
-    return;
-  }
-
-  renderNode(data);
-}
-
-/* ---------- SEND ---------- */
-sendBtn.onclick = () => {
-  const text = messageInput.value.trim();
-  if (!text || !SESSION_ID) return;
-  addUserMessage(text);
-  messageInput.value = "";
-  sendToEngine(text);
-};
-</script>
-</body>
-</html>`);
-  } catch (err) {
-    console.error("RENDER EMBED ERROR:", err);
-    res.status(500).send("Error al cargar el chatbot");
+    res.status(500).send("No se pudo cargar el chatbot");
   }
 };
 
