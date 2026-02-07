@@ -85,6 +85,14 @@
         const msg = document.createElement("div");
         msg.className = `msg ${from}`;
 
+        // Agregar avatar solo para mensajes del bot
+        if (from === "bot" && avatar) {
+            const avatarImg = document.createElement("img");
+            avatarImg.src = avatar;
+            avatarImg.className = "msg-avatar";
+            msg.appendChild(avatarImg);
+        }
+
         const bubble = document.createElement("div");
         bubble.className = "bubble";
         bubble.textContent = text;
@@ -94,42 +102,76 @@
         messages.scrollTop = messages.scrollHeight;
     }
 
+    let typingElement = null;
+
     function showTyping() {
-        return addMessage("bot", "Escribiendo…");
+        if (typingElement) return; // Evitar duplicados
+
+        const msg = document.createElement("div");
+        msg.className = "msg bot typing";
+
+        if (avatar) {
+            const avatarImg = document.createElement("img");
+            avatarImg.src = avatar;
+            avatarImg.className = "msg-avatar";
+            msg.appendChild(avatarImg);
+        }
+
+        const bubble = document.createElement("div");
+        bubble.className = "bubble";
+        bubble.textContent = "Escribiendo…";
+
+        msg.appendChild(bubble);
+        messages.appendChild(msg);
+        messages.scrollTop = messages.scrollHeight;
+
+        typingElement = msg;
     }
 
-    function removeTyping(el) {
-        if (el) el.remove();
+    function removeTyping() {
+        if (typingElement) {
+            typingElement.remove();
+            typingElement = null;
+        }
     }
 
     /* ===============================
        START
     ================================ */
     async function startConversation() {
-        let typing;
-
         try {
-            if (welcomeMessage) addMessage("bot", welcomeMessage);
+            // Mostrar welcome message solo si existe
+            if (welcomeMessage) {
+                addMessage("bot", welcomeMessage);
+            }
 
-            typing = showTyping();
+            showTyping();
 
             const res = await fetch(
                 `${apiBase}/api/public-chatbot/chatbot-conversation/${publicId}/start`,
                 { method: "POST" }
             );
 
+            if (!res.ok) {
+                throw new Error(`Error ${res.status}`);
+            }
+
             const data = await res.json();
             SESSION_ID = data.session_id;
 
-            removeTyping(typing);
-            if (data.content) addMessage("bot", data.content);
+            removeTyping();
+
+            // Solo mostrar el contenido si NO es igual al welcomeMessage
+            if (data.content && data.content !== welcomeMessage) {
+                addMessage("bot", data.content);
+            }
 
             messageInput.disabled = false;
             sendBtn.disabled = false;
             messageInput.focus();
         } catch (err) {
             console.error(err);
-            removeTyping(typing);
+            removeTyping();
             addMessage("bot", "No pude iniciar la conversación 😕");
         }
     }
@@ -140,12 +182,11 @@
 
         addMessage("user", text);
         messageInput.value = "";
+        messageInput.disabled = true;
         sendBtn.disabled = true;
 
-        let typing;
-
         try {
-            typing = showTyping();
+            showTyping();
 
             const res = await fetch(
                 `${apiBase}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`,
@@ -156,23 +197,37 @@
                 }
             );
 
-            const data = await res.json();
-            removeTyping(typing);
+            if (!res.ok) {
+                throw new Error(`Error ${res.status}`);
+            }
 
-            if (data.content) addMessage("bot", data.content);
+            const data = await res.json();
+            removeTyping();
+
+            if (data.content) {
+                addMessage("bot", data.content);
+            }
+
+            if (data.completed) {
+                messageInput.disabled = true;
+                sendBtn.disabled = true;
+            }
         } catch (err) {
             console.error(err);
-            removeTyping(typing);
+            removeTyping();
             addMessage("bot", "Ocurrió un error 😕");
         } finally {
-            sendBtn.disabled = false;
-            messageInput.focus();
+            if (!messageInput.disabled) {
+                messageInput.disabled = false;
+                sendBtn.disabled = false;
+                messageInput.focus();
+            }
         }
     }
 
     sendBtn.onclick = sendMessage;
     messageInput.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
+        if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             sendMessage();
         }
