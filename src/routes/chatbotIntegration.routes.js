@@ -3,10 +3,7 @@ const rateLimit = require("express-rate-limit");
 const ctrl = require("../integration/chatbotIntegration.controller");
 const auth = require("../middlewares/auth.middleware");
 
-/* ────────────────────────────────────────────── */
-/* RATE LIMIT SOLO PARA SCRIPTS PÚBLICOS         */
-/* ────────────────────────────────────────────── */
-
+/*
 const chatbotScriptLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minuto
   max: 20,
@@ -21,12 +18,12 @@ const chatbotScriptLimiter = rateLimit({
   }
 });
 
-/* ───────── RUTAS PÚBLICAS ───────── */
 router.get(
   "/integration/:public_id",
   chatbotScriptLimiter,
   ctrl.integrationScript
-);
+);*/
+
 router.get("/embed/:public_id", ctrl.renderEmbed);
 // INSTALL DEBE SER PÚBLICO
 router.get("/:public_id/install", ctrl.getInstallScript);
