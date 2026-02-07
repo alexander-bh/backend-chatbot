@@ -1,3 +1,4 @@
+//utils/domain.utils
 function normalizeDomain(domain = "") {
   try {
     const url = new URL(domain.startsWith("http") ? domain : `https://${domain}`);

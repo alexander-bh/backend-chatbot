@@ -21,38 +21,27 @@ const chatbotScriptLimiter = rateLimit({
   }
 });
 
-/* ────────────────────────────────────────────── */
-/* RUTAS PÚBLICAS (NO AUTH)                      */
-/* ────────────────────────────────────────────── */
+/* ───────── RUTAS PÚBLICAS ───────── */
 
-// 1) SCRIPT DE INTEGRACIÓN (crea el iframe final)
 router.get(
   "/integration/:public_id",
   chatbotScriptLimiter,
   ctrl.integrationScript
 );
 
-// 2) IFRAME EMBED (HTML del chatbot)
 router.get("/embed/:public_id", ctrl.renderEmbed);
 
-/* ────────────────────────────────────────────── */
-/* RUTAS PRIVADAS (DASHBOARD)                    */
-/* ────────────────────────────────────────────── */
-
-router.use(auth);
-
-// 3) INSTALACIÓN REAL  →  /:public_id/install
+// ✅ INSTALL DEBE SER PÚBLICO
 router.get("/:public_id/install", ctrl.getInstallScript);
 
-// 4) GENERAR CÓDIGO DE INSTALACIÓN
-router.post("/:public_id/send-installation", ctrl.sendInstallationCode);
+/* ───────── RUTAS PRIVADAS ───────── */
+router.use(auth);
 
-// 5) DOMINIOS PERMITIDOS
+router.post("/:public_id/send-installation", ctrl.sendInstallationCode);
 router.post("/:public_id/domain/add", ctrl.addAllowedDomain);
 router.post("/:public_id/domain/remove", ctrl.removeAllowedDomain);
-
-// 6) REGENERAR TOKEN (si lo usas)
 router.post("/:public_id/token/regenerate", ctrl.regenerateInstallToken);
+
 
 
 module.exports = router;
