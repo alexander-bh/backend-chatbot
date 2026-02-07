@@ -73,10 +73,31 @@ exports.getInstallScript = async (req, res) => {
     });
 
     if (!chatbot) {
-      return res.status(404).send("// Chatbot no encontrado");
+      return res.status(404).send(`
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Chatbot no encontrado</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto; background:#f3f4f6; padding:40px;}
+    .box{max-width:700px;margin:auto;background:white;padding:24px;border-radius:12px;box-shadow:0 10px 20px rgba(0,0,0,.08);}
+    code{background:#eef2ff;padding:4px 8px;border-radius:6px;}
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2>❌ Chatbot no encontrado</h2>
+    <p>El <code>public_id</code> proporcionado no existe o está deshabilitado.</p>
+  </div>
+</body>
+</html>
+`);
     }
 
+    // Detectar dominio de origen
     let origin = req.headers.origin || "";
+
     if (!origin && req.headers.referer) {
       try {
         origin = new URL(req.headers.referer).origin;
@@ -87,8 +108,47 @@ exports.getInstallScript = async (req, res) => {
 
     const domain = normalizeDomain(origin);
 
+    // 👉 MENSAJE AMIGABLE si lo abres directo en el navegador
     if (!domain) {
-      return res.status(400).send("// Dominio inválido");
+      return res.status(400).send(`
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Cómo instalar el chatbot</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto; background:#f3f4f6; padding:40px;}
+    .box{max-width:800px;margin:auto;background:white;padding:24px;border-radius:12px;box-shadow:0 10px 20px rgba(0,0,0,.08);}
+    code{background:#eef2ff;padding:4px 8px;border-radius:6px;}
+    pre{background:#111827;color:#e5e7eb;padding:16px;border-radius:10px;overflow-x:auto;}
+    .ok{color:#166534;}
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2>📌 Cómo instalar tu chatbot</h2>
+
+    <p>Este endpoint <strong>no debe abrirse directamente en el navegador.</strong></p>
+
+    <p>Debes colocarlo dentro de tu sitio web:</p>
+
+<pre><code>&lt;script 
+  src="${getBaseUrl()}/api/chatbot-integration/${public_id}/install"
+  async&gt;
+&lt;/script&gt;
+</code></pre>
+
+    <p class="ok">✔ Pégalo antes de &lt;/body&gt; en tu página.</p>
+
+    <hr/>
+
+    <h3>Tu dominio permitido:</h3>
+    <code>${chatbot.allowed_domains.join(", ")}</code>
+
+  </div>
+</body>
+</html>
+`);
     }
 
     const allowLocalhost = process.env.NODE_ENV === "development";
@@ -99,9 +159,26 @@ exports.getInstallScript = async (req, res) => {
       (allowLocalhost && isLocalhost(domain));
 
     if (!allowed) {
-      return res.status(403).send("// Dominio no autorizado");
+      return res.status(403).send(`
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Dominio no autorizado</title>
+</head>
+<body>
+  <h2>🚫 Dominio no autorizado</h2>
+  <p>Tu dominio actual:</p>
+  <code>${domain}</code>
+
+  <p>Dominios permitidos:</p>
+  <code>${chatbot.allowed_domains.join(", ")}</code>
+</body>
+</html>
+`);
     }
 
+    // ====== GENERAR IFRAME SEGURO ======
     const timeWindow = Math.floor(Date.now() / 60000);
 
     const signature = signDomain(
@@ -147,9 +224,10 @@ exports.getInstallScript = async (req, res) => {
 })();`);
   } catch (err) {
     console.error("INSTALL SCRIPT:", err);
-    res.status(500).send("// Error interno");
+    res.status(500).send("Error interno");
   }
 };
+
 
 /* =======================================================
    2) INTEGRATION SCRIPT
