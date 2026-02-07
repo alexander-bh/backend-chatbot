@@ -12,7 +12,7 @@
         publicId,
         name,
         avatar,
-        welcomeMessage,
+        welcomeMessage = "1",
         primaryColor,
         secondaryColor,
         launcherText,
