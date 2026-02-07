@@ -3,38 +3,11 @@ const crypto = require("crypto");
 const { signDomain } = require("../utils/domainSignature");
 const { isLocalhost } = require("../utils/domainValidation");
 const { domainMatches } = require("../utils/domainMatch");
-const isValidDomain = require("../utils/isValidDomain");
+const { normalizeDomain } = require("../utils/domain.utils");
 
 /* =======================================================
    UTILIDADES
 ======================================================= */
-
-const normalizeDomain = (input = "") => {
-  try {
-    if (!input) return "";
-
-    input = input.trim().toLowerCase();
-
-    if (input.startsWith("*.")) {
-      let base = input.slice(2);
-      if (!/^https?:\/\//.test(base)) {
-        base = "https://" + base;
-      }
-      const url = new URL(base);
-      return "*." + url.hostname.replace(/^www\./, "");
-    }
-
-    if (!/^https?:\/\//.test(input)) {
-      input = "https://" + input;
-    }
-
-    const url = new URL(input);
-    return url.hostname.replace(/^www\./, "");
-  } catch {
-    return "";
-  }
-};
-
 const escape = (str = "") =>
   str.replace(/[&<>"']/g, m =>
     ({
@@ -73,114 +46,25 @@ exports.getInstallScript = async (req, res) => {
     });
 
     if (!chatbot) {
-      return res.status(404).send(`
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8"/>
-  <title>Chatbot no encontrado</title>
-  <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto; background:#f3f4f6; padding:40px;}
-    .box{max-width:700px;margin:auto;background:white;padding:24px;border-radius:12px;box-shadow:0 10px 20px rgba(0,0,0,.08);}
-    code{background:#eef2ff;padding:4px 8px;border-radius:6px;}
-  </style>
-</head>
-<body>
-  <div class="box">
-    <h2>❌ Chatbot no encontrado</h2>
-    <p>El <code>public_id</code> proporcionado no existe o está deshabilitado.</p>
-  </div>
-</body>
-</html>
-`);
+      return res.status(404).send("// Chatbot no encontrado");
     }
 
-    // Detectar dominio de origen
-    let origin = req.headers.origin || "";
+    const originHeader = req.headers.referer || req.headers.origin;
+    const domain = normalizeDomain(originHeader);
 
-    if (!origin && req.headers.referer) {
-      try {
-        origin = new URL(req.headers.referer).origin;
-      } catch {
-        origin = "";
-      }
-    }
-
-    const domain = normalizeDomain(origin);
-
-    // 👉 MENSAJE AMIGABLE si lo abres directo en el navegador
     if (!domain) {
-      return res.status(400).send(`
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8"/>
-  <title>Cómo instalar el chatbot</title>
-  <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto; background:#f3f4f6; padding:40px;}
-    .box{max-width:800px;margin:auto;background:white;padding:24px;border-radius:12px;box-shadow:0 10px 20px rgba(0,0,0,.08);}
-    code{background:#eef2ff;padding:4px 8px;border-radius:6px;}
-    pre{background:#111827;color:#e5e7eb;padding:16px;border-radius:10px;overflow-x:auto;}
-    .ok{color:#166534;}
-  </style>
-</head>
-<body>
-  <div class="box">
-    <h2>📌 Cómo instalar tu chatbot</h2>
-
-    <p>Este endpoint <strong>no debe abrirse directamente en el navegador.</strong></p>
-
-    <p>Debes colocarlo dentro de tu sitio web:</p>
-
-<pre><code>&lt;script 
-  src="${getBaseUrl()}/api/chatbot-integration/${public_id}/install"
-  async&gt;
-&lt;/script&gt;
-</code></pre>
-
-    <p class="ok">✔ Pégalo antes de &lt;/body&gt; en tu página.</p>
-
-    <hr/>
-
-    <h3>Tu dominio permitido:</h3>
-    <code>${chatbot.allowed_domains.join(", ")}</code>
-
-  </div>
-</body>
-</html>
-`);
+      return res.status(400).send("// Dominio inválido");
     }
-
-    const allowLocalhost = process.env.NODE_ENV === "development";
-    const allowedDomains = chatbot.allowed_domains || [];
 
     const allowed =
-      allowedDomains.some(d => domainMatches(domain, d)) ||
-      (allowLocalhost && isLocalhost(domain));
+      chatbot.allowed_domains.some(d => normalizeDomain(d) === domain) ||
+      (process.env.NODE_ENV === "development" && isLocalhost(domain));
 
     if (!allowed) {
-      return res.status(403).send(`
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8"/>
-  <title>Dominio no autorizado</title>
-</head>
-<body>
-  <h2>🚫 Dominio no autorizado</h2>
-  <p>Tu dominio actual:</p>
-  <code>${domain}</code>
-
-  <p>Dominios permitidos:</p>
-  <code>${chatbot.allowed_domains.join(", ")}</code>
-</body>
-</html>
-`);
+      return res.status(403).send("// Dominio no autorizado");
     }
 
-    // ====== GENERAR IFRAME SEGURO ======
     const timeWindow = Math.floor(Date.now() / 60000);
-
     const signature = signDomain(
       domain,
       chatbot.public_id,
@@ -218,16 +102,13 @@ exports.getInstallScript = async (req, res) => {
   \`;
 
   iframe.sandbox = "allow-scripts allow-same-origin allow-forms";
-  iframe.allow = "clipboard-write";
-
   document.body.appendChild(iframe);
 })();`);
   } catch (err) {
     console.error("INSTALL SCRIPT:", err);
-    res.status(500).send("Error interno");
+    res.status(500).send("// Error interno");
   }
 };
-
 
 /* =======================================================
    2) INTEGRATION SCRIPT
@@ -267,12 +148,9 @@ exports.integrationScript = async (req, res) => {
       return res.status(403).send("// Chatbot inválido");
     }
 
-    const allowLocalhost = process.env.NODE_ENV === "development";
-    const allowedDomains = chatbot.allowed_domains || [];
-
     const allowed =
-      allowedDomains.some(d => domainMatches(domain, d)) ||
-      (allowLocalhost && isLocalhost(domain));
+      chatbot.allowed_domains.some(d => normalizeDomain(d) === domain) ||
+      (process.env.NODE_ENV === "development" && isLocalhost(domain));
 
     if (!allowed) {
       return res.status(403).send("// Dominio no autorizado");
@@ -321,8 +199,6 @@ exports.integrationScript = async (req, res) => {
   \`;
 
   iframe.sandbox = "allow-scripts allow-same-origin allow-forms";
-  iframe.allow = "clipboard-write";
-
   document.body.appendChild(iframe);
 })();`);
   } catch (err) {
@@ -442,39 +318,38 @@ window.__CHATBOT_CONFIG__ = {
 exports.addAllowedDomain = async (req, res) => {
   try {
     const { public_id } = req.params;
-    let { domain } = req.body;
-
-    domain = normalizeDomain(domain);
-
-    if (!domain || !isValidDomain(domain)) {
-      return res.status(400).json({ error: "Dominio inválido" });
-    }
+    const { domain } = req.body;
 
     const chatbot = await Chatbot.findOne({ public_id });
 
     if (!chatbot) {
-      return res.status(404).json({ error: "No encontrado" });
+      return res.status(404).json({ error: "Chatbot no encontrado" });
     }
 
-    chatbot.allowed_domains ||= [];
+    const normalized = normalizeDomain(domain);
 
-    const exists = chatbot.allowed_domains.some(d =>
-      d === domain || domainMatches(domain, d)
+    const exists = chatbot.allowed_domains.some(
+      d => normalizeDomain(d) === normalized
     );
 
     if (exists) {
-      return res.status(409).json({ error: "Dominio ya existe" });
+      return res.status(400).json({ error: "Dominio ya existe" });
     }
 
-    chatbot.allowed_domains.push(domain);
+    chatbot.allowed_domains.push(normalized);
     await chatbot.save();
 
-    res.json({ success: true, domains: chatbot.allowed_domains });
+    res.json({
+      message: "Dominio agregado",
+      allowed_domains: chatbot.allowed_domains
+    });
+
   } catch (err) {
-    console.error("ADD DOMAIN:", err);
+    console.error(err);
     res.status(500).json({ error: "Error interno" });
   }
 };
+
 
 /* =======================================================
    5) ELIMINAR DOMINIO
@@ -528,20 +403,14 @@ exports.removeAllowedDomain = async (req, res) => {
 exports.sendInstallationCode = async (req, res) => {
   try {
     const { public_id } = req.params;
-
     const chatbot = await Chatbot.findOne({ public_id });
-
     if (!chatbot) {
       return res.status(404).json({ error: "Chatbot no encontrado" });
     }
-
     chatbot.install_token = crypto.randomBytes(32).toString("hex");
     await chatbot.save();
-
     const baseUrl = getBaseUrl();
-
-    const script = `<script src="${baseUrl}/api/chatbot-integration/${public_id}/install" async></script>`;
-
+    const script =`<script src="${baseUrl}/api/chatbot-integration/${public_id}/install" async></script>`;
     res.type("text/plain").send(script);
 
   } catch (err) {
