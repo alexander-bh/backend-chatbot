@@ -12,10 +12,8 @@
         publicId,
         name,
         avatar,
-        welcomeMessage = "1",
         primaryColor,
         secondaryColor,
-        launcherText,
         inputPlaceholder
     } = window.__CHATBOT_CONFIG__;
 
@@ -33,10 +31,9 @@
     const messageInput = document.getElementById("messageInput");
     const sendBtn = document.getElementById("sendBtn");
     const chatWidget = document.getElementById("chatWidget");
-    const chatToggle = document.getElementById("chatToggle");
     const chatName = document.getElementById("chatName");
     const chatAvatar = document.getElementById("chatAvatar");
-    const launcher = document.getElementById("launcherText");
+    const chatToggle = document.getElementById("chatToggle");
 
     /* 🛡 Defensa por si el HTML cambia */
     if (!messages || !messageInput || !sendBtn || !chatWidget || !chatToggle) {
@@ -44,22 +41,32 @@
         return;
     }
 
+    const originalIcon = chatToggle.innerHTML;
+
     /* ===============================
        CONFIG UI
     ================================ */
     if (chatName && name) chatName.textContent = name;
+
     if (chatAvatar && avatar) {
         chatAvatar.src = avatar;
         chatAvatar.hidden = false;
     }
-    if (launcher && launcherText) launcher.textContent = launcherText;
-    if (inputPlaceholder) messageInput.placeholder = inputPlaceholder;
+
+    if (inputPlaceholder) {
+        messageInput.placeholder = inputPlaceholder;
+    }
 
     if (primaryColor) {
-        document.documentElement.style.setProperty("--chat-primary", primaryColor);
+        document.documentElement
+            .style
+            .setProperty("--chat-primary", primaryColor);
     }
+
     if (secondaryColor) {
-        document.documentElement.style.setProperty("--chat-secondary", secondaryColor);
+        document.documentElement
+            .style
+            .setProperty("--chat-secondary", secondaryColor);
     }
 
     messageInput.disabled = true;
@@ -70,8 +77,25 @@
     ================================ */
     chatToggle.onclick = () => {
         isOpen = !isOpen;
-        chatWidget.classList.toggle("open", isOpen);
 
+        chatWidget.classList.toggle("open", isOpen);
+        chatToggle.classList.toggle("active", isOpen);
+
+        chatToggle.innerHTML = isOpen
+            ? '<span style="font-size:26px;line-height:1">✕</span>'
+            : originalIcon;
+
+        // Quitar foco al cerrar
+        if (!isOpen) {
+            messageInput.blur();
+        }
+
+        // Auto-focus al abrir
+        if (isOpen && !messageInput.disabled) {
+            messageInput.focus();
+        }
+
+        // Iniciar solo una vez
         if (!started) {
             started = true;
             startConversation();
@@ -85,7 +109,6 @@
         const msg = document.createElement("div");
         msg.className = `msg ${from}`;
 
-        // Agregar avatar solo para mensajes del bot
         if (from === "bot" && avatar) {
             const avatarImg = document.createElement("img");
             avatarImg.src = avatar;
@@ -99,13 +122,14 @@
 
         msg.appendChild(bubble);
         messages.appendChild(msg);
+
         messages.scrollTop = messages.scrollHeight;
     }
 
     let typingElement = null;
 
     function showTyping() {
-        if (typingElement) return; // Evitar duplicados
+        if (typingElement) return;
 
         const msg = document.createElement("div");
         msg.className = "msg bot typing";
@@ -123,6 +147,7 @@
 
         msg.appendChild(bubble);
         messages.appendChild(msg);
+
         messages.scrollTop = messages.scrollHeight;
 
         typingElement = msg;
@@ -140,11 +165,6 @@
     ================================ */
     async function startConversation() {
         try {
-            // Mostrar welcome message solo si existe
-            if (welcomeMessage) {
-                addMessage("bot", welcomeMessage);
-            }
-
             showTyping();
 
             const res = await fetch(
@@ -157,33 +177,42 @@
             }
 
             const data = await res.json();
+
             SESSION_ID = data.session_id;
 
             removeTyping();
 
-            // Solo mostrar el contenido si NO es igual al welcomeMessage
-            if (data.content && data.content !== welcomeMessage) {
-                addMessage("bot", data.content);
-            }
-
             messageInput.disabled = false;
             sendBtn.disabled = false;
-            messageInput.focus();
+
+            if (isOpen) {
+                messageInput.focus();
+            }
+
         } catch (err) {
             console.error(err);
+
             removeTyping();
-            addMessage("bot", "No pude iniciar la conversación 😕");
+
+            addMessage(
+                "bot",
+                "No pude iniciar la conversación 😕"
+            );
         }
     }
 
     async function sendMessage() {
         const text = messageInput.value.trim();
+
         if (!text || !SESSION_ID) return;
 
         addMessage("user", text);
+
         messageInput.value = "";
         messageInput.disabled = true;
         sendBtn.disabled = true;
+
+        let completed = false;
 
         try {
             showTyping();
@@ -192,7 +221,9 @@
                 `${apiBase}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`,
                 {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
                     body: JSON.stringify({ input: text })
                 }
             );
@@ -202,6 +233,7 @@
             }
 
             const data = await res.json();
+
             removeTyping();
 
             if (data.content) {
@@ -209,27 +241,46 @@
             }
 
             if (data.completed) {
+                completed = true;
+
                 messageInput.disabled = true;
                 sendBtn.disabled = true;
             }
+
         } catch (err) {
             console.error(err);
+
             removeTyping();
-            addMessage("bot", "Ocurrió un error 😕");
+
+            addMessage(
+                "bot",
+                "Ocurrió un error 😕"
+            );
+
         } finally {
-            if (!messageInput.disabled) {
+
+            // Reactivar solo si no terminó
+            if (!completed) {
                 messageInput.disabled = false;
                 sendBtn.disabled = false;
-                messageInput.focus();
+
+                if (isOpen) {
+                    messageInput.focus();
+                }
             }
         }
     }
 
+    /* ===============================
+       EVENTS
+    ================================ */
     sendBtn.onclick = sendMessage;
+
     messageInput.addEventListener("keydown", (e) => {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             sendMessage();
         }
     });
+
 })();

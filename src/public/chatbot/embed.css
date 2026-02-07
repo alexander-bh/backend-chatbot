@@ -15,6 +15,10 @@ body {
 /* ===============================
    FAB BUTTON
 ================================ */
+.chat-fab.active {
+    animation: none;
+}
+
 .chat-fab {
     position: fixed;
     bottom: 20px;
@@ -26,13 +30,19 @@ body {
     color: white;
     border: none;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+
     display: flex;
     align-items: center;
     justify-content: center;
+
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     font-size: 28px;
     z-index: 10000;
+
     transition: transform 0.2s, box-shadow 0.2s;
+
+    /* Animación */
+    animation: pulse 2.5s infinite;
 }
 
 .chat-fab:hover {
@@ -44,9 +54,26 @@ body {
     transform: scale(0.95);
 }
 
-#launcherText {
-    font-size: 14px;
-    font-weight: 600;
+/* Ícono */
+
+.chat-icon {
+    width: 28px;
+    height: 28px;
+    stroke: white;
+}
+
+/* Pulso */
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(37,99,235,0.5);
+    }
+    70% {
+        box-shadow: 0 0 0 15px rgba(37,99,235,0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(37,99,235,0);
+    }
 }
 
 /* ===============================
