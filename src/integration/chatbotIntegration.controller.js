@@ -50,7 +50,13 @@ exports.getInstallScript = async (req, res) => {
       return res.status(404).send("// Chatbot no encontrado");
     }
 
-    const originHeader = req.headers.referer || req.headers.origin;
+    // ✅ FIX: origen más confiable
+    const originHeader =
+      req.headers.origin ||
+      req.headers.referer ||
+      req.query.d ||
+      "";
+
     const domain = normalizeDomain(originHeader);
 
     if (!domain) {
@@ -66,6 +72,7 @@ exports.getInstallScript = async (req, res) => {
     }
 
     const timeWindow = Math.floor(Date.now() / 60000);
+
     const signature = signDomain(
       domain,
       chatbot.public_id,
@@ -83,7 +90,7 @@ exports.getInstallScript = async (req, res) => {
   if (window.__CHATBOT_INSTALLED__) return;
   window.__CHATBOT_INSTALLED__ = true;
 
-  const iframe = document.createElement("iframe");
+  var iframe = document.createElement("iframe");
 
   iframe.src =
     "${baseUrl}/api/chatbot-integration/integration/${public_id}"
@@ -99,7 +106,7 @@ exports.getInstallScript = async (req, res) => {
     width:380px;
     height:600px;
     border:none;
-    z-index:999999;
+    z-index:2147483647;
   \`;
 
   iframe.sandbox = "allow-scripts allow-same-origin allow-forms";
@@ -184,6 +191,9 @@ exports.integrationScript = async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
 
     res.send(`(function(){
+  if (window.__CHATBOT_IFRAME__) return;
+  window.__CHATBOT_IFRAME__ = true;
+
   var iframe = document.createElement("iframe");
 
   iframe.src =
@@ -196,7 +206,7 @@ exports.integrationScript = async (req, res) => {
     width:380px;
     height:600px;
     border:none;
-    z-index:999999;
+    z-index:2147483647;
   \`;
 
   iframe.sandbox = "allow-scripts allow-same-origin allow-forms";
