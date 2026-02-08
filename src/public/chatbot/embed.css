@@ -10,15 +10,13 @@
 body {
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: transparent;
+    overflow: hidden;
 }
 
 /* ===============================
    FAB BUTTON
 ================================ */
-.chat-fab.active {
-    animation: none;
-}
-
 .chat-fab {
     position: fixed;
     bottom: 20px;
@@ -40,9 +38,11 @@ body {
     z-index: 10000;
 
     transition: transform 0.2s, box-shadow 0.2s;
-
-    /* Animación */
     animation: pulse 2.5s infinite;
+}
+
+.chat-fab.active {
+    animation: none;
 }
 
 .chat-fab:hover {
@@ -53,16 +53,6 @@ body {
 .chat-fab:active {
     transform: scale(0.95);
 }
-
-/* Ícono */
-
-.chat-icon {
-    width: 28px;
-    height: 28px;
-    stroke: white;
-}
-
-/* Pulso */
 
 @keyframes pulse {
     0% {
@@ -89,14 +79,21 @@ body {
     background: white;
     border-radius: 16px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+    
     display: none;
     flex-direction: column;
     overflow: hidden;
     z-index: 9999;
+    
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+    transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
 .chat-widget.open {
     display: flex;
+    opacity: 1;
+    transform: translateY(0) scale(1);
 }
 
 /* ===============================
@@ -111,24 +108,52 @@ body {
 .chat-header {
     background: var(--chat-primary);
     color: white;
-    padding: 16px;
+    padding: 16px 20px;
     display: flex;
     align-items: center;
     gap: 12px;
     flex-shrink: 0;
+    position: relative;
 }
 
 .chat-avatar {
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     object-fit: cover;
     border: 2px solid rgba(255, 255, 255, 0.3);
 }
 
+.chat-header-info {
+    flex: 1;
+}
+
 .chat-header strong {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 600;
+    display: block;
+}
+
+.chat-status {
+    font-size: 12px;
+    opacity: 0.85;
+    margin-top: 2px;
+}
+
+.chat-close {
+    background: transparent;
+    border: none;
+    color: white;
+    cursor: pointer;
+    font-size: 24px;
+    padding: 4px 8px;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+    line-height: 1;
+}
+
+.chat-close:hover {
+    opacity: 1;
 }
 
 /* ===============================
@@ -146,6 +171,18 @@ main {
     gap: 8px;
     margin-bottom: 16px;
     align-items: flex-end;
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .msg.bot {
@@ -170,6 +207,7 @@ main {
     max-width: 75%;
     word-wrap: break-word;
     line-height: 1.4;
+    font-size: 14px;
 }
 
 .msg.bot .bubble {
@@ -188,6 +226,18 @@ main {
 .msg.typing .bubble {
     font-style: italic;
     opacity: 0.7;
+    animation: pulse-text 1.5s infinite;
+}
+
+@keyframes pulse-text {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 0.8; }
+}
+
+.msg.error .bubble {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
 }
 
 /* ===============================
@@ -207,11 +257,13 @@ footer {
     outline: none;
     font-size: 14px;
     font-family: inherit;
+    resize: none;
 }
 
 #messageInput:disabled {
     background: #f3f4f6;
     cursor: not-allowed;
+    opacity: 0.6;
 }
 
 #sendBtn {
@@ -222,11 +274,15 @@ footer {
     cursor: pointer;
     font-weight: 600;
     font-size: 14px;
-    transition: background 0.2s;
+    transition: background 0.2s, transform 0.1s;
 }
 
 #sendBtn:hover:not(:disabled) {
     background: color-mix(in srgb, var(--chat-primary) 85%, black);
+}
+
+#sendBtn:active:not(:disabled) {
+    transform: scale(0.95);
 }
 
 #sendBtn:disabled {
@@ -270,5 +326,8 @@ main::-webkit-scrollbar-thumb:hover {
     .chat-fab {
         bottom: 16px;
         right: 16px;
+        width: 56px;
+        height: 56px;
+        font-size: 24px;
     }
 }
