@@ -35,7 +35,7 @@ body {
 
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     font-size: 28px;
-    z-index: 10000;
+    z-index: 10001; /* ✅ Mayor que chat-widget */
 
     transition: transform 0.2s, box-shadow 0.2s;
     animation: pulse 2.5s infinite;
@@ -43,6 +43,8 @@ body {
 
 .chat-fab.active {
     animation: none;
+    /* ✅ Cuando está abierto, mover hacia arriba para no sobreponer */
+    bottom: 620px; /* 600px de altura del chat + 20px de margen */
 }
 
 .chat-fab:hover {
@@ -78,22 +80,26 @@ body {
     max-height: calc(100vh - 120px);
     background: white;
     border-radius: 16px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+    
+    /* ✅ Sin sombra por defecto */
+    box-shadow: none;
     
     display: none;
     flex-direction: column;
     overflow: hidden;
-    z-index: 9999;
+    z-index: 10000;
     
     opacity: 0;
     transform: translateY(20px) scale(0.95);
-    transition: opacity 0.3s ease, transform 0.3s ease;
+    transition: opacity 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 .chat-widget.open {
     display: flex;
     opacity: 1;
     transform: translateY(0) scale(1);
+    /* ✅ Sombra solo cuando está abierto */
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
 }
 
 /* ===============================
@@ -239,10 +245,6 @@ main {
     color: #991b1b;
     border: 1px solid #fecaca;
 }
-
-/* ===============================
-   FOOTER
-================================ */
 footer {
     display: flex;
     border-top: 1px solid #e5e7eb;
@@ -330,4 +332,32 @@ main::-webkit-scrollbar-thumb:hover {
         height: 56px;
         font-size: 24px;
     }
+    
+    /* ✅ En móvil no mover el botón */
+    .chat-fab.active {
+        bottom: 16px;
+    }
+}
+
+/* ===============================
+   MEJORAS ADICIONALES
+================================ */
+
+/* Evitar que el texto se seleccione al hacer doble clic en botones */
+.chat-fab,
+#sendBtn,
+.chat-close {
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* Mejorar accesibilidad del botón FAB */
+.chat-fab:focus-visible {
+    outline: 3px solid rgba(37, 99, 235, 0.5);
+    outline-offset: 2px;
+}
+
+/* Transición suave del botón FAB cuando cambia de posición */
+.chat-fab {
+    transition: transform 0.2s, box-shadow 0.2s, bottom 0.3s ease;
 }
