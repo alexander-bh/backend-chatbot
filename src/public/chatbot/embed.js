@@ -48,7 +48,7 @@
     // Validar elementos críticos
     const required = ["messages", "messageInput", "sendBtn", "chatWidget", "chatToggle"];
     const missing = required.filter(key => !elements[key]);
-    
+
     if (missing.length > 0) {
         console.error("[Chatbot] Elementos DOM faltantes:", missing);
         return;
@@ -112,7 +112,13 @@
     }
 
     elements.chatToggle.onclick = toggleChat;
-    
+
+    if (elements.chatClose) {
+        elements.chatClose.onclick = toggleChat;
+    }
+
+    elements.chatToggle.onclick = toggleChat;
+
     if (elements.chatClose) {
         elements.chatClose.onclick = toggleChat;
     }
@@ -187,7 +193,7 @@
     async function startConversation() {
         try {
             console.log("[Chatbot] Iniciando conversación...");
-            
+
             showTyping();
             setStatus("Conectando...");
 
