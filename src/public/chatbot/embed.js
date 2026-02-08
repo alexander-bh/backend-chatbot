@@ -3,7 +3,7 @@
        VALIDACIÓN GLOBAL
     ================================ */
     if (!window.__CHATBOT_CONFIG__) {
-        console.error("Chatbot config no encontrada");
+        console.error("[Chatbot] Config no encontrada");
         return;
     }
 
@@ -17,6 +17,12 @@
         inputPlaceholder
     } = window.__CHATBOT_CONFIG__;
 
+    console.log("[Chatbot] Inicializando con config:", {
+        apiBase,
+        publicId,
+        name
+    });
+
     /* ===============================
        STATE
     ================================ */
@@ -27,92 +33,98 @@
     /* ===============================
        DOM
     ================================ */
-    const messages = document.getElementById("messages");
-    const messageInput = document.getElementById("messageInput");
-    const sendBtn = document.getElementById("sendBtn");
-    const chatWidget = document.getElementById("chatWidget");
-    const chatName = document.getElementById("chatName");
-    const chatAvatar = document.getElementById("chatAvatar");
-    const chatToggle = document.getElementById("chatToggle");
+    const elements = {
+        messages: document.getElementById("messages"),
+        messageInput: document.getElementById("messageInput"),
+        sendBtn: document.getElementById("sendBtn"),
+        chatWidget: document.getElementById("chatWidget"),
+        chatToggle: document.getElementById("chatToggle"),
+        chatClose: document.getElementById("chatClose"),
+        chatName: document.getElementById("chatName"),
+        chatAvatar: document.getElementById("chatAvatar"),
+        chatStatus: document.getElementById("chatStatus")
+    };
 
-    /* 🛡 Defensa por si el HTML cambia */
-    if (!messages || !messageInput || !sendBtn || !chatWidget || !chatToggle) {
-        console.error("Chatbot DOM incompleto");
+    // Validar elementos críticos
+    const required = ["messages", "messageInput", "sendBtn", "chatWidget", "chatToggle"];
+    const missing = required.filter(key => !elements[key]);
+    
+    if (missing.length > 0) {
+        console.error("[Chatbot] Elementos DOM faltantes:", missing);
         return;
     }
 
-    const originalIcon = chatToggle.innerHTML;
+    const originalIcon = elements.chatToggle.innerHTML;
 
     /* ===============================
        CONFIG UI
     ================================ */
-    if (chatName && name) chatName.textContent = name;
+    if (elements.chatName && name) {
+        elements.chatName.textContent = name;
+    }
 
-    if (chatAvatar && avatar) {
-        chatAvatar.src = avatar;
-        chatAvatar.hidden = false;
+    if (elements.chatAvatar && avatar) {
+        elements.chatAvatar.src = avatar;
+        elements.chatAvatar.hidden = false;
     }
 
     if (inputPlaceholder) {
-        messageInput.placeholder = inputPlaceholder;
+        elements.messageInput.placeholder = inputPlaceholder;
     }
 
     if (primaryColor) {
-        document.documentElement
-            .style
-            .setProperty("--chat-primary", primaryColor);
+        document.documentElement.style.setProperty("--chat-primary", primaryColor);
     }
 
     if (secondaryColor) {
-        document.documentElement
-            .style
-            .setProperty("--chat-secondary", secondaryColor);
+        document.documentElement.style.setProperty("--chat-secondary", secondaryColor);
     }
 
-    messageInput.disabled = true;
-    sendBtn.disabled = true;
+    elements.messageInput.disabled = true;
+    elements.sendBtn.disabled = true;
 
     /* ===============================
        TOGGLE CHAT
     ================================ */
-    chatToggle.onclick = () => {
+    function toggleChat() {
         isOpen = !isOpen;
 
-        chatWidget.classList.toggle("open", isOpen);
-        chatToggle.classList.toggle("active", isOpen);
+        elements.chatWidget.classList.toggle("open", isOpen);
+        elements.chatToggle.classList.toggle("active", isOpen);
 
-        chatToggle.innerHTML = isOpen
+        elements.chatToggle.innerHTML = isOpen
             ? '<span style="font-size:26px;line-height:1">✕</span>'
             : originalIcon;
 
-        // Quitar foco al cerrar
         if (!isOpen) {
-            messageInput.blur();
+            elements.messageInput.blur();
         }
 
-        // Auto-focus al abrir
-        if (isOpen && !messageInput.disabled) {
-            messageInput.focus();
+        if (isOpen && !elements.messageInput.disabled) {
+            elements.messageInput.focus();
         }
 
         // Iniciar solo una vez
-        if (!started) {
+        if (isOpen && !started) {
             started = true;
-            startConversation().then(() => {
-                messageInput.disabled = false;
-                sendBtn.disabled = false;
-            });
+            startConversation();
         }
-    };
+    }
+
+    elements.chatToggle.onclick = toggleChat;
+    
+    if (elements.chatClose) {
+        elements.chatClose.onclick = toggleChat;
+    }
 
     /* ===============================
        HELPERS
     ================================ */
-    function addMessage(from, text) {
+    function addMessage(from, text, isError = false) {
         const msg = document.createElement("div");
-        msg.className = `msg ${from}`;
+        msg.className = `msg ${from}${isError ? ' error' : ''}`;
 
-        if (from === "bot" && avatar) {
+        if (from === "bot" && avatar && !isError) {
             const avatarImg = document.createElement("img");
             avatarImg.src = avatar;
             avatarImg.className = "msg-avatar";
@@ -124,9 +136,9 @@
         bubble.textContent = text;
 
         msg.appendChild(bubble);
-        messages.appendChild(msg);
+        elements.messages.appendChild(msg);
 
-        messages.scrollTop = messages.scrollHeight;
+        elements.messages.scrollTop = elements.messages.scrollHeight;
     }
 
     let typingElement = null;
@@ -149,9 +161,9 @@
         bubble.textContent = "Escribiendo…";
 
         msg.appendChild(bubble);
-        messages.appendChild(msg);
+        elements.messages.appendChild(msg);
 
-        messages.scrollTop = messages.scrollHeight;
+        elements.messages.scrollTop = elements.messages.scrollHeight;
 
         typingElement = msg;
     }
@@ -163,79 +175,119 @@
         }
     }
 
+    function setStatus(text) {
+        if (elements.chatStatus) {
+            elements.chatStatus.textContent = text;
+        }
+    }
+
     /* ===============================
-       START
+       START CONVERSATION
     ================================ */
     async function startConversation() {
         try {
+            console.log("[Chatbot] Iniciando conversación...");
+            
             showTyping();
+            setStatus("Conectando...");
 
-            const res = await fetch(
-                `${apiBase}/api/public-chatbot/chatbot-conversation/${publicId}/start`,
-                { method: "POST" }
-            );
+            const url = `${apiBase}/api/public-chatbot/chatbot-conversation/${publicId}/start`;
+            console.log("[Chatbot] URL:", url);
+
+            const res = await fetch(url, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                }
+            });
+
+            console.log("[Chatbot] Respuesta:", res.status);
 
             if (!res.ok) {
-                throw new Error(`Error ${res.status}`);
+                const errorText = await res.text();
+                console.error("[Chatbot] Error del servidor:", errorText);
+                throw new Error(`Error ${res.status}: ${errorText}`);
             }
 
             const data = await res.json();
+            console.log("[Chatbot] Datos recibidos:", data);
 
             SESSION_ID = data.session_id;
 
             removeTyping();
+            setStatus("En línea");
 
-            messageInput.disabled = false;
-            sendBtn.disabled = false;
+            // Mostrar mensaje inicial si existe
+            if (data.content) {
+                addMessage("bot", data.content);
+            }
+
+            elements.messageInput.disabled = false;
+            elements.sendBtn.disabled = false;
 
             if (isOpen) {
-                messageInput.focus();
+                elements.messageInput.focus();
             }
 
         } catch (err) {
-            console.error(err);
+            console.error("[Chatbot] Error al iniciar:", err);
 
             removeTyping();
+            setStatus("Error de conexión");
 
             addMessage(
                 "bot",
-                "No pude iniciar la conversación 😕"
+                "No pude conectarme al servidor. Por favor, intenta más tarde.",
+                true
             );
         }
     }
 
+    /* ===============================
+       SEND MESSAGE
+    ================================ */
     async function sendMessage() {
-        const text = messageInput.value.trim();
+        const text = elements.messageInput.value.trim();
 
-        if (!text || !SESSION_ID) return;
+        if (!text || !SESSION_ID) {
+            console.warn("[Chatbot] No hay texto o sesión");
+            return;
+        }
+
+        console.log("[Chatbot] Enviando:", text);
 
         addMessage("user", text);
 
-        messageInput.value = "";
-        messageInput.disabled = true;
-        sendBtn.disabled = true;
+        elements.messageInput.value = "";
+        elements.messageInput.disabled = true;
+        elements.sendBtn.disabled = true;
 
         let completed = false;
 
         try {
             showTyping();
 
-            const res = await fetch(
-                `${apiBase}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`,
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({ input: text })
-                }
-            );
+            const url = `${apiBase}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`;
+            console.log("[Chatbot] Next URL:", url);
+
+            const res = await fetch(url, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ input: text })
+            });
+
+            console.log("[Chatbot] Next response:", res.status);
 
             if (!res.ok) {
+                const errorText = await res.text();
+                console.error("[Chatbot] Error en next:", errorText);
                 throw new Error(`Error ${res.status}`);
             }
 
             const data = await res.json();
+            console.log("[Chatbot] Next data:", data);
 
             removeTyping();
 
@@ -245,30 +297,29 @@
 
             if (data.completed) {
                 completed = true;
-
-                messageInput.disabled = true;
-                sendBtn.disabled = true;
+                setStatus("Conversación finalizada");
+                elements.messageInput.disabled = true;
+                elements.sendBtn.disabled = true;
             }
 
         } catch (err) {
-            console.error(err);
+            console.error("[Chatbot] Error al enviar:", err);
 
             removeTyping();
 
             addMessage(
                 "bot",
-                "Ocurrió un error 😕"
+                "Ocurrió un error al procesar tu mensaje.",
+                true
             );
 
         } finally {
-
-            // Reactivar solo si no terminó
             if (!completed) {
-                messageInput.disabled = false;
-                sendBtn.disabled = false;
+                elements.messageInput.disabled = false;
+                elements.sendBtn.disabled = false;
 
                 if (isOpen) {
-                    messageInput.focus();
+                    elements.messageInput.focus();
                 }
             }
         }
@@ -277,13 +328,15 @@
     /* ===============================
        EVENTS
     ================================ */
-    sendBtn.onclick = sendMessage;
+    elements.sendBtn.onclick = sendMessage;
 
-    messageInput.addEventListener("keydown", (e) => {
+    elements.messageInput.addEventListener("keydown", (e) => {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             sendMessage();
         }
     });
+
+    console.log("[Chatbot] Widget listo");
 
 })();

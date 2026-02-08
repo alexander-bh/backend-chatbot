@@ -131,9 +131,6 @@ exports.renderEmbed = async (req, res) => {
 
     const apiOrigin = new URL(getBaseUrl()).origin;
 
-    /* ===============================
-       CSP HARDENIZADA (COMPATIBLE)
-    ================================ */
     const frameAncestors = chatbot.allowed_domains.length
       ? chatbot.allowed_domains
           .map(d =>
@@ -142,7 +139,7 @@ exports.renderEmbed = async (req, res) => {
               : `https://${d}`
           )
           .join(" ")
-      : apiOrigin;
+      : "*";
 
     res.setHeader(
       "Content-Security-Policy",
@@ -167,15 +164,6 @@ exports.renderEmbed = async (req, res) => {
 <title>${escapeHTML(chatbot.name)}</title>
 
 <link rel="stylesheet" href="/public/chatbot/embed.css" />
-
-<style>
-body {
-  margin: 0;
-  background: transparent;
-  font-family: system-ui, -apple-system, sans-serif;
-  overflow: hidden;
-}
-</style>
 </head>
 <body>
 
@@ -184,7 +172,6 @@ body {
 <div class="chat-widget" id="chatWidget">
   <div class="chat">
 
-    <!-- HEADER CORRECTO -->
     <header class="chat-header">
       <img
         id="chatAvatar"
@@ -192,7 +179,11 @@ body {
         alt="Avatar"
         hidden
       />
-      <strong id="chatName">${escapeHTML(chatbot.name)}</strong>
+      <div class="chat-header-info">
+        <strong id="chatName">${escapeHTML(chatbot.name)}</strong>
+        <div class="chat-status" id="chatStatus">Offline</div>
+      </div>
+      <button class="chat-close" id="chatClose" aria-label="Cerrar">×</button>
     </header>
 
     <main id="messages"></main>
@@ -229,7 +220,6 @@ window.__CHATBOT_CONFIG__ = {
     res.status(500).send("No se pudo cargar el chatbot");
   }
 };
-
 
 /* =======================================================
    4) AGREGAR DOMINIO
