@@ -77,20 +77,45 @@ exports.getInstallScript = async (req, res) => {
     "position:fixed",
     "bottom:20px",
     "right:20px",
-    "width:380px",
-    "height:600px",
+    "width:70px",
+    "height:70px",
     "border:none",
-    "border-radius:12px",
-    "box-shadow:0 4px 12px rgba(0,0,0,0.15)",
+    "border-radius:50%",
     "z-index:2147483647",
-    "background:transparent"
+    "background:transparent",
+    "transition:all .25s ease",
+    "overflow:hidden"
   ].join(";");
+
+  iframe.dataset.state = "closed";
 
   iframe.sandbox = "allow-scripts allow-same-origin allow-forms";
   iframe.setAttribute("allow", "clipboard-write");
 
   document.body.appendChild(iframe);
+
+  window.addEventListener("message", function(event){
+    if (!event.data || !event.data.chatbot) return;
+
+    if(event.data.chatbot === "open"){
+      iframe.style.width = "380px";
+      iframe.style.height = "600px";
+      iframe.style.borderRadius = "12px";
+      iframe.style.boxShadow = "0 4px 18px rgba(0,0,0,0.18)";
+      iframe.dataset.state = "open";
+    }
+
+    if(event.data.chatbot === "close"){
+      iframe.style.width = "70px";
+      iframe.style.height = "70px";
+      iframe.style.borderRadius = "50%";
+      iframe.style.boxShadow = "none";
+      iframe.dataset.state = "closed";
+    }
+  });
+
 })();`);
+
   } catch (err) {
     console.error("INSTALL SCRIPT ERROR:", err);
     res.status(500).send("// Error interno");
