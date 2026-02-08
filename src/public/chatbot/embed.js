@@ -98,7 +98,10 @@
         // Iniciar solo una vez
         if (!started) {
             started = true;
-            startConversation();
+            startConversation().then(() => {
+                messageInput.disabled = false;
+                sendBtn.disabled = false;
+            });
         }
     };
 

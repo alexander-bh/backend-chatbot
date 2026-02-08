@@ -129,24 +129,25 @@ exports.renderEmbed = async (req, res) => {
       return res.status(403).send("Dominio no permitido");
     }
 
-    if (!chatbot.allowed_domains.length && !allowLocalhost) {
-      return res.status(403).send("No hay dominios autorizados");
-    }
-
     const apiOrigin = new URL(getBaseUrl()).origin;
 
-    const frameAncestors = chatbot.allowed_domains
-      .map(d =>
-        d.startsWith("*.")
-          ? `https://*.${d.slice(2)}`
-          : `https://${d}`
-      )
-      .join(" ");
+    /* ===============================
+       CSP HARDENIZADA (COMPATIBLE)
+    ================================ */
+    const frameAncestors = chatbot.allowed_domains.length
+      ? chatbot.allowed_domains
+          .map(d =>
+            d.startsWith("*.")
+              ? `https://*.${d.slice(2)}`
+              : `https://${d}`
+          )
+          .join(" ")
+      : apiOrigin;
 
     res.setHeader(
       "Content-Security-Policy",
       [
-        `default-src 'self' ${apiOrigin}`,
+        `default-src 'self'`,
         `script-src 'self' 'unsafe-inline' ${apiOrigin}`,
         `style-src 'self' 'unsafe-inline'`,
         `img-src 'self' data: https:`,
@@ -164,9 +165,16 @@ exports.renderEmbed = async (req, res) => {
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>${escapeHTML(chatbot.name)}</title>
+
 <link rel="stylesheet" href="/public/chatbot/embed.css" />
+
 <style>
-body{margin:0;font-family:system-ui;background:transparent;overflow:hidden}
+body {
+  margin: 0;
+  background: transparent;
+  font-family: system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+}
 </style>
 </head>
 <body>
@@ -175,14 +183,29 @@ body{margin:0;font-family:system-ui;background:transparent;overflow:hidden}
 
 <div class="chat-widget" id="chatWidget">
   <div class="chat">
+
+    <!-- HEADER CORRECTO -->
     <header class="chat-header">
-      <strong>${escapeHTML(chatbot.name)}</strong>
+      <img
+        id="chatAvatar"
+        class="chat-avatar"
+        alt="Avatar"
+        hidden
+      />
+      <strong id="chatName">${escapeHTML(chatbot.name)}</strong>
     </header>
+
     <main id="messages"></main>
+
     <footer>
-      <input id="messageInput" placeholder="Escribe tu mensaje…" />
+      <input
+        id="messageInput"
+        placeholder="Escribe tu mensaje…"
+        autocomplete="off"
+      />
       <button id="sendBtn">Enviar</button>
     </footer>
+
   </div>
 </div>
 
@@ -192,7 +215,9 @@ window.__CHATBOT_CONFIG__ = {
   publicId: ${JSON.stringify(public_id)},
   name: ${JSON.stringify(chatbot.name)},
   avatar: ${JSON.stringify(chatbot.avatar || "")},
-  primaryColor: ${JSON.stringify(chatbot.primary_color || "#2563eb")}
+  primaryColor: ${JSON.stringify(chatbot.primary_color || "#2563eb")},
+  secondaryColor: ${JSON.stringify(chatbot.secondary_color || "#111827")},
+  inputPlaceholder: "Escribe tu mensaje…"
 };
 </script>
 
@@ -204,6 +229,7 @@ window.__CHATBOT_CONFIG__ = {
     res.status(500).send("No se pudo cargar el chatbot");
   }
 };
+
 
 /* =======================================================
    4) AGREGAR DOMINIO
