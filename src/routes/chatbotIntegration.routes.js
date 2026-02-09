@@ -10,7 +10,7 @@ router.use(auth);
 
 router.post("/:public_id/send-installation", ctrl.sendInstallationCode);
 router.post("/:public_id/domain/add", ctrl.addAllowedDomain);
-router.post("/:public_id/domain/remove", ctrl.removeAllowedDomain);
+router.delete("/:public_id/domain/remove", ctrl.removeAllowedDomain);
 router.post("/:public_id/token/regenerate", ctrl.regenerateInstallToken);
 
 module.exports = router;
