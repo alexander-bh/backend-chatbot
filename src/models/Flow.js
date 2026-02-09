@@ -31,6 +31,16 @@ const FlowSchema = new Schema(
       default: null
     },
 
+    lock: {
+      locked_by: {
+        type: Schema.Types.ObjectId, // ✅ CORRECTO
+        ref: "User",
+        default: null
+      },
+      locked_at: Date,
+      lock_expires_at: Date
+    },
+
     version: {
       type: Number,
       default: 1
@@ -50,8 +60,7 @@ const FlowSchema = new Schema(
   { timestamps: true }
 );
 
-
-// Índices correctos
+// Índices
 FlowSchema.index({ account_id: 1 });
 FlowSchema.index({ chatbot_id: 1, status: 1 });
 

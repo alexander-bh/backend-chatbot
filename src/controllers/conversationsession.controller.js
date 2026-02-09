@@ -66,7 +66,8 @@ exports.startConversation = async (req, res) => {
     const startNode = await FlowNode.findOne({
       _id: flow.start_node_id,
       flow_id: flow._id,
-      account_id: req.user.account_id
+      account_id: req.user.account_id,
+      is_draft: mode === "preview"
     });
 
     if (!startNode) {
@@ -113,12 +114,11 @@ exports.nextStep = async (req, res) => {
       return res.json({ completed: true });
     }
 
-    /* =============================
-       LOAD FLOW NODES
-    ============================= */
+    /* ───────── LOAD FLOW NODES ───────── */
     const nodes = await FlowNode.find({
       flow_id: session.flow_id,
-      account_id: session.account_id
+      account_id: session.account_id,
+      is_draft: session.mode === "preview"
     }).lean();
 
     const nodesMap = new Map(nodes.map(n => [n._id.toString(), n]));
@@ -130,25 +130,21 @@ exports.nextStep = async (req, res) => {
       throw new Error("Nodo actual no encontrado");
     }
 
-    /* =============================
-       INPUT PROCESSING
-    ============================= */
+    /* ───────── INPUT PROCESSING ───────── */
     if (INPUT_NODES.includes(currentNode.node_type)) {
       if (input === undefined) {
         return res.status(400).json({ message: "Este nodo requiere respuesta" });
       }
 
-      let validationResult = { ok: true };
-
       if (currentNode.validation?.enabled) {
-        validationResult = validateInput(
+        const result = validateInput(
           input,
           currentNode.validation.rules || []
         );
-      }
 
-      if (!validationResult.ok) {
-        return res.status(400).json({ message: validationResult.message });
+        if (!result.ok) {
+          return res.status(400).json({ message: result.message });
+        }
       }
 
       if (session.mode === "production" && currentNode.variable_key) {
@@ -159,11 +155,9 @@ exports.nextStep = async (req, res) => {
       await session.save();
     }
 
-    /* =============================
-       RESOLVE NEXT NODE
-    ============================= */
+    /* ───────── NEXT NODE RESOLUTION ───────── */
     const resolveNextNode = () => {
-      // OPTIONS
+
       if (currentNode.options?.length && input !== undefined) {
         const sortedOptions = [...currentNode.options].sort(
           (a, b) => (a.order ?? 0) - (b.order ?? 0)
@@ -179,21 +173,17 @@ exports.nextStep = async (req, res) => {
         }
       }
 
-      // MANUAL NEXT
       if (currentNode.next_node_id) {
         return nodesMap.get(currentNode.next_node_id.toString());
       }
 
-      // ORDER FALLBACK
       const idx = indexMap.get(currentNode._id.toString());
       return sortedNodes[idx + 1];
     };
 
     let nextNode = resolveNextNode();
 
-    /* =============================
-       FLOW END
-    ============================= */
+    /* ───────── FLOW END ───────── */
     if (!nextNode) {
       session.is_completed = true;
       await session.save();
@@ -205,13 +195,10 @@ exports.nextStep = async (req, res) => {
       return res.json({ completed: true });
     }
 
-    /* =============================
-       AUTO RENDER LOOP
-    ============================= */
+    /* ───────── AUTO RENDER LOOP ───────── */
     while (nextNode) {
       session.current_node_id = nextNode._id;
 
-      // 🔔 NOTIFICACIÓN DEL NODO
       if (nextNode.meta?.notify?.enabled && session.mode === "production") {
         await executeNodeNotification(nextNode, session);
       }

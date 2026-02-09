@@ -1,7 +1,6 @@
 //chatbotIntegration.controller
 const Chatbot = require("../models/Chatbot");
 const crypto = require("crypto");
-const { signDomain } = require("../utils/domainSignature");
 const { isLocalhost } = require("../utils/domainValidation");
 const { domainMatches } = require("../utils/domainMatch");
 const { normalizeDomain } = require("../utils/domain.utils");

@@ -59,22 +59,19 @@ router.post(
   flowController.saveFlow
 );
 
-
-// Publicar flujo
-router.post(
-  "/:id/publish",
-  auth,
-  FLOW_ROLE,
-  flowController.publishFlow
-);
-
-
 // Obtener flujo por ID
 router.get(
   "/:id",
   auth,
   FLOW_ROLE,
   flowController.getFlowById
+);
+
+//Cerrar Editor
+router.post(
+  "/:id/unlock",
+  auth,
+  flowController.unlockFlow
 );
 
 module.exports = router;
