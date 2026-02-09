@@ -16,6 +16,7 @@ exports.startConversation = async (req, res) => {
       });
     }
 
+    /* ───────── CHATBOT ───────── */
     const chatbot = await Chatbot.findOne({
       public_id,
       status: "active"
@@ -27,23 +28,30 @@ exports.startConversation = async (req, res) => {
       });
     }
 
+    /* ───────── FLOW PUBLICADO ───────── */
     const flow = await Flow.findOne({
       chatbot_id: chatbot._id,
       account_id: chatbot.account_id,
       status: "active"
     }).sort({ updatedAt: -1 });
 
-    if (!flow || !flow.start_node_id) {
+    if (!flow) {
       return res.status(404).json({
         message: "Chatbot sin flujo publicado"
       });
     }
 
+    if (!flow.start_node_id) {
+      return res.status(500).json({
+        message: "El flujo publicado no tiene nodo inicial"
+      });
+    }
+
+    /* ───────── NODO INICIAL ───────── */
     const startNode = await FlowNode.findOne({
       _id: flow.start_node_id,
       flow_id: flow._id,
-      account_id: chatbot.account_id,
-      is_draft: false
+      account_id: chatbot.account_id
     });
 
     if (!startNode) {
@@ -52,6 +60,7 @@ exports.startConversation = async (req, res) => {
       });
     }
 
+    /* ───────── SESIÓN ───────── */
     const session = await ConversationSession.create({
       account_id: chatbot.account_id,
       chatbot_id: chatbot._id,
@@ -86,13 +95,11 @@ exports.nextPublicStep = async (req, res) => {
       return res.json({ completed: true });
     }
 
-    if (session.mode !== "production") {
-      return res.status(403).json({ message: "Modo inválido" });
-    }
-
+    // 👉 reutilizamos EXACTAMENTE la lógica del engine
     req.params.id = session_id;
     req.body.input = input;
 
+    // delega al engine privado
     const engine = require("./conversationsession.controller");
     return engine.nextStep(req, res);
 
@@ -103,4 +110,3 @@ exports.nextPublicStep = async (req, res) => {
     });
   }
 };
-
