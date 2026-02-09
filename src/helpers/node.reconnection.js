@@ -8,7 +8,10 @@ exports.reconnectParents = async (
 ) => {
   if (!deletedNode) return [];
 
-  const nextId = deletedNode.next_node_id || null;
+  const nextId = deletedNode.next_node_id
+    ? deletedNode.next_node_id
+    : null;
+
   const reconnections = [];
 
   const parents = await FlowNode.find(
@@ -27,9 +30,13 @@ exports.reconnectParents = async (
   for (const parent of parents) {
     let touched = false;
 
-    if (parent.next_node_id?.equals(deletedNode._id)) {
+    if (
+      parent.next_node_id &&
+      parent.next_node_id.toString() === deletedNode._id.toString()
+    ) {
       parent.next_node_id = nextId;
       touched = true;
+
       reconnections.push({
         from: parent._id,
         to: nextId,
@@ -37,11 +44,15 @@ exports.reconnectParents = async (
       });
     }
 
-    if (parent.node_type === "options" && Array.isArray(parent.options)) {
+    if (Array.isArray(parent.options)) {
       parent.options.forEach(opt => {
-        if (opt.next_node_id?.equals(deletedNode._id)) {
+        if (
+          opt.next_node_id &&
+          opt.next_node_id.toString() === deletedNode._id.toString()
+        ) {
           opt.next_node_id = nextId;
           touched = true;
+
           reconnections.push({
             from: parent._id,
             to: nextId,

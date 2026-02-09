@@ -1,11 +1,83 @@
 const { Schema, model } = require("mongoose");
 
+const PolicySchema = new Schema(
+  {
+    required: { type: Boolean, default: true },
+    accept_label: { type: String, default: "Aceptar" },
+    reject_label: { type: String, default: "Rechazar" }
+  },
+  { _id: false }
+);
+
+const LinkActionSchema = new Schema(
+  {
+    type: { type: String, enum: ["url", "email", "phone", "whatsapp"] },
+    title: String,
+    value: String
+  },
+  { _id: false }
+);
+
+const OptionSchema = new Schema(
+  {
+    label: String,
+    value: String,
+    order: { type: Number, default: 0 },
+    next_node_id: { type: Schema.Types.ObjectId, ref: "FlowNode" }
+  },
+  { _id: false }
+);
+
+const ValidationSchema = new Schema(
+  {
+    enabled: { type: Boolean, default: false },
+    rules: [
+      {
+        type: {
+          type: String,
+          enum: ["required", "min_max", "email", "phone", "integer", "decimal"],
+          required: true
+        },
+        min: Number,
+        max: Number,
+        message: { type: String, required: true }
+      }
+    ]
+  },
+  { _id: false }
+);
+
+const MetaSchema = new Schema(
+  {
+    notify: {
+      enabled: { type: Boolean, default: false },
+      type: String,
+      subject: String,
+      template: String,
+      send_once: { type: Boolean, default: true },
+      recipients: { type: [String], default: [] }
+    }
+  },
+  { _id: false, strict: false }
+);
+
 const FlowNodeSchema = new Schema(
   {
     account_id: { type: Schema.Types.ObjectId, ref: "Account", required: true },
-    flow_id: { type: Schema.Types.ObjectId, ref: "Flow", required: true, index: true },
 
-    parent_node_id: { type: Schema.Types.ObjectId, ref: "FlowNode", default: null },
+    flow_id: {
+      type: Schema.Types.ObjectId,
+      ref: "Flow",
+      required: true,
+      index: true
+    },
+
+    parent_node_id: {
+      type: Schema.Types.ObjectId,
+      ref: "FlowNode",
+      default: null
+    },
+
     order: { type: Number, default: 0 },
 
     node_type: {
@@ -19,7 +91,8 @@ const FlowNodeSchema = new Schema(
         "text_input",
         "options",
         "jump",
-        "link"
+        "link",
+        "data_policy"
       ],
       required: true
     },
@@ -28,81 +101,58 @@ const FlowNodeSchema = new Schema(
     variable_key: String,
 
     options: {
-      type: [
-        new Schema({
-          label: String,
-          value: String,
-          order: { type: Number, default: 0 },
-          next_node_id: { type: Schema.Types.ObjectId, ref: "FlowNode" }
-        }, { _id: false })
-      ],
+      type: [OptionSchema],
       default: []
     },
 
-    next_node_id: { type: Schema.Types.ObjectId, ref: "FlowNode", default: null },
+    next_node_id: {
+      type: Schema.Types.ObjectId,
+      ref: "FlowNode",
+      default: null
+    },
 
     link_action: {
-      type: new Schema(
-        {
-          type: { type: String, enum: ["url", "email", "phone", "whatsapp"] },
-          title: String,
-          value: String
-        },
-        { _id: false }
-      ),
+      type: LinkActionSchema,
       default: undefined
     },
 
-    typing_time: { type: Number, default: 2, min: 0, max: 10 },
+    policy: {
+      type: PolicySchema,
+      default: undefined
+    },
+
+    typing_time: {
+      type: Number,
+      default: 2,
+      min: 0,
+      max: 10
+    },
 
     validation: {
-      type: new Schema(
-        {
-          enabled: { type: Boolean, default: false },
-          rules: [
-            {
-              type: {
-                type: String,
-                enum: ["required", "min_max", "email", "phone", "integer", "decimal"],
-                required: true
-              },
-              min: Number,
-              max: Number,
-              message: { type: String, required: true }
-            }
-          ]
-        },
-        { _id: false }
-      ),
+      type: ValidationSchema,
       default: undefined
     },
 
     crm_field_key: { type: String, default: null },
+
     is_draft: { type: Boolean, default: true },
 
     meta: {
-      type: new Schema(
-        {
-          notify: {
-            enabled: { type: Boolean, default: false },
-            type: { type: String },
-            subject: { type: String },
-            template: { type: String },
-            send_once: { type: Boolean, default: true },
-            recipients: { type: [String], default: [] }
-          }
-        },
-        { _id: false, strict: false }
-      ),
+      type: MetaSchema,
       default: {}
     },
-    end_conversation: { type: Boolean, default: false }
+
+    end_conversation: {
+      type: Boolean,
+      default: false
+    }
   },
   { timestamps: true }
 );
 
+/* 🔥 Índice mejorado para soportar ramas */
 FlowNodeSchema.index(
-  { flow_id: 1, order: 1 },
+  { flow_id: 1, parent_node_id: 1, order: 1 },
   { unique: true }
 );
 

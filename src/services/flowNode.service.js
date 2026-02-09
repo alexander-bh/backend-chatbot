@@ -4,6 +4,9 @@ const updateStartNode = require("../utils/updateStartNode");
 const { getEditableFlow } = require("../utils/flow.utils");
 const { getNextOrder, reorderFlowNodes } = require("../helpers/node.order");
 const { reconnectParents } = require("../helpers/node.reconnection");
+const { collectSafeCascadeIds } = require("../helpers/node.graph");
+const { validateFlowGraph } = require("../helpers/flow.validator")
+
 
 const toObjectId = (id, field = "id") => {
   if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -83,6 +86,11 @@ exports.createNode = async ({ data, account_id, session }) => {
     { session }
   );
 
+  await validateFlowGraph({
+    flow_id: flowId,
+    account_id: accountId
+  });
+
   await updateStartNode(flowId, accountId, session);
 
   return node;
@@ -121,14 +129,34 @@ exports.updateNode = async ({ nodeId, data, account_id, session }) => {
 
   await getEditableFlow(existing.flow_id, accountObjectId);
 
+  const allowed = [
+    "content",
+    "options",
+    "typing_time",
+    "validation",
+    "meta",
+    "link_action",
+    "end_conversation",
+    "variable_key"
+  ];
+
+  const safeData = Object.fromEntries(
+    Object.entries(data).filter(([k]) => allowed.includes(k))
+  );
+
   const updated = await FlowNode.findOneAndUpdate(
     {
       _id: nodeObjectId,
       account_id: accountObjectId
     },
-    data,
+    safeData,
     { new: true, session }
   );
+
+  await validateFlowGraph({
+    flow_id: existing.flow_id,
+    account_id: accountObjectId
+  });
 
   return updated;
 };
@@ -202,6 +230,11 @@ exports.connectNode = async ({
 
   await source.save({ session });
 
+  await validateFlowGraph({
+    flow_id: source.flow_id,
+    account_id: accountId
+  });
+
   return source;
 };
 
@@ -223,7 +256,18 @@ exports.deleteNode = async ({ nodeId, account_id, session }) => {
 
   await getEditableFlow(node.flow_id, accountObjectId);
 
-  return exports.deleteNodeCascade(node, accountObjectId, session);
+  const result = await exports.deleteNodeCascade(
+    node,
+    accountObjectId,
+    session
+  );
+
+  await validateFlowGraph({
+    flow_id: node.flow_id,
+    account_id: accountObjectId
+  });
+
+  return result;
 };
 
 
@@ -241,41 +285,26 @@ exports.deleteNodeCascade = async (node, account_id, session) => {
     session
   );
 
-  const ids = new Set();
-  const stack = [node._id];
-
-  while (stack.length) {
-    const id = stack.pop();
-
-    if (ids.has(String(id))) continue;
-
-    ids.add(String(id));
-
-    const n = await FlowNode.findById(id, null, { session });
-
-    if (!n) continue;
-
-    if (n.next_node_id) stack.push(n.next_node_id);
-
-    n.options?.forEach(o => {
-      if (o.next_node_id) stack.push(o.next_node_id);
-    });
-  }
+  const ids = await collectSafeCascadeIds({
+    startNode: node,
+    account_id,
+    session
+  });
 
   await FlowNode.deleteMany(
-    { _id: { $in: [...ids] } },
+    { _id: { $in: ids } },
     { session }
   );
 
   await reorderFlowNodes(node.flow_id, account_id, session);
-
   await updateStartNode(node.flow_id, account_id, session);
 
   return {
-    deleted: ids.size,
+    deleted: ids.length,
     reconnections
   };
 };
+
 
 // ─────────────────────────────────────────────
 // Reordenar nodos (drag & drop)
@@ -292,7 +321,13 @@ exports.reorderNodes = async ({ flow_id, nodes, account_id, session }) => {
   await getEditableFlow(flowId, accountId);
 
   await reorderFlowNodes(flowId, accountId, session, nodes);
+
+  await validateFlowGraph({
+    flow_id: flowId,
+    account_id: accountId
+  });
 };
+
 
 // ─────────────────────────────────────────────
 // Duplicar 
@@ -344,7 +379,10 @@ exports.duplicateNode = async ({ nodeId, account_id, session }) => {
   );
 
   await updateStartNode(original.flow_id, accountObjectId, session);
-
+  await validateFlowGraph({
+    flow_id: original.flow_id,
+    account_id: accountObjectId
+  });
   return newNode;
 };
 
