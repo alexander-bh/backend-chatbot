@@ -30,41 +30,56 @@ const collectSafeCascadeIds = async ({
   session
 }) => {
 
-  const ids = new Set();
+  const idsToDelete = new Set();
   const stack = [startNode._id];
+  
+  // ✅ Marcar el nodo inicial como "a eliminar"
+  idsToDelete.add(String(startNode._id));
 
   while (stack.length) {
 
-    const id = stack.pop();
-    if (ids.has(String(id))) continue;
-
-    ids.add(String(id));
-
-    const node = await FlowNode.findById(id, null, { session });
+    const currentId = stack.pop();
+    const node = await FlowNode.findById(currentId, null, { session });
+    
     if (!node) continue;
 
-    const pushIfSafe = async (childId) => {
+    // 🔍 Evaluar hijos del nodo actual
+    const checkChild = async (childId) => {
       if (!childId) return;
+      if (idsToDelete.has(String(childId))) return;
 
-      const shared = await hasOtherParents({
-        nodeId: childId,
-        flow_id: node.flow_id,
-        account_id,
-        excludeParentId: node._id,
-        session
-      });
+      // ❓ ¿Este hijo tiene OTROS padres además del que estamos eliminando?
+      const hasOtherParents = await FlowNode.findOne(
+        {
+          flow_id: node.flow_id,
+          account_id,
+          _id: { $nin: [...idsToDelete].map(id => id) }, // Excluir nodos ya marcados
+          $or: [
+            { next_node_id: childId },
+            { "options.next_node_id": childId }
+          ]
+        },
+        null,
+        { session }
+      );
 
-      if (!shared) stack.push(childId);
+      // 🔥 Si NO tiene otros padres → se elimina en cascada
+      if (!hasOtherParents) {
+        idsToDelete.add(String(childId));
+        stack.push(childId); // Seguir explorando sus hijos
+      }
     };
 
-    await pushIfSafe(node.next_node_id);
+    // Evaluar next_node_id
+    await checkChild(node.next_node_id);
 
+    // Evaluar opciones
     for (const opt of node.options || []) {
-      await pushIfSafe(opt.next_node_id);
+      await checkChild(opt.next_node_id);
     }
   }
 
-  return [...ids];
+  return [...idsToDelete];
 };
 
 module.exports = {

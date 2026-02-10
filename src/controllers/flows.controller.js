@@ -187,9 +187,11 @@ exports.deleteFlow = async (req, res) => {
 };
 
 exports.saveFlow = async (req, res) => {
+
   const session = await mongoose.startSession();
 
   try {
+
     session.startTransaction();
 
     const flowId = req.params.id;
@@ -221,7 +223,7 @@ exports.saveFlow = async (req, res) => {
 
     const flow = await getEditableFlow(flowId, account_id);
 
-    /* ───────── NODOS EXISTENTES (PARA MERGE) ───────── */
+    /* ───────── EXISTENTES PARA MERGE ───────── */
 
     const existingNodes = await FlowNode.find(
       { flow_id: flowId, account_id },
@@ -255,10 +257,6 @@ exports.saveFlow = async (req, res) => {
       throw new Error("start_node no existe en nodes");
     }
 
-    if (startNode.parent_node_id) {
-      throw new Error("start_node no puede tener parent");
-    }
-
     nodes.forEach(node => {
       if (node.node_type === "link" && node.next_node_id) {
         throw new Error("Nodo link no puede tener next_node_id");
@@ -270,7 +268,7 @@ exports.saveFlow = async (req, res) => {
       start_node_id
     );
 
-    /* ───────── RECREAR NODOS (MERGE SEGURO) ───────── */
+    /* ───────── RECREAR NODOS ───────── */
 
     await FlowNode.deleteMany(
       { flow_id: flowId, account_id },
@@ -278,9 +276,32 @@ exports.saveFlow = async (req, res) => {
     );
 
     const docs = nodes.map(node => {
+
       const prev = existingMap.get(node.__old_id) || {};
 
+      const nextNode =
+        node.next_node_id && validOldIds.has(String(node.next_node_id))
+          ? idMap.get(String(node.next_node_id))
+          : null;
+
+      const options = Array.isArray(node.options) && node.options.length
+        ? node.options.map(opt => ({
+            label: String(opt.label || ""),
+            value: opt.value ?? "",
+            order: opt.order ?? 0,
+            next_node_id:
+              opt.next_node_id && validOldIds.has(String(opt.next_node_id))
+                ? idMap.get(String(opt.next_node_id))
+                : null
+          }))
+        : prev.options ?? [];
+
+      const hasOutput =
+        nextNode ||
+        options.some(o => o.next_node_id);
+
       return {
+
         _id: idMap.get(node.__old_id),
         account_id,
         flow_id: flowId,
@@ -290,6 +311,7 @@ exports.saveFlow = async (req, res) => {
 
         content: node.content ?? prev.content ?? null,
         variable_key: node.variable_key ?? prev.variable_key ?? null,
+
         typing_time: Math.min(
           Math.max(node.typing_time ?? prev.typing_time ?? 2, 0),
           10
@@ -310,33 +332,16 @@ exports.saveFlow = async (req, res) => {
           : prev.meta ?? {},
 
         is_draft: !publish,
+
         end_conversation:
           typeof node.end_conversation === "boolean"
             ? node.end_conversation
-            : prev.end_conversation ?? false,
+            : !hasOutput,
 
-        parent_node_id:
-          node.parent_node_id && validOldIds.has(String(node.parent_node_id))
-            ? idMap.get(String(node.parent_node_id))
-            : null,
-
-        next_node_id:
-          node.next_node_id && validOldIds.has(String(node.next_node_id))
-            ? idMap.get(String(node.next_node_id))
-            : null,
-
-        options: Array.isArray(node.options) && node.options.length
-          ? node.options.map(opt => ({
-              label: String(opt.label || ""),
-              value: opt.value ?? "",
-              order: opt.order ?? 0,
-              next_node_id:
-                opt.next_node_id && validOldIds.has(String(opt.next_node_id))
-                  ? idMap.get(String(opt.next_node_id))
-                  : null
-            }))
-          : prev.options ?? []
+        next_node_id: nextNode,
+        options
       };
+
     });
 
     await FlowNode.insertMany(docs, { session });
@@ -344,6 +349,7 @@ exports.saveFlow = async (req, res) => {
     /* ───────── START NODE ───────── */
 
     const newStartId = idMap.get(String(start_node_id));
+
     if (!newStartId) {
       throw new Error("start_node_id no mapeado");
     }
@@ -353,6 +359,7 @@ exports.saveFlow = async (req, res) => {
     /* ───────── PUBLICACIÓN ───────── */
 
     if (publish === true) {
+
       await Flow.updateMany(
         {
           chatbot_id: flow.chatbot_id,
@@ -366,8 +373,11 @@ exports.saveFlow = async (req, res) => {
       flow.status = "draft";
       flow.version = (flow.version ?? 0) + 1;
       flow.published_at = new Date();
+
     } else {
+
       flow.status = "draft";
+
     }
 
     /* ───────── VALIDACIÓN FINAL ───────── */
@@ -387,13 +397,18 @@ exports.saveFlow = async (req, res) => {
     });
 
   } catch (error) {
+
     await session.abortTransaction();
+
     res.status(400).json({
       success: false,
       message: error.message
     });
+
   } finally {
+
     session.endSession();
+
   }
 };
 

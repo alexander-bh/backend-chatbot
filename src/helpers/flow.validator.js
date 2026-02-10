@@ -24,22 +24,30 @@ exports.validateFlowGraph = async ({
 
   if (!nodes.length) return;
 
-  // ─────────────────────────────────────
-  // Mapas base
-  // ─────────────────────────────────────
+  /* ─────────────────────────────────────
+     SOLO nodos activos (no draft)
+  ───────────────────────────────────── */
+  const activeNodes = nodes.filter(n => !n.is_draft);
+
+  if (!activeNodes.length) return;
+
+  /* ─────────────────────────────────────
+     Mapas base
+  ───────────────────────────────────── */
   const nodeMap = new Map();
   const incomingCount = new Map();
 
-  nodes.forEach(node => {
+  activeNodes.forEach(node => {
     const id = String(node._id);
     nodeMap.set(id, node);
     incomingCount.set(id, 0);
   });
 
-  // ─────────────────────────────────────
-  // Validar referencias + contar entradas
-  // ─────────────────────────────────────
+  /* ─────────────────────────────────────
+     Validar referencias + contar entradas
+  ───────────────────────────────────── */
   const checkRef = (fromId, toId) => {
+
     if (!toId) return;
 
     const key = String(toId);
@@ -51,7 +59,7 @@ exports.validateFlowGraph = async ({
     incomingCount.set(key, incomingCount.get(key) + 1);
   };
 
-  for (const node of nodes) {
+  for (const node of activeNodes) {
 
     if (node.next_node_id) {
       checkRef(node._id, node.next_node_id);
@@ -64,31 +72,9 @@ exports.validateFlowGraph = async ({
     });
   }
 
-  // ─────────────────────────────────────
-  // Reglas estructurales strict
-  // ─────────────────────────────────────
-  if (strict) {
-    for (const node of nodes) {
-
-      const hasOutput =
-        !!node.next_node_id ||
-        node.options?.some(o => o.next_node_id);
-
-      if (node.end_conversation) {
-        if (hasOutput) {
-          throw new Error("Un nodo end no puede tener salidas");
-        }
-      } else {
-        if (!hasOutput) {
-          throw new Error("Un nodo sin end debe tener al menos una salida");
-        }
-      }
-    }
-  }
-
-  // ─────────────────────────────────────
-  // Detectar nodo raíz real
-  // ─────────────────────────────────────
+  /* ─────────────────────────────────────
+     Detectar nodo raíz real
+  ───────────────────────────────────── */
   const roots = [...incomingCount.entries()]
     .filter(([_, count]) => count === 0)
     .map(([id]) => id);
@@ -103,9 +89,9 @@ exports.validateFlowGraph = async ({
 
   const startNodeId = roots[0];
 
-  // ─────────────────────────────────────
-  // Validar start_node_id persistido
-  // ─────────────────────────────────────
+  /* ─────────────────────────────────────
+     Validar start_node_id persistido
+  ───────────────────────────────────── */
   if (flow.start_node_id) {
     if (String(flow.start_node_id) !== startNodeId) {
       throw new Error(
@@ -114,9 +100,9 @@ exports.validateFlowGraph = async ({
     }
   }
 
-  // ─────────────────────────────────────
-  // DFS: ciclos + alcanzabilidad
-  // ─────────────────────────────────────
+  /* ─────────────────────────────────────
+     DFS: ciclos + alcanzabilidad
+  ───────────────────────────────────── */
   const visited = new Set();
   const stack = new Set();
 
@@ -148,31 +134,35 @@ exports.validateFlowGraph = async ({
 
   dfs(startNodeId);
 
-  // ─────────────────────────────────────
-  // Nodos inalcanzables
-  // ─────────────────────────────────────
-  if (visited.size !== nodes.length) {
+  if (visited.size !== activeNodes.length) {
     throw new Error("El flujo contiene nodos inalcanzables");
   }
 
-  // ─────────────────────────────────────
-  // Reglas de ejecución por nodo (final)
-  // ─────────────────────────────────────
-  for (const node of nodes) {
+  /* ─────────────────────────────────────
+     Reglas de ejecución SOLO en strict
+  ───────────────────────────────────── */
+  if (strict) {
 
-    const hasOutput =
-      !!node.next_node_id ||
-      node.options?.some(o => o.next_node_id);
+    for (const node of activeNodes) {
 
-    if (node.end_conversation) {
-      if (hasOutput) {
-        throw new Error("Un nodo end no puede tener salidas");
-      }
-    } else {
-      if (!hasOutput) {
-        throw new Error(
-          "Un nodo sin end debe tener al menos una salida"
-        );
+      const hasOutput =
+        !!node.next_node_id ||
+        node.options?.some(o => o.next_node_id);
+
+      if (node.end_conversation) {
+
+        if (hasOutput) {
+          throw new Error("Un nodo end no puede tener salidas");
+        }
+
+      } else {
+
+        if (!hasOutput) {
+          throw new Error(
+            "Un nodo sin end debe tener al menos una salida"
+          );
+        }
+
       }
     }
   }

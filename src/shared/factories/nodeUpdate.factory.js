@@ -1,10 +1,11 @@
 module.exports = {
+
   text: (data) => ({
     content: data.content,
     typing_time: data.typing_time
   }),
 
-  question: (data) => ({
+  text_input: (data) => ({
     content: data.content,
     variable_key: data.variable_key,
     validation: data.validation,
@@ -26,7 +27,7 @@ module.exports = {
     policy: data.policy
   }),
 
-  jump: () => ({}), // no editable, solo conexiones
+  jump: () => ({}),
 
   email: (data) => ({
     content: data.content,
@@ -45,4 +46,5 @@ module.exports = {
     variable_key: data.variable_key,
     validation: data.validation
   })
+
 };

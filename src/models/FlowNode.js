@@ -72,12 +72,6 @@ const FlowNodeSchema = new Schema(
       index: true
     },
 
-    parent_node_id: {
-      type: Schema.Types.ObjectId,
-      ref: "FlowNode",
-      default: null
-    },
-
     order: { type: Number, default: 0 },
 
     node_type: {
@@ -150,13 +144,22 @@ const FlowNodeSchema = new Schema(
   { timestamps: true }
 );
 
-/* 🔥 Índice mejorado para soportar ramas */
-FlowNodeSchema.index(
-  { flow_id: 1, parent_node_id: 1, order: 1 },
-  { unique: true }
-);
+FlowNodeSchema.index({ flow_id: 1, account_id: 1 });
 
+// traversal rápido del flow
+FlowNodeSchema.index({ flow_id: 1 });
+
+// conexiones directas
 FlowNodeSchema.index({ flow_id: 1, next_node_id: 1 });
+
+// opciones con branching
+FlowNodeSchema.index({ "options.next_node_id": 1 });
+
+// runtime lookup
+FlowNodeSchema.index({ flow_id: 1, order: 1 });
+
+// notificaciones
 FlowNodeSchema.index({ "meta.notify.enabled": 1 });
+
 
 module.exports = model("FlowNode", FlowNodeSchema);
