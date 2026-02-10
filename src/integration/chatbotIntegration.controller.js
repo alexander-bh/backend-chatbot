@@ -1,9 +1,12 @@
 //chatbotIntegration.controller
 const Chatbot = require("../models/Chatbot");
 const crypto = require("crypto");
+const { parseOrigin } = require("../utils/origin.utils");
 const { isLocalhost } = require("../utils/domainValidation");
 const { domainMatches } = require("../utils/domainMatch");
 const { normalizeDomain } = require("../utils/domain.utils");
+const { domainExists } = require("../utils/domain.validator");
+
 
 /* =======================================================
    UTILIDADES
@@ -21,6 +24,50 @@ const escapeHTML = (str = "") =>
 
 const getBaseUrl = () =>
   process.env.APP_BASE_URL || "https://backend-chatbot-omega.vercel.app";
+
+//Extraer dominio y puerto desde Origin
+exports.serveWidget = async (req, res) => {
+  const originHeader = req.headers.origin;
+  const parsed = parseOrigin(originHeader);
+
+  if (!parsed) {
+    return res.status(403).json({ error: "Origen inválido" });
+  }
+
+  const { hostname, port } = parsed;
+  const originDomain = normalizeDomain(hostname);
+
+  if (!originDomain) {
+    return res.status(403).json({ error: "Dominio inválido" });
+  }
+
+  const chatbot = await Chatbot.findOne({ public_id: req.params.id });
+
+  if (!chatbot) {
+    return res.status(404).json({ error: "Chatbot no encontrado" });
+  }
+
+  const domainAllowed = chatbot.allowed_domains.some(a =>
+    domainMatches(originDomain, a)
+  );
+
+  if (!domainAllowed) {
+    return res.status(403).json({ error: "Dominio no permitido" });
+  }
+
+  // 🔐 Validar puerto SOLO en localhost
+  if (isLocalhost(originDomain)) {
+    const ALLOWED_PORTS = ["3000", "5173"];
+
+    if (port && !ALLOWED_PORTS.includes(port)) {
+      return res.status(403).json({
+        error: "Puerto no permitido"
+      });
+    }
+  }
+
+  res.json({ ok: true });
+};
 
 /* =======================================================
    1) GET INSTALL SCRIPT  → /:public_id/install
@@ -233,6 +280,24 @@ exports.addAllowedDomain = async (req, res) => {
 
     if (!normalized) {
       return res.status(400).json({ error: "Dominio inválido" });
+    }
+
+    const isDev = process.env.NODE_ENV !== "production";
+
+    // 🧪 Localhost SOLO en desarrollo
+    if (isLocalhost(normalized)) {
+      if (!isDev) {
+        return res.status(400).json({
+          error: "Dominios localhost no permitidos en producción"
+        });
+      }
+    } else {
+      const exists = await domainExists(normalized);
+      if (!exists) {
+        return res.status(400).json({
+          error: "El dominio no existe en DNS"
+        });
+      }
     }
 
     const chatbot = await Chatbot.findOne({

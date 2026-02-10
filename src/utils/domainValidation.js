@@ -5,5 +5,7 @@ const LOCALHOST_DOMAINS = [
 ];
 
 exports.isLocalhost = domain => {
-  return LOCALHOST_DOMAINS.includes(domain);
+  if (!domain) return false;
+  const host = domain.split(":")[0];
+  return LOCALHOST_DOMAINS.includes(host);
 };

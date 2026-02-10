@@ -11,5 +11,6 @@ router.post("/:public_id/send-installation", ctrl.sendInstallationCode);
 router.post("/:public_id/domain/add", ctrl.addAllowedDomain);
 router.delete("/:public_id/domain/remove", ctrl.removeAllowedDomain);
 router.post("/:public_id/token/regenerate", ctrl.regenerateInstallToken); //<--- revicion 
+router.get("/widget/:chatbot_id", ctrl.serveWidget);
 
 module.exports = router;
