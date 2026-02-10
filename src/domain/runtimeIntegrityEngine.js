@@ -185,7 +185,7 @@ module.exports = async function runtimeIntegrityEngine(flow, { session } = {}) {
       );
     }
 
-    return dfs(startId, true);
+    return dfs(startId, true); //<--- aqui para para evitar enviar sin politicas 
   }
 
   nodes.forEach(node => {
@@ -220,6 +220,7 @@ module.exports = async function runtimeIntegrityEngine(flow, { session } = {}) {
 
   nodes.forEach(node => {
 
+    /*
     if (node.variable_key) {
 
       if (vars.has(node.variable_key)) {
@@ -229,7 +230,7 @@ module.exports = async function runtimeIntegrityEngine(flow, { session } = {}) {
       }
 
       vars.add(node.variable_key);
-    }
+    }*/
 
     if (
       node.typing_time != null &&
