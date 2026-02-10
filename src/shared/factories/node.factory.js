@@ -1,20 +1,21 @@
 const NODE_FACTORY = {
+
   text: (data) => ({
     content: data.content ?? "",
-    typing_time: data.typing_time ?? 2,
-    next_node_id: null
+    typing_time: data.typing_time ?? 2
   }),
 
   options: (data) => ({
     content: data.content ?? "",
-    options: data.options ?? []
+    options: data.options ?? [],
+    typing_time: data.typing_time ?? 2
   }),
 
   text_input: (data) => ({
     content: data.content ?? "",
     variable_key: data.variable_key,
     validation: data.validation,
-    next_node_id: null
+    typing_time: data.typing_time ?? 2
   }),
 
   email: (data) => ({
@@ -22,7 +23,7 @@ const NODE_FACTORY = {
     variable_key: data.variable_key ?? "email",
     validation: data.validation,
     crm_field_key: "email",
-    next_node_id: null
+    typing_time: data.typing_time ?? 2
   }),
 
   phone: (data) => ({
@@ -30,20 +31,19 @@ const NODE_FACTORY = {
     variable_key: data.variable_key ?? "phone",
     validation: data.validation,
     crm_field_key: "phone",
-    next_node_id: null
+    typing_time: data.typing_time ?? 2
   }),
 
   number: (data) => ({
     content: data.content ?? "",
     variable_key: data.variable_key,
     validation: data.validation,
-    next_node_id: null
+    typing_time: data.typing_time ?? 2
   }),
 
   link: (data) => ({
     content: data.content ?? "",
-    link_action: data.link_action,
-    next_node_id: null
+    link_action: data.link_action
   }),
 
   data_policy: (data) => ({
@@ -51,10 +51,7 @@ const NODE_FACTORY = {
     policy: data.policy
   }),
 
-  jump: (data) => ({
-    content: data.content ?? "",
-    next_node_id: data.next_node_id
-  }),
+  jump: () => ({}),
 
   end: () => ({
     end_conversation: true
