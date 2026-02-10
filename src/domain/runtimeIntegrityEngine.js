@@ -9,22 +9,22 @@ const LEGAL_REQUIRED_TYPES = [
 
 module.exports = async function runtimeIntegrityEngine(flow, { session } = {}) {
 
-  if (!session) {
-    throw new Error("runtimeIntegrityEngine requiere session activa");
-  }
-
   if (!flow || !flow._id) {
     throw new Error("Flow inválido");
   }
 
   /* ───────── LOAD NODES ───────── */
 
-  const nodes = await FlowNode.find({
+  const query = FlowNode.find({
     flow_id: flow._id,
     account_id: flow.account_id
-  })
-    .session(session)
-    .lean();
+  });
+
+  if (session) {
+    query.session(session);
+  }
+
+  const nodes = await query.lean();
 
   if (!nodes.length) {
     throw new Error("Flow sin nodos");
@@ -50,13 +50,10 @@ module.exports = async function runtimeIntegrityEngine(flow, { session } = {}) {
     }
 
     if (Array.isArray(node.options)) {
-
       node.options.forEach(opt => {
-
         if (!opt.next_node_id) {
           throw new Error(`Opción sin destino en nodo ${id}`);
         }
-
         graph[id].push(String(opt.next_node_id));
       });
     }
@@ -131,13 +128,10 @@ module.exports = async function runtimeIntegrityEngine(flow, { session } = {}) {
   function detectLoop(id) {
 
     if (stack.has(id)) {
-
       const node = nodeMap.get(id);
-
       if (!node?.meta?.allow_loop) {
         throw new Error(`Loop infinito detectado en ${id}`);
       }
-
       return;
     }
 
@@ -153,7 +147,7 @@ module.exports = async function runtimeIntegrityEngine(flow, { session } = {}) {
 
   detectLoop(startId);
 
-  /* ───────── LEGAL CONSENT ENTERPRISE ───────── */
+  /* ───────── LEGAL CONSENT ───────── */
 
   function validateConsent(targetId) {
 
@@ -185,11 +179,10 @@ module.exports = async function runtimeIntegrityEngine(flow, { session } = {}) {
       );
     }
 
-    return dfs(startId, true); //<--- aqui para para evitar enviar sin politicas 
+    return dfs(startId, true);
   }
 
   nodes.forEach(node => {
-
     if (!LEGAL_REQUIRED_TYPES.includes(node.node_type)) return;
 
     if (!validateConsent(String(node._id))) {
@@ -216,22 +209,7 @@ module.exports = async function runtimeIntegrityEngine(flow, { session } = {}) {
 
   /* ───────── VARIABLES ───────── */
 
-  const vars = new Set();
-
   nodes.forEach(node => {
-
-    /* <--- Esto para evitar colocar mas de un text input
-    if (node.variable_key) {
-
-      if (vars.has(node.variable_key)) {
-        throw new Error(
-          `variable_key duplicado ${node.variable_key}`
-        );
-      }
-
-      vars.add(node.variable_key);
-    }*/
-
     if (
       node.typing_time != null &&
       (node.typing_time < 0 || node.typing_time > 10)
@@ -246,6 +224,3 @@ module.exports = async function runtimeIntegrityEngine(flow, { session } = {}) {
     reachable: reachable.size
   };
 };
-
-
-

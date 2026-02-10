@@ -6,6 +6,8 @@ const runtimeIntegrityEngine = require("../domain/runtimeIntegrityEngine");
 const { acquireFlowLock, releaseFlowLock } = require("../utils/flowLock.engine");
 const { getEditableFlow } = require("../utils/flow.utils");
 const { validateFlow } = require("../validators/flow.validator");
+const withTransactionRetry = require("../utils/withTransactionRetry");
+
 
 // Crear flow
 exports.createFlow = async (req, res) => {
@@ -187,19 +189,12 @@ exports.deleteFlow = async (req, res) => {
 };
 
 exports.saveFlow = async (req, res) => {
-
-  const session = await mongoose.startSession();
-
   try {
-
-    session.startTransaction();
-
     const flowId = req.params.id;
     const { nodes, start_node_id, publish = false } = req.body;
+
     const account_id = req.user.account_id;
     const user_id = req.user._id || req.user.id;
-
-    /* ───────── VALIDACIONES BÁSICAS ───────── */
 
     if (!mongoose.Types.ObjectId.isValid(flowId)) {
       throw new Error("flowId inválido");
@@ -213,66 +208,14 @@ exports.saveFlow = async (req, res) => {
       throw new Error("start_node_id inválido");
     }
 
-    /* ───────── LOCK ───────── */
-
-    await acquireFlowLock({
-      flow_id: flowId,
-      user_id,
-      account_id,
-      session
-    });
-
-    const flow = await getEditableFlow(
-      flowId,
-      account_id,
-      session
-    );
-
-    /* ───────── EXISTENTES ───────── */
-
-    const existingNodes = await FlowNode.find(
-      { flow_id: flowId, account_id },
-      null,
-      { session }
-    );
-
-    const existingMap = new Map(
-      existingNodes.map(n => [String(n._id), n.toObject()])
-    );
-
-    /* ───────── MAPEO DE IDS ───────── */
-
     const idMap = new Map();
     const validOldIds = new Set();
 
-    nodes.forEach(node => {
-
-      const oldId = String(node._id);
-
+    nodes.forEach(n => {
+      const oldId = String(n._id);
       validOldIds.add(oldId);
-
-      if (!idMap.has(oldId)) {
-        idMap.set(oldId, new mongoose.Types.ObjectId());
-      }
-
-      node.__old_id = oldId;
-
-    });
-
-    /* ───────── VALIDACIÓN ESTRUCTURAL ───────── */
-
-    const startNode = nodes.find(
-      n => String(n._id) === String(start_node_id)
-    );
-
-    if (!startNode) {
-      throw new Error("start_node no existe en nodes");
-    }
-
-    nodes.forEach(node => {
-      if (node.node_type === "link" && node.next_node_id) {
-        throw new Error("Nodo link no puede tener next_node_id");
-      }
+      idMap.set(oldId, new mongoose.Types.ObjectId());
+      n.__old_id = oldId;
     });
 
     validateFlow(
@@ -280,139 +223,58 @@ exports.saveFlow = async (req, res) => {
       start_node_id
     );
 
-    /* ───────── LIMPIAR FLOW ───────── */
+    let flow;
 
-    await FlowNode.deleteMany(
-      { flow_id: flowId, account_id },
-      { session }
-    );
+    await withTransactionRetry(async session => {
 
-    /* ───────── CONSTRUIR DOCUMENTOS ───────── */
-
-    const docs = nodes.map(node => {
-
-      const prev = existingMap.get(node.__old_id) || {};
-
-      const nextNode =
-        node.next_node_id &&
-        validOldIds.has(String(node.next_node_id))
-          ? idMap.get(String(node.next_node_id))
-          : null;
-
-      const options = Array.isArray(node.options)
-        ? node.options.map(opt => ({
-            label: String(opt.label || ""),
-            value: opt.value ?? "",
-            order: opt.order ?? 0,
-            next_node_id:
-              opt.next_node_id &&
-              validOldIds.has(String(opt.next_node_id))
-                ? idMap.get(String(opt.next_node_id))
-                : null
-          }))
-        : prev.options ?? [];
-
-      const hasOutput =
-        nextNode ||
-        options.some(o => o.next_node_id);
-
-      return {
-
-        _id: idMap.get(node.__old_id),
-
-        account_id,
+      await acquireFlowLock({
         flow_id: flowId,
+        user_id,
+        account_id,
+        session
+      });
 
-        order: node.order ?? prev.order ?? 0,
-        node_type: node.node_type ?? prev.node_type,
+      flow = await getEditableFlow(flowId, account_id, session);
 
-        content: node.content ?? prev.content ?? null,
-        variable_key: node.variable_key ?? prev.variable_key ?? null,
-
-        typing_time: Math.min(
-          Math.max(
-            node.typing_time ?? prev.typing_time ?? 2,
-            0
-          ),
-          10
-        ),
-
-        validation:
-          node.validation ??
-          prev.validation ??
-          undefined,
-
-        link_action:
-          node.link_action ??
-          prev.link_action ??
-          undefined,
-
-        meta:
-          Object.keys(node.meta || {}).length
-            ? node.meta
-            : prev.meta ?? {},
-
-        is_draft: !publish,
-
-        end_conversation:
-          typeof node.end_conversation === "boolean"
-            ? node.end_conversation
-            : !hasOutput,
-
-        next_node_id: nextNode,
-        options
-
-      };
-
-    });
-
-    await FlowNode.insertMany(docs, { session });
-
-    /* ───────── START NODE ───────── */
-
-    const newStartId = idMap.get(
-      String(start_node_id)
-    );
-
-    if (!newStartId) {
-      throw new Error("start_node_id no mapeado");
-    }
-
-    flow.start_node_id = newStartId;
-
-    /* ───────── PUBLICACIÓN ───────── */
-
-    if (publish === true) {
-
-      await Flow.updateMany(
-        {
-          chatbot_id: flow.chatbot_id,
-          account_id,
-          _id: { $ne: flow._id }
-        },
-        { status: "archived" },
+      await FlowNode.deleteMany(
+        { flow_id: flowId, account_id },
         { session }
       );
 
+      const docs = nodes.map(node => ({
+        _id: idMap.get(node.__old_id),
+        flow_id: flowId,
+        account_id,
+        order: node.order ?? 0,
+        node_type: node.node_type,
+        content: node.content ?? null,
+        next_node_id:
+          node.next_node_id &&
+          validOldIds.has(String(node.next_node_id))
+            ? idMap.get(String(node.next_node_id))
+            : null,
+        options: node.options ?? [],
+        end_conversation: node.end_conversation === true,
+        is_draft: !publish
+      }));
+
+      await FlowNode.insertMany(docs, { session });
+
+      flow.start_node_id = idMap.get(String(start_node_id));
       flow.status = "draft";
-      flow.version = (flow.version ?? 0) + 1;
-      flow.published_at = new Date();
+      flow.lock = null;
 
-    } else {
+      if (publish) {
+        flow.version = (flow.version ?? 0) + 1;
+        flow.published_at = new Date();
+      }
 
-      flow.status = "draft";
+      await flow.save({ session });
+    });
 
-    }
+    /* ───────── VALIDACIÓN POST-COMMIT ───────── */
 
-    /* ───────── VALIDACIÓN FINAL ───────── */
-
-    await runtimeIntegrityEngine(flow, { session });
-
-    flow.lock = null;
-
-    await flow.save({ session });
-
-    await session.commitTransaction();
+    await runtimeIntegrityEngine(flow);
 
     res.json({
       success: true,
@@ -422,21 +284,12 @@ exports.saveFlow = async (req, res) => {
     });
 
   } catch (error) {
-
-    await session.abortTransaction();
-
     res.status(400).json({
       success: false,
       message: error.message
     });
-
-  } finally {
-
-    session.endSession();
-
   }
 };
-
 
 /* ===========================================================
    UNLOCK FLOW
