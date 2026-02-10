@@ -3,7 +3,7 @@ const Flow = require("../models/Flow");
 const FlowNode = require("../models/FlowNode");
 const mongoose = require("mongoose");
 const crypto = require("crypto");
-const avatars = require("../config/chatbotAvatars");
+const systemAvatars = require("../shared/enum/systemAvatars");
 const {
   getBaseName,
   generateCopyName
@@ -281,7 +281,7 @@ exports.updateChatbot = async (req, res) => {
     // ─────────── AVATAR POR URL (selección) ───────────
     if (avatar && !req.file) {
       // Validar que sea una URL válida o del sistema
-      const isSystemAvatar = avatars.some(a => a.url === avatar);
+      const isSystemAvatar = systemAvatars.some(a => a.url === avatar);
       const isUploadedAvatar = chatbot.uploaded_avatars?.some(a => a.url === avatar);
 
       if (!isSystemAvatar && !isUploadedAvatar) {
@@ -546,7 +546,7 @@ exports.getAvailableAvatars = async (req, res) => {
     }
 
     res.json({
-      system: avatars,
+      system: systemAvatars,
       uploaded: chatbot.uploaded_avatars || [],
       active: chatbot.avatar
     });

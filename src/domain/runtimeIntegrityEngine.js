@@ -220,7 +220,7 @@ module.exports = async function runtimeIntegrityEngine(flow, { session } = {}) {
 
   nodes.forEach(node => {
 
-    /*
+    /* <--- Esto para evitar colocar mas de un text input
     if (node.variable_key) {
 
       if (vars.has(node.variable_key)) {
