@@ -117,10 +117,12 @@ exports.duplicateNode = async (req, res) => {
 };
 
 // Eliminar nodos
-exports.deleteNode = async (req, res) => {
+exports.deleteNode = async (req, res, next) => {
+
   const session = await mongoose.startSession();
 
   try {
+
     session.startTransaction();
 
     const result = await flowNodeService.deleteNode({
@@ -130,14 +132,22 @@ exports.deleteNode = async (req, res) => {
     });
 
     await session.commitTransaction();
-    res.json(result);
+
+    res.json({
+      success: true,
+      ...result
+    });
 
   } catch (err) {
+
     await session.abortTransaction();
-    res.status(400).json({ message: err.message });
+
+    next(err); // ✅ AQUÍ sí existe
 
   } finally {
+
     session.endSession();
+
   }
 };
 

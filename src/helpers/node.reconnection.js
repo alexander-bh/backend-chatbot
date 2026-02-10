@@ -4,13 +4,13 @@ exports.reconnectParents = async (
   deletedNode,
   flow_id,
   account_id,
-  session
+  session,
+  cascadeIds = []
 ) => {
+
   if (!deletedNode) return [];
 
-  const nextId = deletedNode.next_node_id
-    ? deletedNode.next_node_id
-    : null;
+  const deletedId = String(deletedNode._id);
 
   const reconnections = [];
 
@@ -28,43 +28,44 @@ exports.reconnectParents = async (
   );
 
   for (const parent of parents) {
+
+    // no tocar nodos que se van a borrar
+    if (cascadeIds.includes(String(parent._id))) continue;
+
     let touched = false;
 
+    // cortar next directo
     if (
       parent.next_node_id &&
-      parent.next_node_id.toString() === deletedNode._id.toString()
+      String(parent.next_node_id) === deletedId
     ) {
-      parent.next_node_id = nextId;
+      parent.next_node_id = null;
       touched = true;
-
-      reconnections.push({
-        from: parent._id,
-        to: nextId,
-        type: "direct"
-      });
     }
 
+    // cortar opciones
     if (Array.isArray(parent.options)) {
-      parent.options.forEach(opt => {
+      for (const opt of parent.options) {
         if (
           opt.next_node_id &&
-          opt.next_node_id.toString() === deletedNode._id.toString()
+          String(opt.next_node_id) === deletedId
         ) {
-          opt.next_node_id = nextId;
+          opt.next_node_id = null;
           touched = true;
-
-          reconnections.push({
-            from: parent._id,
-            to: nextId,
-            type: "option"
-          });
         }
-      });
+      }
     }
 
     if (touched) {
       parent.is_draft = true;
+
       await parent.save({ session });
+
+      reconnections.push({
+        from: parent._id,
+        removed: deletedNode._id,
+        type: "unlink"
+      });
     }
   }
 

@@ -6,7 +6,10 @@ const { getNextOrder, reorderFlowNodes } = require("../helpers/node.order");
 const { reconnectParents } = require("../helpers/node.reconnection");
 const { collectSafeCascadeIds } = require("../helpers/node.graph");
 const { validateFlowGraph } = require("../helpers/flow.validator")
-
+const NODE_FACTORY = require("../shared/factories/node.factory");
+const NODE_UPDATE_FACTORY = require(
+  "../shared/factories/nodeUpdate.factory"
+);
 
 const toObjectId = (id, field = "id") => {
   if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -70,26 +73,30 @@ exports.createNode = async ({ data, account_id, session }) => {
 
   await getEditableFlow(flowId, accountId);
 
+  const builder = NODE_FACTORY[data.node_type];
+  if (!builder) {
+    throw new Error("Tipo de nodo no soportado");
+  }
+
   const order = await getNextOrder(flowId, accountId, session);
 
-  const { flow_id, account_id: _, ...safeData } = data;
-
-  const [node] = await FlowNode.create(
-    [{
-      ...safeData,
-      flow_id: flowId,
-      account_id: accountId,
-      order,
-      is_draft: true,
-      next_node_id: null
-    }],
+  const startNode = await FlowNode.findOne(
+    { flow_id: flowId, account_id: accountId, parent_node_id: null },
+    null,
     { session }
   );
 
-  await validateFlowGraph({
+  const nodePayload = {
     flow_id: flowId,
-    account_id: accountId
-  });
+    account_id: accountId,
+    node_type: data.node_type,
+    order,
+    parent_node_id: startNode ? startNode._id : null,
+    is_draft: true,
+    ...builder(data.data || {})
+  };
+
+  const [node] = await FlowNode.create([nodePayload], { session });
 
   await updateStartNode(flowId, accountId, session);
 
@@ -120,41 +127,36 @@ exports.updateNode = async ({ nodeId, data, account_id, session }) => {
   const nodeObjectId = toObjectId(nodeId, "nodeId");
   const accountObjectId = toObjectId(account_id, "account_id");
 
-  const existing = await FlowNode.findOne({
+  const node = await FlowNode.findOne({
     _id: nodeObjectId,
     account_id: accountObjectId
   }).session(session);
 
-  if (!existing) throw new Error("Nodo no encontrado");
+  if (!node) throw new Error("Nodo no encontrado");
 
-  await getEditableFlow(existing.flow_id, accountObjectId);
+  await getEditableFlow(node.flow_id, accountObjectId);
 
-  const allowed = [
-    "content",
-    "options",
-    "typing_time",
-    "validation",
-    "meta",
-    "link_action",
-    "end_conversation",
-    "variable_key"
-  ];
+  const updater = NODE_UPDATE_FACTORY[node.node_type];
+  if (!updater) {
+    throw new Error("Este tipo de nodo no soporta edición");
+  }
 
-  const safeData = Object.fromEntries(
-    Object.entries(data).filter(([k]) => allowed.includes(k))
-  );
+  const patch = updater(data) || {};
 
   const updated = await FlowNode.findOneAndUpdate(
     {
       _id: nodeObjectId,
       account_id: accountObjectId
     },
-    safeData,
+    patch,
     { new: true, session }
   );
 
+  updated.is_draft = true;
+  await updated.save({ session });
+
   await validateFlowGraph({
-    flow_id: existing.flow_id,
+    flow_id: node.flow_id,
     account_id: accountObjectId
   });
 
@@ -247,12 +249,17 @@ exports.deleteNode = async ({ nodeId, account_id, session }) => {
   const accountObjectId = toObjectId(account_id, "account_id");
 
   const node = await FlowNode.findOne(
-    { _id: nodeObjectId, account_id: accountObjectId },
+    {
+      _id: nodeObjectId,
+      account_id: accountObjectId
+    },
     null,
     { session }
   );
 
-  if (!node) throw new Error("Nodo no encontrado");
+  if (!node) {
+    throw new Error("Nodo no encontrado");
+  }
 
   await getEditableFlow(node.flow_id, accountObjectId);
 
@@ -262,49 +269,118 @@ exports.deleteNode = async ({ nodeId, account_id, session }) => {
     session
   );
 
-  await validateFlowGraph({
-    flow_id: node.flow_id,
-    account_id: accountObjectId
-  });
-
   return result;
 };
-
 
 // ─────────────────────────────────────────────
 // Lógica interna de cascada
 // ─────────────────────────────────────────────
 exports.deleteNodeCascade = async (node, account_id, session) => {
 
-  await getEditableFlow(node.flow_id, account_id);
-
-  const reconnections = await reconnectParents(
-    node,
-    node.flow_id,
-    account_id,
-    session
-  );
-
+  /**
+   * 1️⃣ Recolectar nodos eliminables en cascada
+   */
   const ids = await collectSafeCascadeIds({
     startNode: node,
     account_id,
     session
   });
 
-  await FlowNode.deleteMany(
-    { _id: { $in: ids } },
+  /**
+   * 2️⃣ Reconectar padres del nodo raíz
+   *    (esto elimina referencias hacia nodos borrados)
+   */
+  const reconnections = await reconnectParents(
+    node,
+    node.flow_id,
+    account_id,
+    session,
+    ids
+  );
+
+  /**
+   * 3️⃣ Limpieza defensiva de referencias colgantes
+   */
+  await FlowNode.updateMany(
+    {
+      flow_id: node.flow_id,
+      account_id,
+      $or: [
+        { next_node_id: { $in: ids } },
+        { "options.next_node_id": { $in: ids } }
+      ]
+    },
+    {
+      $unset: {
+        next_node_id: "",
+        "options.$[].next_node_id": ""
+      }
+    },
     { session }
   );
 
-  await reorderFlowNodes(node.flow_id, account_id, session);
-  await updateStartNode(node.flow_id, account_id, session);
+  /**
+   * 4️⃣ 🔥 CERRAR NODOS QUE SE QUEDARON SIN SALIDA
+   *     (ESTE ERA EL BUG QUE TENÍAS)
+   */
+  const affectedParents = await FlowNode.find(
+    {
+      flow_id: node.flow_id,
+      account_id,
+      _id: { $nin: ids }
+    },
+    null,
+    { session }
+  );
+
+  for (const parent of affectedParents) {
+
+    const hasOutput =
+      !!parent.next_node_id ||
+      parent.options?.some(o => o.next_node_id);
+
+    if (!hasOutput && !parent.end_conversation) {
+      parent.end_conversation = true;
+      parent.is_draft = true;
+      await parent.save({ session });
+    }
+  }
+
+  /**
+   * 5️⃣ Normalizar nodo start
+   */
+  await updateStartNode(
+    node.flow_id,
+    account_id,
+    session,
+    ids
+  );
+
+  /**
+   * 6️⃣ Eliminar nodos
+   */
+  await FlowNode.deleteMany(
+    {
+      _id: { $in: ids },
+      account_id
+    },
+    { session }
+  );
+
+  /**
+   * 7️⃣ Reordenar flujo
+   */
+  await reorderFlowNodes(
+    node.flow_id,
+    account_id,
+    session
+  );
 
   return {
     deleted: ids.length,
     reconnections
   };
 };
-
 
 // ─────────────────────────────────────────────
 // Reordenar nodos (drag & drop)
@@ -328,7 +404,6 @@ exports.reorderNodes = async ({ flow_id, nodes, account_id, session }) => {
   });
 };
 
-
 // ─────────────────────────────────────────────
 // Duplicar 
 // ─────────────────────────────────────────────
@@ -349,6 +424,17 @@ exports.duplicateNode = async ({ nodeId, account_id, session }) => {
 
   const order = await getNextOrder(original.flow_id, accountObjectId, session);
 
+  // 🔑 buscar nodo start actual
+  const startNode = await FlowNode.findOne(
+    {
+      flow_id: original.flow_id,
+      account_id: accountObjectId,
+      parent_node_id: null
+    },
+    null,
+    { session }
+  );
+
   const clonedOptions = (original.options || []).map(opt => ({
     label: opt.label,
     value: opt.value,
@@ -360,7 +446,7 @@ exports.duplicateNode = async ({ nodeId, account_id, session }) => {
     [{
       account_id: accountObjectId,
       flow_id: original.flow_id,
-      parent_node_id: null,
+      parent_node_id: startNode ? startNode._id : null,
       order,
       node_type: original.node_type,
       content: original.content,
@@ -379,10 +465,13 @@ exports.duplicateNode = async ({ nodeId, account_id, session }) => {
   );
 
   await updateStartNode(original.flow_id, accountObjectId, session);
+
   await validateFlowGraph({
     flow_id: original.flow_id,
     account_id: accountObjectId
   });
+
   return newNode;
 };
+
 
