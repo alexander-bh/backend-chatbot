@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 const Flow = require("../models/Flow");
 const Chatbot = require("../models/Chatbot");
 const FlowNode = require("../models/FlowNode");
-const runtimeIntegrityEngine = require("../services/runtimeIntegrity.engine.service");
+const runtimeIntegrityEngine = require("../domain/runtimeIntegrityEngine");
 const { acquireFlowLock, releaseFlowLock } = require("../utils/flowLock.engine");
 const { getEditableFlow } = require("../utils/flow.utils");
 const { validateFlow } = require("../validators/flow.validator");
@@ -195,8 +195,9 @@ exports.saveFlow = async (req, res) => {
     session.startTransaction();
 
     const flowId = req.params.id;
-    const { nodes, start_node_id, publish } = req.body;
+    const { nodes, start_node_id, publish = false } = req.body;
     const account_id = req.user.account_id;
+    const user_id = req.user._id || req.user.id;
 
     /* ───────── VALIDACIONES BÁSICAS ───────── */
 
@@ -216,14 +217,18 @@ exports.saveFlow = async (req, res) => {
 
     await acquireFlowLock({
       flow_id: flowId,
-      user_id: req.user._id || req.user.id,
+      user_id,
       account_id,
       session
     });
 
-    const flow = await getEditableFlow(flowId, account_id);
+    const flow = await getEditableFlow(
+      flowId,
+      account_id,
+      session
+    );
 
-    /* ───────── EXISTENTES PARA MERGE ───────── */
+    /* ───────── EXISTENTES ───────── */
 
     const existingNodes = await FlowNode.find(
       { flow_id: flowId, account_id },
@@ -235,19 +240,26 @@ exports.saveFlow = async (req, res) => {
       existingNodes.map(n => [String(n._id), n.toObject()])
     );
 
-    /* ───────── MAPEO IDS ───────── */
+    /* ───────── MAPEO DE IDS ───────── */
 
     const idMap = new Map();
     const validOldIds = new Set();
 
     nodes.forEach(node => {
+
       const oldId = String(node._id);
+
       validOldIds.add(oldId);
-      idMap.set(oldId, new mongoose.Types.ObjectId());
+
+      if (!idMap.has(oldId)) {
+        idMap.set(oldId, new mongoose.Types.ObjectId());
+      }
+
       node.__old_id = oldId;
+
     });
 
-    /* ───────── VALIDACIONES ESTRUCTURALES ───────── */
+    /* ───────── VALIDACIÓN ESTRUCTURAL ───────── */
 
     const startNode = nodes.find(
       n => String(n._id) === String(start_node_id)
@@ -268,29 +280,33 @@ exports.saveFlow = async (req, res) => {
       start_node_id
     );
 
-    /* ───────── RECREAR NODOS ───────── */
+    /* ───────── LIMPIAR FLOW ───────── */
 
     await FlowNode.deleteMany(
       { flow_id: flowId, account_id },
       { session }
     );
 
+    /* ───────── CONSTRUIR DOCUMENTOS ───────── */
+
     const docs = nodes.map(node => {
 
       const prev = existingMap.get(node.__old_id) || {};
 
       const nextNode =
-        node.next_node_id && validOldIds.has(String(node.next_node_id))
+        node.next_node_id &&
+        validOldIds.has(String(node.next_node_id))
           ? idMap.get(String(node.next_node_id))
           : null;
 
-      const options = Array.isArray(node.options) && node.options.length
+      const options = Array.isArray(node.options)
         ? node.options.map(opt => ({
             label: String(opt.label || ""),
             value: opt.value ?? "",
             order: opt.order ?? 0,
             next_node_id:
-              opt.next_node_id && validOldIds.has(String(opt.next_node_id))
+              opt.next_node_id &&
+              validOldIds.has(String(opt.next_node_id))
                 ? idMap.get(String(opt.next_node_id))
                 : null
           }))
@@ -303,6 +319,7 @@ exports.saveFlow = async (req, res) => {
       return {
 
         _id: idMap.get(node.__old_id),
+
         account_id,
         flow_id: flowId,
 
@@ -313,7 +330,10 @@ exports.saveFlow = async (req, res) => {
         variable_key: node.variable_key ?? prev.variable_key ?? null,
 
         typing_time: Math.min(
-          Math.max(node.typing_time ?? prev.typing_time ?? 2, 0),
+          Math.max(
+            node.typing_time ?? prev.typing_time ?? 2,
+            0
+          ),
           10
         ),
 
@@ -327,9 +347,10 @@ exports.saveFlow = async (req, res) => {
           prev.link_action ??
           undefined,
 
-        meta: Object.keys(node.meta || {}).length
-          ? node.meta
-          : prev.meta ?? {},
+        meta:
+          Object.keys(node.meta || {}).length
+            ? node.meta
+            : prev.meta ?? {},
 
         is_draft: !publish,
 
@@ -340,6 +361,7 @@ exports.saveFlow = async (req, res) => {
 
         next_node_id: nextNode,
         options
+
       };
 
     });
@@ -348,7 +370,9 @@ exports.saveFlow = async (req, res) => {
 
     /* ───────── START NODE ───────── */
 
-    const newStartId = idMap.get(String(start_node_id));
+    const newStartId = idMap.get(
+      String(start_node_id)
+    );
 
     if (!newStartId) {
       throw new Error("start_node_id no mapeado");
@@ -385,6 +409,7 @@ exports.saveFlow = async (req, res) => {
     await runtimeIntegrityEngine(flow, { session });
 
     flow.lock = null;
+
     await flow.save({ session });
 
     await session.commitTransaction();
@@ -411,6 +436,7 @@ exports.saveFlow = async (req, res) => {
 
   }
 };
+
 
 /* ===========================================================
    UNLOCK FLOW
