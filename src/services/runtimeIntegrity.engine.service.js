@@ -30,16 +30,16 @@ module.exports = async function runtimeIntegrityEngine(flow, { session } = {}) {
     throw new Error("Flow sin nodos");
   }
 
+  /* ───────── MAPA DE NODOS ───────── */
+
   const nodeMap = new Map();
-  nodes.forEach(n =>
-    nodeMap.set(String(n._id), n)
-  );
+  nodes.forEach(n => {
+    nodeMap.set(String(n._id), n);
+  });
 
   const startId = String(flow.start_node_id);
 
   if (!nodeMap.has(startId)) {
-    console.error("START EN FLOW:", startId);
-    console.error("NODOS EN BD:", [...nodeMap.keys()]);
     throw new Error("Start node inexistente");
   }
 
@@ -68,41 +68,48 @@ module.exports = async function runtimeIntegrityEngine(flow, { session } = {}) {
 
   const reachable = new Set();
 
-  function dfs(id) {
+  function dfsReach(id) {
     if (reachable.has(id)) return;
     reachable.add(id);
-    (graph[id] || []).forEach(dfs);
+    (graph[id] || []).forEach(dfsReach);
   }
 
-  dfs(startId);
+  dfsReach(startId);
 
   nodes.forEach(n => {
-    const nid = String(n._id);
-    if (!reachable.has(nid)) {
+    const id = String(n._id);
+    if (!reachable.has(id)) {
       throw new Error(
-        `Nodo huérfano detectado ${nid} — NO está conectado al start`
+        `Nodo huérfano detectado ${id} — no alcanzable desde start`
       );
     }
   });
 
-  /* ───────── DEAD END DETECTION ───────── */
+  /* ───────── DEAD END + TERMINALES ───────── */
 
   nodes.forEach(node => {
     const id = String(node._id);
+    const exits = graph[id].length;
+
+    if (node.end_conversation === true && exits > 0) {
+      throw new Error(`Nodo terminal con salida ${id}`);
+    }
+
+    if (node.node_type === "link" && exits > 0) {
+      throw new Error(`Nodo link no puede tener salida ${id}`);
+    }
 
     const hasExit =
-      graph[id].length > 0 ||
+      exits > 0 ||
       node.end_conversation === true ||
-      node.node_type === "link" ||
-      (node.node_type === "options" &&
-        node.options?.some(o => o.next_node_id));
+      node.node_type === "link";
 
     if (!hasExit) {
       throw new Error(`Nodo sin salida ${id}`);
     }
   });
 
-  /* ───────── LOOP DETECTION ───────── */
+  /* ───────── LOOP DETECTION (DESDE START) ───────── */
 
   const visited = new Set();
   const stack = new Set();
@@ -111,8 +118,8 @@ module.exports = async function runtimeIntegrityEngine(flow, { session } = {}) {
 
     if (stack.has(id)) {
       const node = nodeMap.get(id);
-      if (!node.meta?.allow_loop) {
-        throw new Error(`Loop infinito detectado en ${id}`);
+      if (!node?.meta?.allow_loop) {
+        throw new Error(`Loop infinito detectado en nodo ${id}`);
       }
       return;
     }
@@ -123,42 +130,42 @@ module.exports = async function runtimeIntegrityEngine(flow, { session } = {}) {
     stack.add(id);
 
     (graph[id] || []).forEach(detectLoop);
+
     stack.delete(id);
   }
 
-  nodes.forEach(n => {
-    const id = String(n._id);
-    if (!visited.has(id)) {
-      detectLoop(id);
-    }
-  });
+  detectLoop(startId);
 
-  /* ───────── LEGAL CONSENT PATH ───────── */
+  /* ───────── LEGAL CONSENT (PATH REAL) ───────── */
+
+  function hasConsentBefore(targetId) {
+    const visited = new Set();
+
+    function dfs(id) {
+      if (visited.has(id)) return false;
+      visited.add(id);
+
+      const node = nodeMap.get(id);
+      if (!node) return false;
+
+      if (node.node_type === "data_policy") return true;
+      if (node.end_conversation) return false;
+
+      return (graph[id] || []).some(next => {
+        if (next === targetId) return true;
+        return dfs(next);
+      });
+    }
+
+    return dfs(startId);
+  }
 
   nodes.forEach(node => {
+    if (!LEGAL_REQUIRED_TYPES.includes(node.node_type)) return;
 
-    if (!LEGAL_REQUIRED_TYPES.includes(node.node_type))
-      return;
-
-    let current = node;
-    let hasPolicy = false;
-
-    while (current?.parent_node_id) {
-
-      if (current.node_type === "data_policy") {
-        hasPolicy = true;
-        break;
-      }
-
-      const next = nodeMap.get(String(current.parent_node_id));
-      if (!next) break;
-
-      current = next;
-    }
-
-    if (!hasPolicy) {
+    if (!hasConsentBefore(String(node._id))) {
       throw new Error(
-        `Nodo ${node._id} captura datos sin consentimiento`
+        `Nodo ${node._id} captura datos sin consentimiento previo`
       );
     }
   });
@@ -166,10 +173,7 @@ module.exports = async function runtimeIntegrityEngine(flow, { session } = {}) {
   /* ───────── MULTI ENTRY DETECTION ───────── */
 
   const incoming = {};
-
-  Object.keys(graph).forEach(k => {
-    incoming[k] = 0;
-  });
+  Object.keys(graph).forEach(id => incoming[id] = 0);
 
   Object.values(graph).forEach(list => {
     list.forEach(id => {
@@ -179,7 +183,27 @@ module.exports = async function runtimeIntegrityEngine(flow, { session } = {}) {
 
   Object.keys(incoming).forEach(id => {
     if (incoming[id] === 0 && id !== startId) {
-      throw new Error(`Nodo entrada ilegal ${id}`);
+      throw new Error(`Nodo con entrada ilegal ${id}`);
+    }
+  });
+
+  /* ───────── VALIDACIONES EXTRA (OPCIONALES) ───────── */
+
+  const vars = new Set();
+
+  nodes.forEach(node => {
+    if (node.variable_key) {
+      if (vars.has(node.variable_key)) {
+        throw new Error(`variable_key duplicado: ${node.variable_key}`);
+      }
+      vars.add(node.variable_key);
+    }
+
+    if (
+      node.typing_time != null &&
+      (node.typing_time < 0 || node.typing_time > 10)
+    ) {
+      throw new Error(`typing_time inválido en ${node._id}`);
     }
   });
 

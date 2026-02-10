@@ -113,42 +113,42 @@ exports.nextStep = async (req, res) => {
       return res.json({ completed: true });
     }
 
-    /* =============================
-       LOAD FLOW NODES
-    ============================= */
+    /* ─────────────────────────────
+       LOAD FLOW GRAPH
+    ───────────────────────────── */
     const nodes = await FlowNode.find({
       flow_id: session.flow_id,
       account_id: session.account_id
     }).lean();
 
-    const nodesMap = new Map(nodes.map(n => [n._id.toString(), n]));
-    const sortedNodes = [...nodes].sort((a, b) => a.order - b.order);
-    const indexMap = new Map(sortedNodes.map((n, i) => [n._id.toString(), i]));
+    const nodesMap = new Map(nodes.map(n => [String(n._id), n]));
 
-    let currentNode = nodesMap.get(session.current_node_id.toString());
+    let currentNode = nodesMap.get(String(session.current_node_id));
     if (!currentNode) {
       throw new Error("Nodo actual no encontrado");
     }
 
-    /* =============================
+    /* ─────────────────────────────
        INPUT PROCESSING
-    ============================= */
-    if (INPUT_NODES.includes(currentNode.node_type)) {
-      if (input === undefined) {
-        return res.status(400).json({ message: "Este nodo requiere respuesta" });
+    ───────────────────────────── */
+    const requiresInput = INPUT_NODES.includes(currentNode.node_type);
+
+    if (requiresInput) {
+      if (input === undefined || input === null) {
+        return res.status(400).json({
+          message: "Este nodo requiere respuesta"
+        });
       }
 
-      let validationResult = { ok: true };
-
       if (currentNode.validation?.enabled) {
-        validationResult = validateInput(
+        const result = validateInput(
           input,
           currentNode.validation.rules || []
         );
-      }
 
-      if (!validationResult.ok) {
-        return res.status(400).json({ message: validationResult.message });
+        if (!result.ok) {
+          return res.status(400).json({ message: result.message });
+        }
       }
 
       if (session.mode === "production" && currentNode.variable_key) {
@@ -159,41 +159,39 @@ exports.nextStep = async (req, res) => {
       await session.save();
     }
 
-    /* =============================
+    /* ─────────────────────────────
        RESOLVE NEXT NODE
-    ============================= */
-    const resolveNextNode = () => {
-      // OPTIONS
-      if (currentNode.options?.length && input !== undefined) {
-        const sortedOptions = [...currentNode.options].sort(
-          (a, b) => (a.order ?? 0) - (b.order ?? 0)
-        );
+    ───────────────────────────── */
+    const resolveNextNode = (node) => {
 
-        const match = sortedOptions.find(opt =>
-          opt.value === input ||
-          opt.label?.toLowerCase() === String(input).toLowerCase()
-        );
+      // OPTIONS (buttons / quick replies)
+      if (node.options?.length && input !== undefined) {
+        const match = node.options
+          .slice()
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+          .find(opt =>
+            opt.value === input ||
+            opt.label?.toLowerCase() === String(input).toLowerCase()
+          );
 
         if (match?.next_node_id) {
-          return nodesMap.get(match.next_node_id.toString());
+          return nodesMap.get(String(match.next_node_id));
         }
       }
 
-      // MANUAL NEXT
-      if (currentNode.next_node_id) {
-        return nodesMap.get(currentNode.next_node_id.toString());
+      // DIRECT CONNECTION
+      if (node.next_node_id) {
+        return nodesMap.get(String(node.next_node_id));
       }
 
-      // ORDER FALLBACK
-      const idx = indexMap.get(currentNode._id.toString());
-      return sortedNodes[idx + 1];
+      return null;
     };
 
-    let nextNode = resolveNextNode();
+    let nextNode = resolveNextNode(currentNode);
 
-    /* =============================
-       FLOW END
-    ============================= */
+    /* ─────────────────────────────
+       NO NEXT → END
+    ───────────────────────────── */
     if (!nextNode) {
       session.is_completed = true;
       await session.save();
@@ -205,36 +203,20 @@ exports.nextStep = async (req, res) => {
       return res.json({ completed: true });
     }
 
-    /* =============================
-       AUTO RENDER LOOP
-    ============================= */
+    /* ─────────────────────────────
+       AUTO EXECUTION LOOP
+    ───────────────────────────── */
     while (nextNode) {
+
       session.current_node_id = nextNode._id;
 
-      // 🔔 NOTIFICACIÓN DEL NODO
+      // 🔔 Notifications
       if (nextNode.meta?.notify?.enabled && session.mode === "production") {
         await executeNodeNotification(nextNode, session);
       }
 
+      // 🛑 END NODE
       if (nextNode.end_conversation) {
-        session.is_completed = true;
-      }
-
-      await session.save();
-
-      if (INPUT_NODES.includes(nextNode.node_type)) {
-        return res.json(renderNode(nextNode, session._id));
-      }
-
-      if (nextNode.end_conversation) {
-        if (session.mode === "production") {
-          await upsertContactFromSession(session);
-        }
-
-        return res.json(renderNode(nextNode, session._id));
-      }
-
-      if (!nextNode.next_node_id && !nextNode.options?.length) {
         session.is_completed = true;
         await session.save();
 
@@ -245,8 +227,31 @@ exports.nextStep = async (req, res) => {
         return res.json(renderNode(nextNode, session._id));
       }
 
+      // ✍️ INPUT NODE
+      if (INPUT_NODES.includes(nextNode.node_type)) {
+        await session.save();
+        return res.json(renderNode(nextNode, session._id));
+      }
+
+      // 🔚 LINK / AUTO NODE WITHOUT OUTPUT
+      if (
+        !nextNode.next_node_id &&
+        !nextNode.options?.length
+      ) {
+        session.is_completed = true;
+        await session.save();
+
+        if (session.mode === "production") {
+          await upsertContactFromSession(session);
+        }
+
+        return res.json(renderNode(nextNode, session._id));
+      }
+
+      // ➡️ CONTINUE AUTO
+      await session.save();
       currentNode = nextNode;
-      nextNode = resolveNextNode();
+      nextNode = resolveNextNode(currentNode);
     }
 
   } catch (error) {

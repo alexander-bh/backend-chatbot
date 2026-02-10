@@ -131,12 +131,12 @@ exports.renderEmbed = async (req, res) => {
 
     const frameAncestors = chatbot.allowed_domains.length
       ? chatbot.allowed_domains
-          .map(d =>
-            d.startsWith("*.")
-              ? `https://*.${d.slice(2)}`
-              : `https://${d}`
-          )
-          .join(" ")
+        .map(d =>
+          d.startsWith("*.")
+            ? `https://*.${d.slice(2)}`
+            : `https://${d}`
+        )
+        .join(" ")
       : "*";
 
     res.setHeader(
@@ -270,6 +270,9 @@ exports.removeAllowedDomain = async (req, res) => {
     const { public_id } = req.params;
     const domain = normalizeDomain(req.body.domain);
 
+    console.log("public_id:", req.params);
+    console.log("domain:", req.body.domain);
+
     const chatbot = await Chatbot.findOne({
       public_id,
       account_id: req.user.account_id
@@ -303,7 +306,7 @@ exports.sendInstallationCode = async (req, res) => {
     chatbot.install_token = crypto.randomBytes(32).toString("hex");
     await chatbot.save();
     const baseUrl = getBaseUrl();
-    const script =`<script src="${baseUrl}/api/chatbot-integration/${public_id}/install" async></script>`;
+    const script = `<script src="${baseUrl}/api/chatbot-integration/${public_id}/install" async></script>`;
     res.type("text/plain").send(script);
 
   } catch (err) {

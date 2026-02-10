@@ -5,6 +5,7 @@ const Flow = require("../models/Flow");
 const FlowNode = require("../models/FlowNode");
 const Chatbot = require("../models/Chatbot");
 const renderNode = require("../utils/renderNode");
+const engine = require("./conversationsession.controller");
 
 exports.startConversation = async (req, res) => {
   try {
@@ -95,13 +96,16 @@ exports.nextPublicStep = async (req, res) => {
       return res.json({ completed: true });
     }
 
-    // 👉 reutilizamos EXACTAMENTE la lógica del engine
-    req.params.id = session_id;
-    req.body.input = input;
+    if (session.mode !== "production") {
+      return res.status(403).json({ message: "Sesión inválida" });
+    }
 
-    // delega al engine privado
-    const engine = require("./conversationsession.controller");
-    return engine.nextStep(req, res);
+    const fakeReq = {
+      params: { id: session_id },
+      body: { input }
+    };
+
+    return engine.nextStep(fakeReq, res);
 
   } catch (err) {
     console.error("nextPublicStep:", err);

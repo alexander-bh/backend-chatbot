@@ -1,6 +1,6 @@
 const FlowNode = require("../models/FlowNode");
 
-exports.hasOtherParents = async ({
+const hasOtherParents = async ({
   nodeId,
   flow_id,
   account_id,
@@ -24,7 +24,7 @@ exports.hasOtherParents = async ({
   return !!parent;
 };
 
-exports.collectSafeCascadeIds = async ({
+const collectSafeCascadeIds = async ({
   startNode,
   account_id,
   session
@@ -46,7 +46,7 @@ exports.collectSafeCascadeIds = async ({
     const pushIfSafe = async (childId) => {
       if (!childId) return;
 
-      const shared = await exports.hasOtherParents({
+      const shared = await hasOtherParents({
         nodeId: childId,
         flow_id: node.flow_id,
         account_id,
@@ -65,4 +65,9 @@ exports.collectSafeCascadeIds = async ({
   }
 
   return [...ids];
+};
+
+module.exports = {
+  hasOtherParents,
+  collectSafeCascadeIds
 };

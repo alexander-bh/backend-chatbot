@@ -69,5 +69,4 @@ router.patch(
   nodeController.reorderNodes
 );
 
-
 module.exports = router;
