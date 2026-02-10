@@ -24,4 +24,4 @@ module.exports = [
     label: "Default",
     url: "https://res.cloudinary.com/dn3uqvffp/image/upload/v1768692030/Captura_de_pantalla_2025-11-24_194735_idq6pk.png"
   }
-];
+];  
