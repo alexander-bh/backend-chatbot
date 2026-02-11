@@ -38,7 +38,7 @@ exports.startConversation = async (req, res) => {
       flow = await Flow.findOne({
         chatbot_id,
         account_id: req.user.account_id,
-        status: "active"
+        status: "draft"
       });
     } else {
       if (!flow_id) {

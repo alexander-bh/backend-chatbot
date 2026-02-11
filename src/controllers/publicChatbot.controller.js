@@ -24,7 +24,7 @@ exports.startConversation = async (req, res) => {
     const flow = await Flow.findOne({
       chatbot_id: chatbot._id,
       account_id: chatbot.account_id,
-      status: "active"
+      status: "draft"
     }).sort({ published_at: -1 });
 
     if (!flow || !flow.start_node_id) {
