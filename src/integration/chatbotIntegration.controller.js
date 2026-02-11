@@ -178,13 +178,21 @@ exports.renderEmbed = async (req, res) => {
 
     const frameAncestors = chatbot.allowed_domains.length
       ? chatbot.allowed_domains
-        .map(d =>
-          d.startsWith("*.")
-            ? `https://*.${d.slice(2)}`
-            : `https://${d}`
-        )
+        .map(d => {
+          if (isLocalhost(d)) {
+            return "http://localhost:* https://localhost:*";
+          }
+
+          if (d.startsWith("*.")) {
+            const base = d.slice(2);
+            return `https://${base} https://*.${base}`;
+          }
+
+          return `https://${d}`;
+        })
         .join(" ")
       : "*";
+
 
     res.setHeader(
       "Content-Security-Policy",

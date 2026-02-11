@@ -19,7 +19,6 @@ const toObjectId = (id, field = "id") => {
    Crear nodo
 ───────────────────────────────────────────── */
 exports.createNode = async ({ data, account_id, session }) => {
-
   const flowId = toObjectId(data.flow_id);
   const accountId = toObjectId(account_id);
 
@@ -30,16 +29,25 @@ exports.createNode = async ({ data, account_id, session }) => {
 
   const order = await getNextOrder(flowId, accountId, session);
 
-  const [node] = await FlowNode.create([{
+  const payload = {
     flow_id: flowId,
     account_id: accountId,
     node_type: data.node_type,
     order,
     is_draft: true,
     next_node_id: null,
-    options: [],
     ...builder(data.data || {})
-  }], { session });
+  };
+
+  /* 🧠 LIMPIEZA CRÍTICA */
+  const inputNodes = ["text_input", "email", "phone", "number"];
+  if (!inputNodes.includes(data.node_type)) {
+    delete payload.variable_key;
+    delete payload.validation;
+    delete payload.crm_field_key;
+  }
+
+  const [node] = await FlowNode.create([payload], { session });
 
   await updateStartNode(flowId, accountId, session);
 
@@ -153,7 +161,6 @@ exports.connectNode = async ({
   let targetObjectId = null;
 
   if (targetNodeId) {
-
     targetObjectId = toObjectId(targetNodeId, "targetNodeId");
 
     const target = await FlowNode.findOne({
@@ -180,9 +187,15 @@ exports.connectNode = async ({
     }
   }
 
-  if (optionIndex === undefined) {
-    source.next_node_id = targetObjectId;
-  } else {
+  /* ================= CONEXIÓN ================= */
+
+  if (optionIndex !== undefined) {
+
+    // 🔒 solo nodos options
+    if (source.node_type !== "options") {
+      throw new Error("Este nodo no soporta conexiones por opción");
+    }
+
     if (
       !Array.isArray(source.options) ||
       optionIndex < 0 ||
@@ -192,6 +205,15 @@ exports.connectNode = async ({
     }
 
     source.options[optionIndex].next_node_id = targetObjectId;
+
+  } else {
+
+    // 🔒 nodos lineales
+    if (source.node_type === "options") {
+      throw new Error("Debes indicar optionIndex para nodos de tipo options");
+    }
+
+    source.next_node_id = targetObjectId;
   }
 
   source.is_draft = true;
@@ -269,28 +291,6 @@ exports.deleteNode = async ({ nodeId, account_id, session }) => {
 };
 
 /* ─────────────────────────────────────────────
-   Reordenar nodos
-───────────────────────────────────────────── */
-exports.reorderNodes = async ({ flow_id, nodes, account_id, session }) => {
-
-  const flowId = toObjectId(flow_id, "flow_id");
-  const accountId = toObjectId(account_id, "account_id");
-
-  if (!Array.isArray(nodes)) {
-    throw new Error("Formato de nodos inválido");
-  }
-
-  await getEditableFlow(flowId, accountId);
-
-  await reorderFlowNodes(flowId, accountId, session, nodes);
-
-  await validateFlowGraph({
-    flow_id: flowId,
-    account_id: accountId
-  });
-};
-
-/* ─────────────────────────────────────────────
    Duplicar nodo
 ───────────────────────────────────────────── */
 exports.duplicateNode = async ({ nodeId, account_id, session }) => {
@@ -343,3 +343,27 @@ exports.duplicateNode = async ({ nodeId, account_id, session }) => {
 
   return newNode;
 };
+
+/* ─────────────────────────────────────────────
+   Reordenar nodos
+───────────────────────────────────────────── */
+exports.reorderNodes = async ({ flow_id, nodes, account_id, session }) => {
+
+  const flowId = toObjectId(flow_id, "flow_id");
+  const accountId = toObjectId(account_id, "account_id");
+
+  if (!Array.isArray(nodes)) {
+    throw new Error("Formato de nodos inválido");
+  }
+
+  await getEditableFlow(flowId, accountId);
+
+  await reorderFlowNodes(flowId, accountId, session, nodes);
+
+  await validateFlowGraph({
+    flow_id: flowId,
+    account_id: accountId
+  });
+};
+
+

@@ -1,4 +1,4 @@
-//utils flow.utils.js
+// utils/flow.utils.js
 const Flow = require("../models/Flow");
 
 exports.getEditableFlow = async (
@@ -6,11 +6,10 @@ exports.getEditableFlow = async (
   account_id,
   session = null
 ) => {
-
   const query = {
     _id: flow_id,
     account_id,
-    status: "draft"
+    status: { $in: ["draft", "active"] }
   };
 
   const q = Flow.findOne(query);

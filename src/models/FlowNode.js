@@ -1,5 +1,7 @@
 const { Schema, model } = require("mongoose");
 
+/* ================= SUBSCHEMAS ================= */
+
 const PolicySchema = new Schema(
   {
     required: { type: Boolean, default: true },
@@ -23,7 +25,11 @@ const OptionSchema = new Schema(
     label: String,
     value: String,
     order: { type: Number, default: 0 },
-    next_node_id: { type: Schema.Types.ObjectId, ref: "FlowNode" }
+    next_node_id: {
+      type: Schema.Types.ObjectId,
+      ref: "FlowNode",
+      default: null
+    }
   },
   { _id: false }
 );
@@ -61,9 +67,16 @@ const MetaSchema = new Schema(
   { _id: false, strict: false }
 );
 
+/* ================= FLOW NODE ================= */
+
 const FlowNodeSchema = new Schema(
   {
-    account_id: { type: Schema.Types.ObjectId, ref: "Account", required: true },
+    account_id: {
+      type: Schema.Types.ObjectId,
+      ref: "Account",
+      required: true,
+      index: true
+    },
 
     flow_id: {
       type: Schema.Types.ObjectId,
@@ -72,7 +85,11 @@ const FlowNodeSchema = new Schema(
       index: true
     },
 
-    order: { type: Number, default: 0 },
+    order: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
 
     node_type: {
       type: String,
@@ -91,8 +108,8 @@ const FlowNodeSchema = new Schema(
       required: true
     },
 
-    content: String,
-    variable_key: String,
+    content: { type: String, default: "" },
+    variable_key: { type: String},
 
     options: {
       type: [OptionSchema],
@@ -127,9 +144,16 @@ const FlowNodeSchema = new Schema(
       default: undefined
     },
 
-    crm_field_key: { type: String, default: null },
+    crm_field_key: {
+      type: String,
+      default: null
+    },
 
-    is_draft: { type: Boolean, default: true },
+    is_draft: {
+      type: Boolean,
+      default: true,
+      index: true
+    },
 
     meta: {
       type: MetaSchema,
@@ -144,22 +168,24 @@ const FlowNodeSchema = new Schema(
   { timestamps: true }
 );
 
+/* ================= INDEXES ================= */
+
+// multi-tenant
 FlowNodeSchema.index({ flow_id: 1, account_id: 1 });
 
-// traversal rápido del flow
-FlowNodeSchema.index({ flow_id: 1 });
+// traversal y runtime
+FlowNodeSchema.index(
+  { flow_id: 1, order: 1, is_draft: 1 },
+  { unique: true }
+);
 
-// conexiones directas
+// conexiones lineales
 FlowNodeSchema.index({ flow_id: 1, next_node_id: 1 });
 
-// opciones con branching
+// branching options
 FlowNodeSchema.index({ "options.next_node_id": 1 });
-
-// runtime lookup
-FlowNodeSchema.index({ flow_id: 1, order: 1 });
 
 // notificaciones
 FlowNodeSchema.index({ "meta.notify.enabled": 1 });
-
 
 module.exports = model("FlowNode", FlowNodeSchema);
