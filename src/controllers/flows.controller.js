@@ -314,7 +314,7 @@ exports.saveFlow = async (req, res) => {
       flow.lock = null;
 
       if (isPublishing) {
-        flow.status = "active";
+        flow.status = "draft";
         flow.version = (flow.version ?? 0) + 1;
         flow.published_at = new Date();
       } else {
