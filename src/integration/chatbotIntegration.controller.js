@@ -279,7 +279,7 @@ window.__CHATBOT_CONFIG__ = {
 ======================================================= */
 exports.addAllowedDomain = async (req, res) => {
   try {
-    if (!req.user?.account_id) {
+    if (!req.user) {
       return res.status(401).json({ error: "No autorizado" });
     }
 
@@ -292,7 +292,6 @@ exports.addAllowedDomain = async (req, res) => {
 
     const isDev = process.env.NODE_ENV !== "production";
 
-    // 🧪 Localhost SOLO en desarrollo
     if (isLocalhost(normalized)) {
       if (!isDev) {
         return res.status(400).json({
@@ -308,10 +307,17 @@ exports.addAllowedDomain = async (req, res) => {
       }
     }
 
-    const chatbot = await Chatbot.findOne({
-      public_id,
-      account_id: req.user.account_id
-    });
+    // 🔥 QUERY DINÁMICO SEGÚN ROL
+    const query = { public_id };
+
+    if (req.user.role !== "ADMIN") {
+      if (!req.user.account_id) {
+        return res.status(401).json({ error: "Cuenta inválida" });
+      }
+      query.account_id = req.user.account_id;
+    }
+
+    const chatbot = await Chatbot.findOne(query);
 
     if (!chatbot) {
       return res.status(404).json({ error: "Chatbot no encontrado" });
@@ -325,6 +331,7 @@ exports.addAllowedDomain = async (req, res) => {
     await chatbot.save();
 
     res.json({ success: true, domains: chatbot.allowed_domains });
+
   } catch (err) {
     console.error("ADD DOMAIN:", err);
     res.status(500).json({ error: "Error interno" });
@@ -336,34 +343,42 @@ exports.addAllowedDomain = async (req, res) => {
 ======================================================= */
 exports.removeAllowedDomain = async (req, res) => {
   try {
-    if (!req.user?.account_id) {
+    if (!req.user) {
       return res.status(401).json({ error: "No autorizado" });
     }
 
     const { public_id } = req.params;
     const domain = normalizeDomain(req.body.domain);
 
-    console.log("public_id:", req.params);
-    console.log("domain:", req.body.domain);
+    const query = { public_id };
 
-    const chatbot = await Chatbot.findOne({
-      public_id,
-      account_id: req.user.account_id
-    });
-
-    if (!chatbot) {
-      return res.status(404).json({ error: "No encontrado" });
+    if (req.user.role !== "ADMIN") {
+      if (!req.user.account_id) {
+        return res.status(401).json({ error: "Cuenta inválida" });
+      }
+      query.account_id = req.user.account_id;
     }
 
-    chatbot.allowed_domains = chatbot.allowed_domains.filter(d => d !== domain);
+    const chatbot = await Chatbot.findOne(query);
+
+    if (!chatbot) {
+      return res.status(404).json({ error: "Chatbot no encontrado" });
+    }
+
+    chatbot.allowed_domains = chatbot.allowed_domains.filter(
+      d => d !== domain
+    );
+
     await chatbot.save();
 
     res.json({ success: true, domains: chatbot.allowed_domains });
+
   } catch (err) {
     console.error("REMOVE DOMAIN:", err);
     res.status(500).json({ error: "Error interno" });
   }
 };
+
 
 /* =======================================================
    6) GENERAR CÓDIGO DE INSTALACIÓN
