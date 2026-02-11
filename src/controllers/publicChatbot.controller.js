@@ -7,52 +7,37 @@ const Chatbot = require("../models/Chatbot");
 const renderNode = require("../utils/renderNode");
 const engine = require("./conversationsession.controller");
 
+// controllers/conversation.controller.js
 exports.startConversation = async (req, res) => {
   try {
     const { public_id } = req.params;
 
-    if (!public_id) {
-      return res.status(400).json({
-        message: "public_id requerido"
-      });
-    }
-
-    /* ───────── CHATBOT ───────── */
     const chatbot = await Chatbot.findOne({
       public_id,
       status: "active"
     });
 
     if (!chatbot) {
-      return res.status(404).json({
-        message: "Chatbot no disponible"
-      });
+      return res.status(404).json({ message: "Chatbot no disponible" });
     }
 
-    /* ───────── FLOW PUBLICADO ───────── */
     const flow = await Flow.findOne({
       chatbot_id: chatbot._id,
       account_id: chatbot.account_id,
       status: "active"
-    }).sort({ updatedAt: -1 });
+    }).sort({ published_at: -1 });
 
-    if (!flow) {
+    if (!flow || !flow.start_node_id) {
       return res.status(404).json({
         message: "Chatbot sin flujo publicado"
       });
     }
 
-    if (!flow.start_node_id) {
-      return res.status(500).json({
-        message: "El flujo publicado no tiene nodo inicial"
-      });
-    }
-
-    /* ───────── NODO INICIAL ───────── */
     const startNode = await FlowNode.findOne({
       _id: flow.start_node_id,
       flow_id: flow._id,
-      account_id: chatbot.account_id
+      account_id: chatbot.account_id,
+      is_draft: false
     });
 
     if (!startNode) {
@@ -61,7 +46,6 @@ exports.startConversation = async (req, res) => {
       });
     }
 
-    /* ───────── SESIÓN ───────── */
     const session = await ConversationSession.create({
       account_id: chatbot.account_id,
       chatbot_id: chatbot._id,
@@ -75,7 +59,7 @@ exports.startConversation = async (req, res) => {
     return res.json(renderNode(startNode, session._id));
 
   } catch (error) {
-    console.error("public startConversation error:", error);
+    console.error("startConversation error:", error);
     return res.status(500).json({
       message: "Error al iniciar conversación"
     });

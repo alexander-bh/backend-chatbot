@@ -2,12 +2,10 @@ const mongoose = require("mongoose");
 const Flow = require("../models/Flow");
 const Chatbot = require("../models/Chatbot");
 const FlowNode = require("../models/FlowNode");
-const runtimeIntegrityEngine = require("../domain/runtimeIntegrityEngine");
 const { acquireFlowLock, releaseFlowLock } = require("../utils/flowLock.engine");
 const { getEditableFlow } = require("../utils/flow.utils");
 const { validateFlow } = require("../validators/flow.validator");
 const withTransactionRetry = require("../utils/withTransactionRetry");
-
 
 // Crear flow
 exports.createFlow = async (req, res) => {
@@ -188,16 +186,21 @@ exports.deleteFlow = async (req, res) => {
   }
 };
 
+// controllers/flow.controller.js
 exports.saveFlow = async (req, res) => {
   try {
     const flowId = req.params.id;
-    const { nodes, start_node_id, publish = false } = req.body;
+    const { nodes, start_node_id, publish = false, chatbot_id } = req.body;
 
     const account_id = req.user.account_id;
     const user_id = req.user._id || req.user.id;
 
     if (!mongoose.Types.ObjectId.isValid(flowId)) {
       throw new Error("flowId inválido");
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(chatbot_id)) {
+      throw new Error("chatbot_id requerido");
     }
 
     if (!Array.isArray(nodes) || nodes.length === 0) {
@@ -207,6 +210,8 @@ exports.saveFlow = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(start_node_id)) {
       throw new Error("start_node_id inválido");
     }
+
+    /* ================= ID MAP ================= */
 
     const idMap = new Map();
     const validOldIds = new Set();
@@ -223,8 +228,6 @@ exports.saveFlow = async (req, res) => {
       start_node_id
     );
 
-    let flow;
-
     await withTransactionRetry(async session => {
 
       await acquireFlowLock({
@@ -234,53 +237,98 @@ exports.saveFlow = async (req, res) => {
         session
       });
 
-      flow = await getEditableFlow(flowId, account_id, session);
+      const flow = await getEditableFlow(flowId, account_id, session);
+      const isPublishing = publish === true;
+
+      /* ================= CLEAN ================= */
 
       await FlowNode.deleteMany(
-        { flow_id: flowId, account_id },
+        {
+          flow_id: flowId,
+          account_id,
+          ...(isPublishing ? {} : { is_draft: true })
+        },
         { session }
       );
 
-      const docs = nodes.map(node => ({
-        _id: idMap.get(node.__old_id),
-        flow_id: flowId,
-        account_id,
-        order: node.order ?? 0,
-        node_type: node.node_type,
-        content: node.content ?? null,
-        next_node_id:
-          node.next_node_id &&
-          validOldIds.has(String(node.next_node_id))
-            ? idMap.get(String(node.next_node_id))
-            : null,
-        options: node.options ?? [],
-        end_conversation: node.end_conversation === true,
-        is_draft: !publish
-      }));
+      /* ================= INSERT ================= */
+
+      const INPUT_NODES = ["text_input", "email", "phone", "number"];
+
+      const docs = nodes.map((node, index) => {
+        const base = {
+          _id: idMap.get(node.__old_id),
+          flow_id: flowId,
+          account_id,
+          order: index,
+          node_type: node.node_type,
+          content: node.content ?? "",
+          typing_time: node.typing_time ?? 2,
+          next_node_id:
+            node.next_node_id &&
+            validOldIds.has(String(node.next_node_id))
+              ? idMap.get(String(node.next_node_id))
+              : null,
+          end_conversation: node.end_conversation === true,
+          meta: node.meta ?? {},
+          is_draft: !isPublishing
+        };
+
+        /* 🧠 SOLO OPTIONS */
+        if (node.node_type === "options") {
+          base.options = (node.options ?? []).map(opt => ({
+            ...opt,
+            next_node_id:
+              opt.next_node_id &&
+              validOldIds.has(String(opt.next_node_id))
+                ? idMap.get(String(opt.next_node_id))
+                : null
+          }));
+        }
+
+        /* 🧠 SOLO INPUTS */
+        if (INPUT_NODES.includes(node.node_type)) {
+          base.variable_key = node.variable_key;
+          base.validation = node.validation ?? undefined;
+          base.crm_field_key = node.crm_field_key ?? undefined;
+        }
+
+        /* 🧠 OTROS TIPOS */
+        if (node.node_type === "link") {
+          base.link_action = node.link_action ?? undefined;
+        }
+
+        if (node.node_type === "data_policy") {
+          base.policy = node.policy ?? undefined;
+        }
+
+        return base;
+      });
 
       await FlowNode.insertMany(docs, { session });
 
+      /* ================= FLOW ================= */
+
+      flow.chatbot_id = chatbot_id;
       flow.start_node_id = idMap.get(String(start_node_id));
-      flow.status = "draft";
       flow.lock = null;
 
-      if (publish) {
+      if (isPublishing) {
+        flow.status = "active";
         flow.version = (flow.version ?? 0) + 1;
         flow.published_at = new Date();
+      } else {
+        flow.status = "draft";
       }
 
       await flow.save({ session });
     });
 
-    /* ───────── VALIDACIÓN POST-COMMIT ───────── */
-
-    await runtimeIntegrityEngine(flow);
-
     res.json({
       success: true,
       message: publish
-        ? "Flow guardado y publicado correctamente"
-        : "Flow guardado correctamente"
+        ? "Flow publicado correctamente"
+        : "Flow guardado como borrador"
     });
 
   } catch (error) {

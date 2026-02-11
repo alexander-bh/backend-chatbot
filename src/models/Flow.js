@@ -33,7 +33,7 @@ const FlowSchema = new Schema(
 
     lock: {
       locked_by: {
-        type: Schema.Types.ObjectId, // ✅ CORRECTO
+        type: Schema.Types.ObjectId, 
         ref: "User",
         default: null
       },
