@@ -175,24 +175,18 @@ exports.renderEmbed = async (req, res) => {
     }
 
     const apiOrigin = new URL(getBaseUrl()).origin;
-
     const frameAncestors = chatbot.allowed_domains.length
       ? chatbot.allowed_domains
         .map(d => {
           if (isLocalhost(d)) {
-            return "http://localhost:* https://localhost:*";
+            return "http://localhost:* http://127.0.0.1:* https://localhost:*";
           }
 
-          if (d.startsWith("*.")) {
-            const base = d.slice(2);
-            return `https://${base} https://*.${base}`;
-          }
-
-          return `https://${d}`;
+          // Permitir dominio exacto + cualquier subdominio
+          return `https://${d} https://*.${d}`;
         })
         .join(" ")
       : "*";
-
 
     res.setHeader(
       "Content-Security-Policy",
