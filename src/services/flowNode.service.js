@@ -88,8 +88,11 @@ exports.updateNode = async ({ nodeId, data, account_id, session }) => {
     account_id: accountObjectId
   }).session(session);
 
-  if (!node) throw new Error("Nodo no encontrado");
+  if (!node) {
+    throw new Error("Nodo no encontrado");
+  }
 
+  // Validar que el flow esté editable
   await getEditableFlow(node.flow_id, accountObjectId);
 
   const updater = NODE_UPDATE_FACTORY[node.node_type];
@@ -99,37 +102,55 @@ exports.updateNode = async ({ nodeId, data, account_id, session }) => {
 
   const patch = updater(data) || {};
 
+  // Si no hay cambios reales, salir
+  if (Object.keys(patch).length === 0) {
+    return node;
+  }
+
+  // Simular el nodo actualizado
   const simulated = {
     ...node.toObject(),
     ...patch,
     is_draft: true
   };
 
+  // ⚠ VALIDAR SOLO SI EL USUARIO ESTÁ MODIFICANDO CONEXIONES
   const isModifyingConnections =
-    patch.hasOwnProperty('next_node_id') ||
-    patch.hasOwnProperty('options') ||
-    patch.hasOwnProperty('end_conversation');
+    Object.prototype.hasOwnProperty.call(data, 'next_node_id') ||
+    Object.prototype.hasOwnProperty.call(data, 'options') ||
+    Object.prototype.hasOwnProperty.call(data, 'end_conversation');
 
   if (isModifyingConnections && !simulated.end_conversation) {
 
-    const hasOutput =
-      simulated.next_node_id ||
-      simulated.options?.some(o => o.next_node_id);
+    const hasDirectOutput = simulated.next_node_id;
 
-    if (!hasOutput && simulated.node_type !== "link") {
+    const hasOptionsOutput =
+      Array.isArray(simulated.options) &&
+      simulated.options.some(o => o.next_node_id);
+
+    if (!hasDirectOutput && !hasOptionsOutput && simulated.node_type !== "link") {
       throw new Error("Nodo sin salida");
     }
   }
 
-  const { _id, ...safePatch } = simulated;
+  // Nunca permitir cambiar _id
+  delete simulated._id;
 
   const updated = await FlowNode.findOneAndUpdate(
     {
       _id: nodeObjectId,
       account_id: accountObjectId
     },
-    { $set: safePatch },
-    { new: true, session }
+    {
+      $set: {
+        ...patch,
+        is_draft: true
+      }
+    },
+    {
+      new: true,
+      session
+    }
   );
 
   return updated;
