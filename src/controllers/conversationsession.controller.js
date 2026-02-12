@@ -5,18 +5,19 @@ const Flow = require("../models/Flow");
 const FlowNode = require("../models/FlowNode");
 const Chatbot = require("../models/Chatbot");
 const upsertContactFromSession = require("../services/upsertContactFromSession.service");
-const validateInput = require("../utils/validateInput");
 const renderNode = require("../utils/renderNode");
 const executeNodeNotification = require("../services/executeNodeNotification.service");
 const validateNodeInput = require("../utils/chat/chatbotValidationEngine");
+
 const ALLOWED_MODES = ["preview", "production"];
+
 const INPUT_NODES = [
   "question",
   "email",
   "phone",
   "number",
   "text_input",
-  "link"
+  "options"
 ];
 
 /* --------------------------------------------------
@@ -24,6 +25,7 @@ const INPUT_NODES = [
 -------------------------------------------------- */
 exports.startConversation = async (req, res) => {
   try {
+
     const { chatbot_id, flow_id, mode = "production" } = req.body;
 
     if (!ALLOWED_MODES.includes(mode)) {
@@ -42,12 +44,15 @@ exports.startConversation = async (req, res) => {
     let flow;
 
     if (mode === "production") {
+
       flow = await Flow.findOne({
         chatbot_id,
         account_id: req.user.account_id,
-        status: "draft"
+        status: "active"
       });
+
     } else {
+
       if (!flow_id) {
         return res.status(400).json({
           message: "flow_id es obligatorio en preview"
@@ -91,13 +96,17 @@ exports.startConversation = async (req, res) => {
     });
 
     return res.json(renderNode(startNode, session._id));
+
   } catch (error) {
+
     console.error("startConversation:", error);
+
     return res.status(500).json({
       message: "Error al iniciar conversación"
     });
   }
 };
+
 
 /* --------------------------------------------------
    NEXT STEP (ENGINE)
@@ -113,6 +122,7 @@ exports.nextStep = async (req, res) => {
     }
 
     const session = await ConversationSession.findById(sessionId);
+
     if (!session) {
       return res.status(404).json({ message: "Sesión no encontrada" });
     }
@@ -121,9 +131,7 @@ exports.nextStep = async (req, res) => {
       return res.json({ completed: true });
     }
 
-    /* ─────────────────────────────
-       LOAD FLOW GRAPH
-    ───────────────────────────── */
+    /* LOAD FLOW GRAPH */
     const nodes = await FlowNode.find({
       flow_id: session.flow_id,
       account_id: session.account_id
@@ -132,17 +140,23 @@ exports.nextStep = async (req, res) => {
     const nodesMap = new Map(nodes.map(n => [String(n._id), n]));
 
     let currentNode = nodesMap.get(String(session.current_node_id));
+
     if (!currentNode) {
       throw new Error("Nodo actual no encontrado");
     }
 
-    /* ─────────────────────────────
-       INPUT PROCESSING
-    ───────────────────────────── */
+    /* PREVENT OPTIONS AUTO ADVANCE */
+    if (
+      currentNode.node_type === "options" &&
+      input === undefined
+    ) {
+      return res.json(renderNode(currentNode, session._id));
+    }
 
+    /* INPUT PROCESSING */
     const requiresInput = INPUT_NODES.includes(currentNode.node_type);
 
-    if (requiresInput) {
+    if (requiresInput && input !== undefined) {
 
       const errors = validateNodeInput(currentNode, input);
 
@@ -165,21 +179,24 @@ exports.nextStep = async (req, res) => {
       await session.save();
     }
 
-    /* ─────────────────────────────
-       RESOLVE NEXT NODE
-    ───────────────────────────── */
-
+    /* RESOLVE NEXT NODE */
     const resolveNextNode = (node) => {
 
-      if (node.options?.length && input !== undefined) {
+      if (
+        node.node_type === "options" &&
+        node.options?.length &&
+        input !== undefined
+      ) {
 
-        const match = node.options
+        const orderedOptions = node.options
           .slice()
-          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-          .find(opt =>
-            opt.value === input ||
-            opt.label?.toLowerCase() === String(input).toLowerCase()
-          );
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+        const match = orderedOptions.find((opt, index) =>
+          String(index) === String(input) ||
+          opt.value === input ||
+          opt.label?.toLowerCase() === String(input).toLowerCase()
+        );
 
         if (match?.next_node_id) {
           return nodesMap.get(String(match.next_node_id));
@@ -195,10 +212,6 @@ exports.nextStep = async (req, res) => {
 
     let nextNode = resolveNextNode(currentNode);
 
-    /* ─────────────────────────────
-       NO NEXT → END
-    ───────────────────────────── */
-
     if (!nextNode) {
 
       session.is_completed = true;
@@ -211,11 +224,14 @@ exports.nextStep = async (req, res) => {
       return res.json({ completed: true });
     }
 
-    /* ─────────────────────────────
-       AUTO EXECUTION LOOP
-    ───────────────────────────── */
+    /* AUTO EXECUTION LOOP */
+    let safetyCounter = 0;
 
     while (nextNode) {
+
+      if (safetyCounter++ > 50) {
+        throw new Error("Loop infinito detectado en flow");
+      }
 
       session.current_node_id = nextNode._id;
 
@@ -253,12 +269,15 @@ exports.nextStep = async (req, res) => {
       }
 
       await session.save();
+
       currentNode = nextNode;
       nextNode = resolveNextNode(currentNode);
     }
 
   } catch (error) {
+
     console.error("nextStep:", error);
+
     return res.status(500).json({
       message: "Error al procesar conversación"
     });
