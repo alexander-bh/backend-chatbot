@@ -48,7 +48,7 @@ exports.startConversation = async (req, res) => {
       flow = await Flow.findOne({
         chatbot_id,
         account_id: req.user.account_id,
-        status: "active"
+        status: "draft"
       });
 
     } else {
@@ -122,7 +122,6 @@ exports.nextStep = async (req, res) => {
     }
 
     const session = await ConversationSession.findById(sessionId);
-
     if (!session) {
       return res.status(404).json({ message: "Sesión no encontrada" });
     }
@@ -140,23 +139,15 @@ exports.nextStep = async (req, res) => {
     const nodesMap = new Map(nodes.map(n => [String(n._id), n]));
 
     let currentNode = nodesMap.get(String(session.current_node_id));
-
     if (!currentNode) {
       throw new Error("Nodo actual no encontrado");
     }
 
-    /* PREVENT OPTIONS AUTO ADVANCE */
-    if (
-      currentNode.node_type === "options" &&
-      input === undefined
-    ) {
-      return res.json(renderNode(currentNode, session._id));
-    }
-
     /* INPUT PROCESSING */
+
     const requiresInput = INPUT_NODES.includes(currentNode.node_type);
 
-    if (requiresInput && input !== undefined) {
+    if (requiresInput) {
 
       const errors = validateNodeInput(currentNode, input);
 
@@ -167,7 +158,8 @@ exports.nextStep = async (req, res) => {
           type: currentNode.node_type,
           content: errors[0],
           typing_time: 1,
-          completed: false
+          completed: false,
+          is_error: true
         });
       }
 
@@ -180,11 +172,12 @@ exports.nextStep = async (req, res) => {
     }
 
     /* RESOLVE NEXT NODE */
+
     const resolveNextNode = (node) => {
 
       if (
         node.node_type === "options" &&
-        node.options?.length &&
+        Array.isArray(node.options) &&
         input !== undefined
       ) {
 
@@ -194,8 +187,8 @@ exports.nextStep = async (req, res) => {
 
         const match = orderedOptions.find((opt, index) =>
           String(index) === String(input) ||
-          opt.value === input ||
-          opt.label?.toLowerCase() === String(input).toLowerCase()
+          String(opt.value) === String(input) ||
+          String(opt.label || "").toLowerCase() === String(input).toLowerCase()
         );
 
         if (match?.next_node_id) {
@@ -212,6 +205,8 @@ exports.nextStep = async (req, res) => {
 
     let nextNode = resolveNextNode(currentNode);
 
+    /* END FLOW */
+
     if (!nextNode) {
 
       session.is_completed = true;
@@ -225,12 +220,13 @@ exports.nextStep = async (req, res) => {
     }
 
     /* AUTO EXECUTION LOOP */
+
     let safetyCounter = 0;
 
     while (nextNode) {
 
       if (safetyCounter++ > 50) {
-        throw new Error("Loop infinito detectado en flow");
+        throw new Error("Loop infinito detectado");
       }
 
       session.current_node_id = nextNode._id;
@@ -269,17 +265,15 @@ exports.nextStep = async (req, res) => {
       }
 
       await session.save();
-
       currentNode = nextNode;
       nextNode = resolveNextNode(currentNode);
     }
 
   } catch (error) {
-
     console.error("nextStep:", error);
-
     return res.status(500).json({
       message: "Error al procesar conversación"
     });
   }
 };
+

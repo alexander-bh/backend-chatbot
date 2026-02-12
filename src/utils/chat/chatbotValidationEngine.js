@@ -1,106 +1,41 @@
-const validators = {
-
-  required(value) {
-    return value && String(value).trim().length > 0;
-  },
-
-  email(value) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-  },
-
-  phone(value) {
-    return /^\d{10}$/.test(value);
-  },
-
-  number(value) {
-    return /^-?\d+(\.\d+)?$/.test(value);
-  },
-
-  numericOnly(value) {
-    return /^\d+$/.test(value);
-  },
-
-  url(value) {
-    try {
-      new URL(value);
-      return true;
-    } catch {
-      return false;
-    }
-  },
-
-  minLength(value, rule) {
-    return String(value).length >= rule.value;
-  },
-
-  maxLength(value, rule) {
-    return String(value).length <= rule.value;
-  },
-
-  regex(value, rule) {
-    const re = new RegExp(rule.value);
-    return re.test(value);
-  }
-
-};
-
-function getDefaultRules(node) {
-
-  switch (node.node_type) {
-
-    case "email":
-      return [{
-        type: "email",
-        message: "Ingresa un email válido"
-      }];
-
-    case "phone":
-      return [{
-        type: "phone",
-        message: "Ingresa un teléfono válido (10 dígitos)"
-      }];
-
-    case "number":
-      return [{
-        type: "number",
-        message: "Ingresa un número válido"
-      }];
-
-    case "link":
-      return [{
-        type: "url",
-        message: "Ingresa un enlace válido"
-      }];
-
-    default:
-      return [];
-  }
-}
-
 module.exports = function validateNodeInput(node, input) {
 
   const errors = [];
 
-  let rules = [];
-
-  if (node.validation?.enabled && node.validation.rules?.length) {
-    rules = node.validation.rules;
-  } else {
-    rules = getDefaultRules(node);
+  if (input === undefined || input === null || input === "") {
+    errors.push("Este campo es obligatorio");
+    return errors;
   }
 
-  for (const rule of rules) {
+  const value = String(input).trim();
 
-    const validator = validators[rule.type];
+  switch (node.node_type) {
 
-    if (!validator) continue;
+    case "email":
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+        errors.push("Ingresa un email válido");
+      }
+      break;
 
-    const valid = validator(input, rule);
+    case "phone":
+      if (!/^[0-9+\-\s]{7,15}$/.test(value)) {
+        errors.push("Ingresa un teléfono válido");
+      }
+      break;
 
-    if (!valid) {
-      errors.push(rule.message || "Entrada inválida");
-    }
+    case "number":
+      if (isNaN(value)) {
+        errors.push("Debe ser un número válido");
+      }
+      break;
 
+    case "options":
+      if (isNaN(value) && !node.options?.some(o =>
+        String(o.label).toLowerCase() === value.toLowerCase()
+      )) {
+        errors.push("Selecciona una opción válida");
+      }
+      break;
   }
 
   return errors;
