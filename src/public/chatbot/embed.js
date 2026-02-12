@@ -1,7 +1,5 @@
 (function () {
-    /* ===============================
-       VALIDACIÓN GLOBAL
-    ================================ */
+
     if (!window.__CHATBOT_CONFIG__) {
         console.error("[Chatbot] Config no encontrada");
         return;
@@ -17,22 +15,10 @@
         inputPlaceholder
     } = window.__CHATBOT_CONFIG__;
 
-    console.log("[Chatbot] Inicializando con config:", {
-        apiBase,
-        publicId,
-        name
-    });
-
-    /* ===============================
-       STATE
-    ================================ */
     let SESSION_ID = null;
     let started = false;
     let isOpen = false;
 
-    /* ===============================
-       DOM
-    ================================ */
     const elements = {
         messages: document.getElementById("messages"),
         messageInput: document.getElementById("messageInput"),
@@ -45,7 +31,6 @@
         chatStatus: document.getElementById("chatStatus")
     };
 
-    // Validar elementos críticos
     const required = ["messages", "messageInput", "sendBtn", "chatWidget", "chatToggle"];
     const missing = required.filter(key => !elements[key]);
 
@@ -56,9 +41,6 @@
 
     const originalIcon = elements.chatToggle.innerHTML;
 
-    /* ===============================
-       CONFIG UI
-    ================================ */
     if (elements.chatName && name) {
         elements.chatName.textContent = name;
     }
@@ -83,9 +65,6 @@
     elements.messageInput.disabled = true;
     elements.sendBtn.disabled = true;
 
-    /* ===============================
-       TOGGLE CHAT
-    ================================ */
     function toggleChat() {
         isOpen = !isOpen;
 
@@ -96,15 +75,6 @@
             ? '<span style="font-size:26px;line-height:1">✕</span>'
             : originalIcon;
 
-        if (!isOpen) {
-            elements.messageInput.blur();
-        }
-
-        if (isOpen && !elements.messageInput.disabled) {
-            elements.messageInput.focus();
-        }
-
-        // Iniciar solo una vez
         if (isOpen && !started) {
             started = true;
             startConversation();
@@ -112,20 +82,10 @@
     }
 
     elements.chatToggle.onclick = toggleChat;
-
     if (elements.chatClose) {
         elements.chatClose.onclick = toggleChat;
     }
 
-    elements.chatToggle.onclick = toggleChat;
-
-    if (elements.chatClose) {
-        elements.chatClose.onclick = toggleChat;
-    }
-
-    /* ===============================
-       HELPERS
-    ================================ */
     function addMessage(from, text, isError = false) {
         const msg = document.createElement("div");
         msg.className = `msg ${from}${isError ? ' error' : ''}`;
@@ -143,7 +103,26 @@
 
         msg.appendChild(bubble);
         elements.messages.appendChild(msg);
+        elements.messages.scrollTop = elements.messages.scrollHeight;
+    }
 
+    function addOptions(options) {
+        const container = document.createElement("div");
+        container.className = "options";
+
+        options.forEach(opt => {
+            const btn = document.createElement("button");
+            btn.textContent = opt.label;
+
+            btn.onclick = () => {
+                sendMessage(opt.index);
+                container.remove();
+            };
+
+            container.appendChild(btn);
+        });
+
+        elements.messages.appendChild(container);
         elements.messages.scrollTop = elements.messages.scrollHeight;
     }
 
@@ -155,21 +134,12 @@
         const msg = document.createElement("div");
         msg.className = "msg bot typing";
 
-        if (avatar) {
-            const avatarImg = document.createElement("img");
-            avatarImg.src = avatar;
-            avatarImg.className = "msg-avatar";
-            msg.appendChild(avatarImg);
-        }
-
         const bubble = document.createElement("div");
         bubble.className = "bubble";
         bubble.textContent = "Escribiendo…";
 
         msg.appendChild(bubble);
         elements.messages.appendChild(msg);
-
-        elements.messages.scrollTop = elements.messages.scrollHeight;
 
         typingElement = msg;
     }
@@ -181,160 +151,141 @@
         }
     }
 
+    const INPUT_TYPES = ["question", "email", "phone", "number", "text_input"];
+
+    async function processNode(data, depth = 0) {
+
+        if (!data || depth > 20) return;
+
+        if (data.typing_time) {
+            showTyping();
+            await new Promise(r => setTimeout(r, data.typing_time * 1000));
+            removeTyping();
+        }
+
+        if (data.content) {
+            addMessage("bot", data.content);
+        }
+
+        if (data.options?.length) {
+            addOptions(data.options);
+            return;
+        }
+
+        if (data.link_action) {
+            window.open(data.link_action, "_blank");
+        }
+
+        const requiresInput =
+            INPUT_TYPES.includes(data.type) ||
+            data.input_type;
+
+        if (!requiresInput && !data.completed) {
+
+            const res = await fetch(
+                `${apiBase}/api/public-chatbot/chatbot-conversation/${data.session_id}/next`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({})
+                }
+            );
+
+            const nextData = await res.json();
+            return processNode(nextData, depth + 1);
+        }
+
+        if (!data.completed) {
+            elements.messageInput.disabled = false;
+            elements.sendBtn.disabled = false;
+        }
+    }
+
     function setStatus(text) {
         if (elements.chatStatus) {
             elements.chatStatus.textContent = text;
         }
     }
 
-    /* ===============================
-       START CONVERSATION
-    ================================ */
     async function startConversation() {
         try {
-            console.log("[Chatbot] Iniciando conversación...");
-
             showTyping();
             setStatus("Conectando...");
 
-            const url = `${apiBase}/api/public-chatbot/chatbot-conversation/${publicId}/start`;
-            console.log("[Chatbot] URL:", url);
-
-            const res = await fetch(url, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                }
-            });
-
-            console.log("[Chatbot] Respuesta:", res.status);
-
-            if (!res.ok) {
-                const errorText = await res.text();
-                console.error("[Chatbot] Error del servidor:", errorText);
-                throw new Error(`Error ${res.status}: ${errorText}`);
-            }
+            const res = await fetch(
+                `${apiBase}/api/public-chatbot/chatbot-conversation/${publicId}/start`,
+                { method: "POST" }
+            );
 
             const data = await res.json();
-            console.log("[Chatbot] Datos recibidos:", data);
 
             SESSION_ID = data.session_id;
 
             removeTyping();
             setStatus("En línea");
 
-            // Mostrar mensaje inicial si existe
-            if (data.content) {
-                addMessage("bot", data.content);
-            }
-
-            elements.messageInput.disabled = false;
-            elements.sendBtn.disabled = false;
-
-            if (isOpen) {
-                elements.messageInput.focus();
-            }
+            await processNode(data);
 
         } catch (err) {
-            console.error("[Chatbot] Error al iniciar:", err);
 
             removeTyping();
-            setStatus("Error de conexión");
+            setStatus("Error");
 
             addMessage(
                 "bot",
-                "No pude conectarme al servidor. Por favor, intenta más tarde.",
+                "No pude conectarme al servidor.",
                 true
             );
         }
     }
 
-    /* ===============================
-       SEND MESSAGE
-    ================================ */
-    async function sendMessage() {
-        const text = elements.messageInput.value.trim();
+    async function sendMessage(inputOverride = null) {
 
-        if (!text || !SESSION_ID) {
-            console.warn("[Chatbot] No hay texto o sesión");
-            return;
+        const text = inputOverride !== null
+            ? inputOverride
+            : elements.messageInput.value.trim();
+
+        if (!text || !SESSION_ID) return;
+
+        if (inputOverride === null) {
+            addMessage("user", text);
+            elements.messageInput.value = "";
         }
 
-        console.log("[Chatbot] Enviando:", text);
-
-        addMessage("user", text);
-
-        elements.messageInput.value = "";
         elements.messageInput.disabled = true;
         elements.sendBtn.disabled = true;
-
-        let completed = false;
 
         try {
             showTyping();
 
-            const url = `${apiBase}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`;
-            console.log("[Chatbot] Next URL:", url);
-
-            const res = await fetch(url, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ input: text })
-            });
-
-            console.log("[Chatbot] Next response:", res.status);
-
-            if (!res.ok) {
-                const errorText = await res.text();
-                console.error("[Chatbot] Error en next:", errorText);
-                throw new Error(`Error ${res.status}`);
-            }
+            const res = await fetch(
+                `${apiBase}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ input: text })
+                }
+            );
 
             const data = await res.json();
-            console.log("[Chatbot] Next data:", data);
 
             removeTyping();
 
-            if (data.content) {
-                addMessage("bot", data.content);
-            }
-
-            if (data.completed) {
-                completed = true;
-                setStatus("Conversación finalizada");
-                elements.messageInput.disabled = true;
-                elements.sendBtn.disabled = true;
-            }
+            await processNode(data);
 
         } catch (err) {
-            console.error("[Chatbot] Error al enviar:", err);
 
             removeTyping();
 
             addMessage(
                 "bot",
-                "Ocurrió un error al procesar tu mensaje.",
+                "Error al procesar tu mensaje.",
                 true
             );
-
-        } finally {
-            if (!completed) {
-                elements.messageInput.disabled = false;
-                elements.sendBtn.disabled = false;
-
-                if (isOpen) {
-                    elements.messageInput.focus();
-                }
-            }
         }
     }
 
-    /* ===============================
-       EVENTS
-    ================================ */
-    elements.sendBtn.onclick = sendMessage;
+    elements.sendBtn.onclick = () => sendMessage();
 
     elements.messageInput.addEventListener("keydown", (e) => {
         if (e.key === "Enter" && !e.shiftKey) {
@@ -343,6 +294,5 @@
         }
     });
 
-    console.log("[Chatbot] Widget listo");
-
 })();
+
