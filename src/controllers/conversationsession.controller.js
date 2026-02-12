@@ -8,9 +8,16 @@ const upsertContactFromSession = require("../services/upsertContactFromSession.s
 const validateInput = require("../utils/validateInput");
 const renderNode = require("../utils/renderNode");
 const executeNodeNotification = require("../services/executeNodeNotification.service");
-
-const INPUT_NODES = ["question", "email", "phone", "number", "text_input"];
+const validateNodeInput = require("../utils/chat/chatbotValidationEngine");
 const ALLOWED_MODES = ["preview", "production"];
+const INPUT_NODES = [
+  "question",
+  "email",
+  "phone",
+  "number",
+  "text_input",
+  "link"
+];
 
 /* --------------------------------------------------
    START CONVERSATION
@@ -97,6 +104,7 @@ exports.startConversation = async (req, res) => {
 -------------------------------------------------- */
 exports.nextStep = async (req, res) => {
   try {
+
     const { id: sessionId } = req.params;
     const { input } = req.body;
 
@@ -131,24 +139,22 @@ exports.nextStep = async (req, res) => {
     /* ─────────────────────────────
        INPUT PROCESSING
     ───────────────────────────── */
+
     const requiresInput = INPUT_NODES.includes(currentNode.node_type);
 
     if (requiresInput) {
-      if (input === undefined || input === null) {
-        return res.status(400).json({
-          message: "Este nodo requiere respuesta"
+
+      const errors = validateNodeInput(currentNode, input);
+
+      if (errors.length > 0) {
+        return res.json({
+          session_id: session._id,
+          node_id: currentNode._id,
+          type: currentNode.node_type,
+          content: errors[0],
+          typing_time: 1,
+          completed: false
         });
-      }
-
-      if (currentNode.validation?.enabled) {
-        const result = validateInput(
-          input,
-          currentNode.validation.rules || []
-        );
-
-        if (!result.ok) {
-          return res.status(400).json({ message: result.message });
-        }
       }
 
       if (session.mode === "production" && currentNode.variable_key) {
@@ -162,10 +168,11 @@ exports.nextStep = async (req, res) => {
     /* ─────────────────────────────
        RESOLVE NEXT NODE
     ───────────────────────────── */
+
     const resolveNextNode = (node) => {
 
-      // OPTIONS (buttons / quick replies)
       if (node.options?.length && input !== undefined) {
+
         const match = node.options
           .slice()
           .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
@@ -179,7 +186,6 @@ exports.nextStep = async (req, res) => {
         }
       }
 
-      // DIRECT CONNECTION
       if (node.next_node_id) {
         return nodesMap.get(String(node.next_node_id));
       }
@@ -192,7 +198,9 @@ exports.nextStep = async (req, res) => {
     /* ─────────────────────────────
        NO NEXT → END
     ───────────────────────────── */
+
     if (!nextNode) {
+
       session.is_completed = true;
       await session.save();
 
@@ -206,17 +214,17 @@ exports.nextStep = async (req, res) => {
     /* ─────────────────────────────
        AUTO EXECUTION LOOP
     ───────────────────────────── */
+
     while (nextNode) {
 
       session.current_node_id = nextNode._id;
 
-      // 🔔 Notifications
       if (nextNode.meta?.notify?.enabled && session.mode === "production") {
         await executeNodeNotification(nextNode, session);
       }
 
-      // 🛑 END NODE
       if (nextNode.end_conversation) {
+
         session.is_completed = true;
         await session.save();
 
@@ -227,17 +235,13 @@ exports.nextStep = async (req, res) => {
         return res.json(renderNode(nextNode, session._id));
       }
 
-      // ✍️ INPUT NODE
       if (INPUT_NODES.includes(nextNode.node_type)) {
         await session.save();
         return res.json(renderNode(nextNode, session._id));
       }
 
-      // 🔚 LINK / AUTO NODE WITHOUT OUTPUT
-      if (
-        !nextNode.next_node_id &&
-        !nextNode.options?.length
-      ) {
+      if (!nextNode.next_node_id && !nextNode.options?.length) {
+
         session.is_completed = true;
         await session.save();
 
@@ -248,7 +252,6 @@ exports.nextStep = async (req, res) => {
         return res.json(renderNode(nextNode, session._id));
       }
 
-      // ➡️ CONTINUE AUTO
       await session.save();
       currentNode = nextNode;
       nextNode = resolveNextNode(currentNode);
