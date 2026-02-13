@@ -12,7 +12,8 @@
         avatar,
         primaryColor,
         secondaryColor,
-        inputPlaceholder
+        inputPlaceholder,
+        welcomeMessage
     } = window.__CHATBOT_CONFIG__;
 
     let SESSION_ID = null;
@@ -73,6 +74,10 @@
         elements.chatWidget.classList.toggle("open", isOpen);
         elements.chatToggle.classList.toggle("active", isOpen);
 
+        if (isOpen) {
+            showWelcomeMessage();
+        }
+
         if (isOpen && !started) {
             started = true;
             startConversation();
@@ -82,6 +87,15 @@
     elements.chatToggle.onclick = toggleChat;
     if (elements.chatClose) {
         elements.chatClose.onclick = toggleChat;
+    }
+
+    let welcomeShown = false;
+
+    function showWelcomeMessage() {
+        if (!welcomeMessage || welcomeShown) return;
+
+        addMessage("bot", welcomeMessage);
+        welcomeShown = true;
     }
 
     function addMessage(from, text, isError = false) {
