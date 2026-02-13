@@ -8,9 +8,7 @@ const { normalizeDomain } = require("../utils/domain.utils");
 const { domainExists } = require("../utils/domain.validator");
 
 
-/* =======================================================
-   UTILIDADES
-======================================================= */
+//UTILIDADES
 const escapeHTML = (str = "") =>
   str.replace(/[&<>"']/g, m =>
     ({
@@ -182,7 +180,7 @@ exports.renderEmbed = async (req, res) => {
             return "http://localhost:* http://127.0.0.1:* https://localhost:*";
           }
 
-          // Permitir dominio exacto + cualquier subdominio
+          // Permitir dominio exacto + cualquier subdominio para la pagina 
           return `https://${d} https://*.${d}`;
         })
         .join(" ")
@@ -214,7 +212,14 @@ exports.renderEmbed = async (req, res) => {
 </head>
 <body>
 
-<button class="chat-fab" id="chatToggle">💬</button>
+<button class="chat-fab" id="chatToggle">
+  <img
+    id="chatAvatar"
+    class="chat-avatar"
+    alt="Avatar"
+    hidden
+    />
+</button>
 
 <div class="chat-widget" id="chatWidget">
   <div class="chat">
