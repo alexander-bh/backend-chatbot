@@ -92,16 +92,36 @@
         elements.chatClose.onclick = toggleChat;
     }
 
-    let welcomeShown = false;
+    let welcomeShown = localStorage.getItem("chat_welcome_seen") === "1";
 
     function showWelcomeOutside() {
         if (!welcomeMessage || welcomeShown || !welcomeBubble) return;
 
-        welcomeBubble.textContent = welcomeMessage;
+        const textEl = welcomeBubble.querySelector(".welcome-text");
+        if (!textEl) return;
+
+        textEl.textContent = welcomeMessage;
+        welcomeBubble.classList.add("show");
+
+        welcomeShown = true;
+        localStorage.setItem("chat_welcome_seen", "1");
+
+        setTimeout(() => {
+            welcomeBubble.classList.remove("show");
+        }, 8000);
+    }
+
+    function showWelcomeOutside() {
+        if (!welcomeMessage || welcomeShown || !welcomeBubble) return;
+
+        const textEl = welcomeBubble.querySelector(".welcome-text");
+        if (!textEl) return;
+
+        textEl.textContent = welcomeMessage;
+
         welcomeBubble.classList.add("show");
         welcomeShown = true;
 
-        // Auto-ocultar después de 8s (opcional)
         setTimeout(() => {
             welcomeBubble.classList.remove("show");
         }, 8000);
@@ -126,9 +146,13 @@
         elements.messages.appendChild(msg);
         elements.messages.scrollTop = elements.messages.scrollHeight;
     }
+
     function addOptions(options) {
-        const container = document.createElement("div");
-        container.className = "options";
+        const msg = document.createElement("div");
+        msg.className = "msg bot";
+
+        const bubble = document.createElement("div");
+        bubble.className = "bubble options";
 
         options.forEach(opt => {
             const btn = document.createElement("button");
@@ -136,13 +160,14 @@
 
             btn.onclick = () => {
                 sendMessage(opt.index);
-                container.remove();
+                msg.remove();
             };
 
-            container.appendChild(btn);
+            bubble.appendChild(btn);
         });
 
-        elements.messages.appendChild(container);
+        msg.appendChild(bubble);
+        elements.messages.appendChild(msg);
         elements.messages.scrollTop = elements.messages.scrollHeight;
     }
 
@@ -160,6 +185,8 @@
 
         msg.appendChild(bubble);
         elements.messages.appendChild(msg);
+
+        elements.messages.scrollTop = elements.messages.scrollHeight;
 
         typingElement = msg;
     }
