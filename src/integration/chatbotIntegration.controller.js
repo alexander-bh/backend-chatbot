@@ -243,17 +243,17 @@ exports.renderEmbed = async (req, res) => {
     </footer>
   </div>
 </div>
-
 <script>
-window.__CHATBOT_CONFIG__ = {
-  apiBase: ${JSON.stringify(getBaseUrl())},
-  publicId: ${JSON.stringify(public_id)},
-  name: ${JSON.stringify(chatbot.name)},
-  avatar: ${JSON.stringify(chatbot.avatar || "")},
-  primaryColor: ${JSON.stringify(chatbot.primary_color || "#2563eb")},
-  secondaryColor: ${JSON.stringify(chatbot.secondary_color || "#111827")},
-  inputPlaceholder: "Escribe tu mensaje…"
-};
+  window.__CHATBOT_CONFIG__ = {
+    apiBase: ${JSON.stringify(getBaseUrl())},
+    publicId: ${JSON.stringify(public_id)},
+    name: ${JSON.stringify(chatbot.name)},
+    avatar: ${JSON.stringify(chatbot.avatar || "")},
+    primaryColor: ${JSON.stringify(chatbot.primary_color || "#2563eb")},
+    secondaryColor: ${JSON.stringify(chatbot.secondary_color || "#111827")},
+    inputPlaceholder: ${JSON.stringify(chatbot.input_placeholder || "Escribe tu mensaje…")},
+    welcomeMessage: ${JSON.stringify(chatbot.welcome_message || "")}
+  };
 </script>
 <script src="/public/chatbot/embed.js"></script>
 </body>
@@ -368,7 +368,6 @@ exports.removeAllowedDomain = async (req, res) => {
     res.status(500).json({ error: "Error interno" });
   }
 };
-
 
 /* =======================================================
    6) GENERAR CÓDIGO DE INSTALACIÓN
