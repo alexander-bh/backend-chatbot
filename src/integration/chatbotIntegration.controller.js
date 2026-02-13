@@ -216,7 +216,6 @@ exports.renderEmbed = async (req, res) => {
     class="chat-avatar"
     alt="Avatar"
   />
-  <span class="chat-close-icon">✕</span>
 </button>
 
 <div class="chat-widget" id="chatWidget">
