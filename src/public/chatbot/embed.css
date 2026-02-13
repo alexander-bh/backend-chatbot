@@ -15,7 +15,7 @@ body {
 }
 
 /* ===============================
-   FAB BUTTON
+   FAB BUTTON – OPCIÓN A
 ================================ */
 .chat-fab {
     position: fixed;
@@ -42,8 +42,7 @@ body {
 
     transition:
         transform 0.2s ease,
-        box-shadow 0.2s ease,
-        opacity 0.2s ease;
+        box-shadow 0.2s ease;
 }
 
 .chat-fab:hover {
@@ -55,18 +54,29 @@ body {
     transform: scale(0.95);
 }
 
-/* FAB oculto cuando el chat está abierto */
+/* 👇 FAB abierto: NO se oculta */
 .chat-fab.active {
     animation: none;
-    transform: scale(0);
-    opacity: 0;
-    pointer-events: none;
 }
 
-.chat-fab.active:hover {
-    transform: scale(0);
-    box-shadow: none;
+/* ===============================
+   ICONOS DENTRO DEL FAB
+================================ */
+.chat-close-icon {
+    display: none;
+    font-size: 26px;
+    line-height: 1;
+    color: white;
 }
+
+.chat-fab.active .chat-avatar {
+    display: none;
+}
+
+.chat-fab.active .chat-close-icon {
+    display: block;
+}
+
 
 @keyframes pulse {
     0% {
