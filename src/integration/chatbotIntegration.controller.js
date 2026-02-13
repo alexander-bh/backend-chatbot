@@ -213,7 +213,7 @@ exports.renderEmbed = async (req, res) => {
 <button class="chat-fab" id="chatToggle">
   <img
     id="chatAvatarFab"
-    class="chat-avatar"
+    class="chat-avatar-fab"
     alt="Avatar"
   />
 </button>
