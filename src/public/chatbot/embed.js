@@ -40,20 +40,16 @@
         return;
     }
 
-    const originalIcon = elements.chatToggle.innerHTML;
-
     if (elements.chatName && name) {
         elements.chatName.textContent = name;
     }
 
     if (elements.chatAvatarFab && avatar) {
         elements.chatAvatarFab.src = avatar;
-        elements.chatAvatarFab.hidden = false;
     }
 
     if (elements.chatAvatarHeader && avatar) {
         elements.chatAvatarHeader.src = avatar;
-        elements.chatAvatarHeader.hidden = false;
     }
 
     if (inputPlaceholder) {
@@ -76,10 +72,6 @@
 
         elements.chatWidget.classList.toggle("open", isOpen);
         elements.chatToggle.classList.toggle("active", isOpen);
-
-        elements.chatToggle.innerHTML = isOpen
-            ? '<span style="font-size:26px;line-height:1">✕</span>'
-            : originalIcon;
 
         if (isOpen && !started) {
             started = true;

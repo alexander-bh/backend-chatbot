@@ -207,18 +207,16 @@ exports.renderEmbed = async (req, res) => {
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>${escapeHTML(chatbot.name)}</title>
-
 <link rel="stylesheet" href="/public/chatbot/embed.css" />
 </head>
 <body>
-
 <button class="chat-fab" id="chatToggle">
   <img
     id="chatAvatarFab"
     class="chat-avatar"
     alt="Avatar"
-    hidden
-    />
+  />
+  <span class="chat-close-icon">✕</span>
 </button>
 
 <div class="chat-widget" id="chatWidget">
@@ -228,7 +226,6 @@ exports.renderEmbed = async (req, res) => {
         id="chatAvatarHeader"
         class="chat-avatar"
         alt="Avatar"
-        hidden
       />
       <div class="chat-header-info">
         <strong id="chatName">${escapeHTML(chatbot.name)}</strong>
@@ -259,7 +256,6 @@ window.__CHATBOT_CONFIG__ = {
   inputPlaceholder: "Escribe tu mensaje…"
 };
 </script>
-
 <script src="/public/chatbot/embed.js"></script>
 </body>
 </html>`);
