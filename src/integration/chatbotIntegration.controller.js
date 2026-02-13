@@ -214,7 +214,7 @@ exports.renderEmbed = async (req, res) => {
 
 <button class="chat-fab" id="chatToggle">
   <img
-    id="chatAvatar"
+    id="chatAvatarFab"
     class="chat-avatar"
     alt="Avatar"
     hidden
@@ -223,10 +223,9 @@ exports.renderEmbed = async (req, res) => {
 
 <div class="chat-widget" id="chatWidget">
   <div class="chat">
-
     <header class="chat-header">
       <img
-        id="chatAvatar"
+        id="chatAvatarHeader"
         class="chat-avatar"
         alt="Avatar"
         hidden
@@ -237,9 +236,7 @@ exports.renderEmbed = async (req, res) => {
       </div>
       <button class="chat-close" id="chatClose" aria-label="Cerrar">×</button>
     </header>
-
     <main id="messages"></main>
-
     <footer>
       <input
         id="messageInput"
@@ -248,7 +245,6 @@ exports.renderEmbed = async (req, res) => {
       />
       <button id="sendBtn">Enviar</button>
     </footer>
-
   </div>
 </div>
 

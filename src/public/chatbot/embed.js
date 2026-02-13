@@ -27,7 +27,8 @@
         chatToggle: document.getElementById("chatToggle"),
         chatClose: document.getElementById("chatClose"),
         chatName: document.getElementById("chatName"),
-        chatAvatar: document.getElementById("chatAvatar"),
+        chatAvatarFab: document.getElementById("chatAvatarFab"),      // Avatar del botón FAB
+        chatAvatarHeader: document.getElementById("chatAvatarHeader"),
         chatStatus: document.getElementById("chatStatus")
     };
 
@@ -45,9 +46,14 @@
         elements.chatName.textContent = name;
     }
 
-    if (elements.chatAvatar && avatar) {
-        elements.chatAvatar.src = avatar;
-        elements.chatAvatar.hidden = false;
+    if (elements.chatAvatarFab && avatar) {
+        elements.chatAvatarFab.src = avatar;
+        elements.chatAvatarFab.hidden = false;
+    }
+
+    if (elements.chatAvatarHeader && avatar) {
+        elements.chatAvatarHeader.src = avatar;
+        elements.chatAvatarHeader.hidden = false;
     }
 
     if (inputPlaceholder) {
@@ -105,7 +111,6 @@
         elements.messages.appendChild(msg);
         elements.messages.scrollTop = elements.messages.scrollHeight;
     }
-
     function addOptions(options) {
         const container = document.createElement("div");
         container.className = "options";
