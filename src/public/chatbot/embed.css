@@ -43,10 +43,7 @@ body {
     transition:
         transform 0.2s ease,
         box-shadow 0.2s ease,
-        background 0.2s ease;
-    
-    overflow: hidden;
-    position: relative;
+        opacity 0.2s ease;
 }
 
 .chat-fab:hover {
@@ -58,47 +55,17 @@ body {
     transform: scale(0.95);
 }
 
+/* FAB oculto cuando el chat está abierto */
 .chat-fab.active {
     animation: none;
-    background: var(--chat-secondary);
-}
-
-/* ===============================
-   ELEMENTOS DENTRO DEL FAB
-================================ */
-.chat-fab .chat-avatar {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    display: block;
-    transition: opacity 0.2s ease, transform 0.2s ease;
-}
-
-.chat-fab.active .chat-avatar {
+    transform: scale(0);
     opacity: 0;
-    transform: scale(0.8);
     pointer-events: none;
 }
 
-.chat-close-icon {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) scale(0.8);
-    font-size: 26px;
-    line-height: 1;
-    color: white;
-    opacity: 0;
-    transition: opacity 0.2s ease, transform 0.2s ease;
-    pointer-events: none;
-}
-
-.chat-fab.active .chat-close-icon {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-    pointer-events: auto;
+.chat-fab.active:hover {
+    transform: scale(0);
+    box-shadow: none;
 }
 
 @keyframes pulse {
@@ -177,36 +144,29 @@ body {
     display: flex;
     align-items: center;
     gap: 12px;
-    flex-shrink: 0;
 }
 
-.chat-header .chat-avatar {
+.chat-avatar {
     width: 36px;
     height: 36px;
     border-radius: 50%;
     object-fit: cover;
     border: 2px solid rgba(255, 255, 255, 0.3);
-    flex-shrink: 0;
 }
 
 .chat-header-info {
     flex: 1;
-    min-width: 0;
 }
 
 .chat-header strong {
     font-size: 15px;
     font-weight: 600;
     display: block;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 .chat-status {
     font-size: 12px;
     opacity: 0.85;
-    margin-top: 2px;
 }
 
 .chat-close {
@@ -216,21 +176,10 @@ body {
     cursor: pointer;
     font-size: 24px;
     opacity: 0.8;
-    padding: 4px;
-    line-height: 1;
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 4px;
-    transition: opacity 0.2s, background 0.2s;
-    flex-shrink: 0;
 }
 
 .chat-close:hover {
     opacity: 1;
-    background: rgba(255, 255, 255, 0.1);
 }
 
 /* ===============================
@@ -274,8 +223,6 @@ main {
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    object-fit: cover;
-    flex-shrink: 0;
 }
 
 .bubble {
@@ -284,7 +231,6 @@ main {
     max-width: 75%;
     font-size: 14px;
     line-height: 1.4;
-    word-wrap: break-word;
 }
 
 .msg.bot .bubble {
@@ -300,47 +246,6 @@ main {
     border-bottom-right-radius: 4px;
 }
 
-.msg.typing .bubble {
-    font-style: italic;
-    opacity: 0.7;
-}
-
-.msg.error .bubble {
-    background: #fee;
-    color: #c00;
-    border-color: #fcc;
-}
-
-/* ===============================
-   OPTIONS
-================================ */
-.options {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-bottom: 16px;
-    animation: slideIn 0.3s ease;
-}
-
-.options button {
-    background: white;
-    border: 2px solid var(--chat-primary);
-    color: var(--chat-primary);
-    padding: 12px 16px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 500;
-    transition: all 0.2s ease;
-    text-align: left;
-}
-
-.options button:hover {
-    background: var(--chat-primary);
-    color: white;
-    transform: translateX(4px);
-}
-
 /* ===============================
    INPUT
 ================================ */
@@ -348,7 +253,6 @@ footer {
     display: flex;
     border-top: 1px solid #e5e7eb;
     background: white;
-    flex-shrink: 0;
 }
 
 #messageInput {
@@ -357,12 +261,6 @@ footer {
     border: none;
     outline: none;
     font-size: 14px;
-    min-width: 0;
-}
-
-#messageInput:disabled {
-    background: #f9fafb;
-    cursor: not-allowed;
 }
 
 #sendBtn {
@@ -372,17 +270,10 @@ footer {
     padding: 0 24px;
     font-weight: 600;
     cursor: pointer;
-    transition: background 0.2s;
-    flex-shrink: 0;
 }
 
 #sendBtn:hover:not(:disabled) {
     background: color-mix(in srgb, var(--chat-primary) 85%, black);
-}
-
-#sendBtn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
 }
 
 /* ===============================
@@ -404,10 +295,5 @@ footer {
         width: 56px;
         height: 56px;
         font-size: 24px;
-    }
-    
-    .chat-fab .chat-avatar {
-        width: 36px;
-        height: 36px;
     }
 }
