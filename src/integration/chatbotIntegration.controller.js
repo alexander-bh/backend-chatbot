@@ -217,7 +217,9 @@ exports.renderEmbed = async (req, res) => {
     alt="Avatar"
   />
 </button>
-<div class="chat-welcome" id="chatWelcome"></div>
+<div class="chat-welcome" id="chatWelcome">
+  <span class="welcome-text"></span>
+</div>
 <div class="chat-widget" id="chatWidget">
   <div class="chat">
     <header class="chat-header">
