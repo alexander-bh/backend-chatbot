@@ -28,11 +28,14 @@
         chatToggle: document.getElementById("chatToggle"),
         chatClose: document.getElementById("chatClose"),
         chatName: document.getElementById("chatName"),
-        chatAvatarFab: document.getElementById("chatAvatarFab"),      // Avatar del botón FAB
+        chatAvatarFab: document.getElementById("chatAvatarFab"),
         chatAvatarHeader: document.getElementById("chatAvatarHeader"),
-        chatStatus: document.getElementById("chatStatus")
+        chatStatus: document.getElementById("chatStatus"),
+        welcomeBubble: document.getElementById("chatWelcome")
     };
 
+    // ✅ alias correcto
+    const welcomeBubble = elements.welcomeBubble;
     const required = ["messages", "messageInput", "sendBtn", "chatWidget", "chatToggle"];
     const missing = required.filter(key => !elements[key]);
 
@@ -74,8 +77,8 @@
         elements.chatWidget.classList.toggle("open", isOpen);
         elements.chatToggle.classList.toggle("active", isOpen);
 
-        if (isOpen) {
-            showWelcomeMessage();
+        if (isOpen && welcomeBubble) {
+            welcomeBubble.classList.remove("show");
         }
 
         if (isOpen && !started) {
@@ -91,11 +94,17 @@
 
     let welcomeShown = false;
 
-    function showWelcomeMessage() {
-        if (!welcomeMessage || welcomeShown) return;
+    function showWelcomeOutside() {
+        if (!welcomeMessage || welcomeShown || !welcomeBubble) return;
 
-        addMessage("bot", welcomeMessage);
+        welcomeBubble.textContent = welcomeMessage;
+        welcomeBubble.classList.add("show");
         welcomeShown = true;
+
+        // Auto-ocultar después de 8s (opcional)
+        setTimeout(() => {
+            welcomeBubble.classList.remove("show");
+        }, 8000);
     }
 
     function addMessage(from, text, isError = false) {
@@ -304,6 +313,8 @@
             sendMessage();
         }
     });
-
+    if (welcomeBubble) {
+        setTimeout(showWelcomeOutside, 1200);
+    }
 })();
 

@@ -15,6 +15,64 @@ body {
 }
 
 /* ===============================
+   WELCOME MESSAGE (OUTSIDE CHAT)
+================================ */
+.chat-welcome {
+    position: fixed;
+    bottom: 90px;
+    right: 92px;
+
+    max-width: 260px;
+    padding: 12px 16px;
+
+    background: white;
+    color: #111827;
+    font-size: 14px;
+    line-height: 1.4;
+
+    border-radius: 16px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.12);
+
+    opacity: 0;
+    transform: translateY(10px);
+    pointer-events: none;
+
+    transition:
+        opacity .25s ease,
+        transform .25s ease;
+
+    z-index: 10000;
+}
+
+/* Flechita */
+.chat-welcome::after {
+    content: "";
+    position: absolute;
+    right: -6px;
+    bottom: 18px;
+
+    width: 12px;
+    height: 12px;
+    background: white;
+    transform: rotate(45deg);
+}
+
+/* Visible */
+.chat-welcome.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+    .chat-welcome {
+        right: 16px;
+        bottom: 88px;
+        max-width: calc(100vw - 32px);
+    }
+}
+
+/* ===============================
    FAB BUTTON
 ================================ */
 .chat-fab {
