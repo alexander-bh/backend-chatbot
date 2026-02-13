@@ -19,8 +19,8 @@ body {
 ================================ */
 .chat-welcome {
     position: fixed;
-    bottom: 92px;
-    right: 96px;
+    bottom: 20px;
+    right: 100px;
 
     max-width: 280px;
     padding: 14px 18px;
@@ -38,7 +38,7 @@ body {
     box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
 
     opacity: 0;
-    transform: translateY(12px) scale(.98);
+    transform: translateX(12px) scale(.98);
     pointer-events: none;
 
     transition:
@@ -48,26 +48,28 @@ body {
     z-index: 10000;
 }
 
+
 /* Flecha */
 .chat-welcome::after {
     content: "";
     position: absolute;
     right: -6px;
-    bottom: 22px;
+    top: 50%;
+    transform: translateY(-50%) rotate(45deg);
 
     width: 14px;
     height: 14px;
     background: #ffffff;
-    transform: rotate(45deg);
 
-    box-shadow: 2px 2px 4px rgba(0,0,0,.06);
+    box-shadow: 2px -2px 4px rgba(0,0,0,.06);
 }
+
 
 
 /* Visible */
 .chat-welcome.show {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateX(0) scale(1);
 }
 
 .bubble.options {
@@ -96,6 +98,20 @@ body {
         bottom: 88px;
         max-width: calc(100vw - 32px);
         font-size: 15px;
+        transform: translateY(12px) scale(.98);
+    }
+    
+    .chat-welcome.show {
+        transform: translateY(0) scale(1);
+    }
+    
+    /* Flecha apuntando hacia abajo en mobile */
+    .chat-welcome::after {
+        right: 22px;
+        top: auto;
+        bottom: -6px;
+        transform: rotate(45deg);
+        box-shadow: 2px 2px 4px rgba(0,0,0,.06);
     }
 }
 
