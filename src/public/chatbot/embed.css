@@ -19,12 +19,8 @@ body {
 ================================ */
 .chat-welcome {
     position: fixed;
-
-    bottom: 100px; /* ligeramente arriba del FAB */
-    right: 20px;   /* mismo right que el FAB */
-
-    transform: translateX(calc(-100% - 16px)); 
-    /* lo mueve completamente a la izquierda del botón */
+    bottom: 92px;
+    right: 96px;
 
     max-width: 280px;
     padding: 14px 18px;
@@ -42,6 +38,7 @@ body {
     box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
 
     opacity: 0;
+    transform: translateY(12px) scale(.98);
     pointer-events: none;
 
     transition:
@@ -50,7 +47,6 @@ body {
 
     z-index: 10000;
 }
-
 
 /* Flecha */
 .chat-welcome::after {
