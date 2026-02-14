@@ -459,48 +459,22 @@ footer {
     height: 48px;
     border-radius: 50%;
 
-    /* Múltiples técnicas de centrado para asegurar compatibilidad */
     display: flex;
     align-items: center;
     justify-content: center;
-    
+
     background: var(--chat-primary);
     border: none;
     cursor: pointer;
     padding: 0;
-    margin: 0;
-    
-    /* Importante: eliminar cualquier espaciado de línea */
-    line-height: 1;
-    font-size: 0;
-    
     transition: all 0.2s ease;
     box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
-    
-    /* Asegurar que no haya overflow */
-    overflow: hidden;
 }
 
 #sendBtn svg {
     width: 22px;
     height: 22px;
     display: block;
-    
-    /* Centrado adicional por si acaso */
-    margin: auto;
-    
-    /* Eliminar cualquier espaciado extra del SVG */
-    vertical-align: middle;
-    
-    /* Color del ícono */
-    fill: currentColor;
-    color: white;
-    
-    /* Asegurar que el SVG no tenga padding/margin propio */
-    padding: 0;
-    
-    /* Para alineación perfecta en algunos navegadores */
-    flex-shrink: 0;
 }
 
 #sendBtn:hover:not(:disabled) {
@@ -509,7 +483,7 @@ footer {
 }
 
 #sendBtn:active:not(:disabled) {
-    transform: scale(0.95);
+    transform: translateY(0);
 }
 
 #sendBtn:disabled {
