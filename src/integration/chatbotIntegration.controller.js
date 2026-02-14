@@ -241,7 +241,30 @@ exports.renderEmbed = async (req, res) => {
         placeholder="Escribe tu mensaje…"
         autocomplete="off"
       />
-      <button id="sendBtn">Enviar</button>
+    <button id="sendBtn" aria-label="Enviar mensaje">
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M22 2L11 13"
+          stroke="white"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+        <path
+          d="M22 2L15 22L11 13L2 9L22 2Z"
+          stroke="white"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+    </button>
     </footer>
   </div>
 </div>
