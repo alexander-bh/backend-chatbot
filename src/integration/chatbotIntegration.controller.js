@@ -172,6 +172,10 @@ exports.renderEmbed = async (req, res) => {
       return res.status(403).send("Dominio no permitido");
     }
 
+    function stripProtocol(domain) {
+      return domain.replace(/^https?:\/\//, "").replace(/\/$/, "");
+    }
+
     const apiOrigin = new URL(getBaseUrl()).origin;
     const frameAncestors = chatbot.allowed_domains.length
       ? chatbot.allowed_domains
@@ -181,25 +185,27 @@ exports.renderEmbed = async (req, res) => {
           }
 
           // Permitir dominio exacto + cualquier subdominio para la pagina 
-          return `https://${d} https://*.${d}`;
+          const clean = stripProtocol(d);
+          return `https://${clean} https://*.${clean}`;
         })
         .join(" ")
-      : "*";
+      : "'none'";
 
     res.setHeader(
       "Content-Security-Policy",
       [
         `default-src 'self'`,
-        `script-src 'self' 'unsafe-inline' ${apiOrigin}`,
+        `script-src 'self' ${apiOrigin}`,
         `style-src 'self' 'unsafe-inline'`,
         `img-src 'self' data: https:`,
-        `connect-src 'self' ${apiOrigin}`,
+        `connect-src 'self' ${apiOrigin} wss:`,
         `frame-ancestors ${frameAncestors}`
       ].join("; ")
     );
 
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Referrer-Policy", "strict-origin");
+    res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
 
     res.send(`<!DOCTYPE html>
 <html lang="es">
