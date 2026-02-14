@@ -130,6 +130,13 @@
         welcomeBubble.classList.add("show");
     }
 
+    function formatTime(date = new Date()) {
+        return date.toLocaleTimeString("es-MX", {
+            hour: "2-digit",
+            minute: "2-digit"
+        });
+    }
+
     function addMessage(from, text, isError = false) {
         const msg = document.createElement("div");
         msg.className = `msg ${from}${isError ? ' error' : ''}`;
@@ -143,12 +150,17 @@
 
         const bubble = document.createElement("div");
         bubble.className = "bubble";
-        bubble.textContent = text;
+
+        bubble.innerHTML = `
+        <div class="message-text">${text}</div>
+        <div class="message-time">${formatTime()}</div>
+    `;
 
         msg.appendChild(bubble);
         elements.messages.appendChild(msg);
         elements.messages.scrollTop = elements.messages.scrollHeight;
     }
+
 
     function addOptions(options) {
         const msg = document.createElement("div");
