@@ -1,5 +1,9 @@
 (function () {
 
+    /* =========================
+       CONFIG
+    ========================= */
+
     if (!window.__CHATBOT_CONFIG__) {
         console.error("[Chatbot] Config no encontrada");
         return;
@@ -20,6 +24,10 @@
     let started = false;
     let isOpen = false;
 
+    /* =========================
+       DOM ELEMENTS
+    ========================= */
+
     const elements = {
         messages: document.getElementById("messages"),
         messageInput: document.getElementById("messageInput"),
@@ -35,11 +43,32 @@
         chatRestart: document.getElementById("chatRestart"),
     };
 
-    // ✅ alias correcto
-    const welcomeBubble = elements.welcomeBubble;
-    const required = ["messages", "messageInput", "sendBtn", "chatWidget", "chatToggle"];
-    const missing = required.filter(key => !elements[key]);
+    const missing = Object.entries(elements)
+        .filter(([_, el]) => !el)
+        .map(([key]) => key);
 
+    if (missing.length > 0) {
+        console.error("[Chatbot] Elementos DOM faltantes:", missing);
+        return;
+    }
+
+    const welcomeBubble = elements.welcomeBubble;
+
+    /* =========================
+       HELPERS
+    ========================= */
+
+    function isValidEmail(value) {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+    }
+
+    function isValidPhone(value) {
+        return /^[0-9+\s()-]{7,}$/.test(value.trim());
+    }
+
+    function isValidNumber(value) {
+        return value.trim() !== "" && !isNaN(value);
+    }
 
     function hexToRgb(hex) {
         if (!hex || !/^#([A-Fa-f0-9]{6})$/.test(hex)) {
@@ -52,38 +81,22 @@
         return `${r}, ${g}, ${b}`;
     }
 
+    function formatTime(date = new Date()) {
+        return date.toLocaleTimeString("es-MX", {
+            hour: "2-digit",
+            minute: "2-digit"
+        });
+    }
+
+    /* =========================
+       THEME INIT
+    ========================= */
+
     const primaryRgb = hexToRgb(primaryColor);
     const secondaryRgb = hexToRgb(secondaryColor);
 
-    if (primaryColor) {
-        document.documentElement.style.setProperty("--chat-primary-rgb", primaryRgb);
-    }
-
-    if (secondaryColor) {
-        document.documentElement.style.setProperty("--chat-secondary-rgb", secondaryRgb);
-    }
-
-
-    if (missing.length > 0) {
-        console.error("[Chatbot] Elementos DOM faltantes:", missing);
-        return;
-    }
-
-    if (elements.chatName && name) {
-        elements.chatName.textContent = name;
-    }
-
-    if (elements.chatAvatarFab && avatar) {
-        elements.chatAvatarFab.src = avatar;
-    }
-
-    if (elements.chatAvatarHeader && avatar) {
-        elements.chatAvatarHeader.src = avatar;
-    }
-
-    if (inputPlaceholder) {
-        elements.messageInput.placeholder = inputPlaceholder;
-    }
+    document.documentElement.style.setProperty("--chat-primary-rgb", primaryRgb);
+    document.documentElement.style.setProperty("--chat-secondary-rgb", secondaryRgb);
 
     if (primaryColor) {
         document.documentElement.style.setProperty("--chat-primary", primaryColor);
@@ -93,58 +106,21 @@
         document.documentElement.style.setProperty("--chat-secondary", secondaryColor);
     }
 
-    if (elements.chatRestart) {
-        elements.chatRestart.addEventListener("click", restartConversation);
-    }
+    if (elements.chatName && name) elements.chatName.textContent = name;
+    if (elements.chatAvatarFab && avatar) elements.chatAvatarFab.src = avatar;
+    if (elements.chatAvatarHeader && avatar) elements.chatAvatarHeader.src = avatar;
+    if (inputPlaceholder) elements.messageInput.placeholder = inputPlaceholder;
 
     elements.messageInput.disabled = true;
     elements.sendBtn.disabled = true;
 
-    let welcomeShown = localStorage.getItem("chat_welcome_seen") === "1";
-
-    function toggleChat() {
-        isOpen = !isOpen;
-
-        elements.chatWidget.classList.toggle("open", isOpen);
-        elements.chatToggle.classList.toggle("active", isOpen);
-
-        if (isOpen && welcomeBubble) {
-            welcomeBubble.classList.remove("show");
-            localStorage.setItem("chat_welcome_seen", "1");
-            welcomeShown = true;
-        }
-
-        if (isOpen && !started) {
-            started = true;
-            startConversation();
-        }
-    }
-
-
-    elements.chatToggle.onclick = toggleChat;
-    if (elements.chatClose) {
-        elements.chatClose.onclick = toggleChat;
-    }
-    function showWelcomeOutside() {
-        if (!welcomeMessage || welcomeShown || !welcomeBubble) return;
-
-        const textEl = welcomeBubble.querySelector(".welcome-text");
-        if (!textEl) return;
-
-        textEl.textContent = welcomeMessage;
-        welcomeBubble.classList.add("show");
-    }
-
-    function formatTime(date = new Date()) {
-        return date.toLocaleTimeString("es-MX", {
-            hour: "2-digit",
-            minute: "2-digit"
-        });
-    }
+    /* =========================
+       UI HELPERS
+    ========================= */
 
     function addMessage(from, text, isError = false) {
         const msg = document.createElement("div");
-        msg.className = `msg ${from}${isError ? ' error' : ''}`;
+        msg.className = `msg ${from}${isError ? " error" : ""}`;
 
         if (from === "bot" && avatar && !isError) {
             const avatarImg = document.createElement("img");
@@ -153,8 +129,8 @@
             msg.appendChild(avatarImg);
         }
 
-        const contentWrapper = document.createElement("div");
-        contentWrapper.className = "msg-content";
+        const content = document.createElement("div");
+        content.className = "msg-content";
 
         const bubble = document.createElement("div");
         bubble.className = "bubble";
@@ -166,15 +142,13 @@
 
         console.log("Mensaje:", text, "Error:", isError);
 
-        contentWrapper.appendChild(bubble);
-        contentWrapper.appendChild(time);
-
-        msg.appendChild(contentWrapper);
+        content.appendChild(bubble);
+        content.appendChild(time);
+        msg.appendChild(content);
 
         elements.messages.appendChild(msg);
         elements.messages.scrollTop = elements.messages.scrollHeight;
     }
-
 
     function addOptions(options) {
         const msg = document.createElement("div");
@@ -186,18 +160,15 @@
         options.forEach(opt => {
             const btn = document.createElement("button");
             btn.textContent = opt.label;
-
             btn.onclick = () => {
                 sendMessage(opt.index);
                 msg.remove();
             };
-
             bubble.appendChild(btn);
         });
 
         msg.appendChild(bubble);
         elements.messages.appendChild(msg);
-        elements.messages.scrollTop = elements.messages.scrollHeight;
     }
 
     let typingElement = null;
@@ -211,17 +182,13 @@
         const bubble = document.createElement("div");
         bubble.className = "bubble";
         bubble.innerHTML = `
-        <span class="typing-dots">
-            <span></span>
-            <span></span>
-            <span></span>
-        </span>`;
+            <span class="typing-dots">
+                <span></span><span></span><span></span>
+            </span>
+        `;
 
         msg.appendChild(bubble);
         elements.messages.appendChild(msg);
-
-        elements.messages.scrollTop = elements.messages.scrollHeight;
-
         typingElement = msg;
     }
 
@@ -232,10 +199,22 @@
         }
     }
 
+    function setStatus(text) {
+        if (elements.chatStatus) elements.chatStatus.textContent = text;
+
+        document.documentElement.style.setProperty(
+            "--chat-pulse-rgb",
+            text === "En línea" ? primaryRgb : secondaryRgb
+        );
+    }
+
+    /* =========================
+       CHAT FLOW
+    ========================= */
+
     const INPUT_TYPES = ["question", "email", "phone", "number", "text_input"];
 
     async function processNode(data, depth = 0) {
-
         if (!data || depth > 20) return;
 
         if (data.typing_time) {
@@ -244,36 +223,24 @@
             removeTyping();
         }
 
-        if (data.content) {
-            addMessage("bot", data.content);
-        }
+        if (data.content) addMessage("bot", data.content);
 
         if (data.options?.length) {
             addOptions(data.options);
             return;
         }
 
-        if (data.link_action) {
-            window.open(data.link_action, "_blank");
-        }
+        if (data.link_action) window.open(data.link_action, "_blank");
 
         const requiresInput =
-            INPUT_TYPES.includes(data.type) ||
-            data.input_type;
+            INPUT_TYPES.includes(data.type) || data.input_type;
 
         if (!requiresInput && !data.completed) {
-
             const res = await fetch(
                 `${apiBase}/api/public-chatbot/chatbot-conversation/${data.session_id}/next`,
-                {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({})
-                }
+                { method: "POST", headers: { "Content-Type": "application/json" } }
             );
-
-            const nextData = await res.json();
-            return processNode(nextData, depth + 1);
+            return processNode(await res.json(), depth + 1);
         }
 
         if (!data.completed) {
@@ -281,41 +248,6 @@
             elements.sendBtn.disabled = false;
         }
     }
-
-    function setStatus(text) {
-        if (elements.chatStatus) {
-            elements.chatStatus.textContent = text;
-        }
-
-        const root = document.documentElement;
-        const isOnline = text === "En línea";
-
-        // Cambiar color del pulso
-        root.style.setProperty(
-            "--chat-pulse-rgb",
-            isOnline ? primaryRgb : secondaryRgb
-        );
-    }
-
-    async function restartConversation() {
-
-        //if (!confirm("¿Deseas reiniciar la conversación?")) return;
-
-        elements.messages.innerHTML = "";
-
-        SESSION_ID = null;
-        started = false;
-
-        elements.messageInput.value = "";
-        elements.messageInput.disabled = true;
-        elements.sendBtn.disabled = true;
-
-        setStatus("Conectando...");
-
-        started = true;
-        await startConversation();
-    }
-
 
     async function startConversation() {
         try {
@@ -328,33 +260,21 @@
             );
 
             const data = await res.json();
-
             SESSION_ID = data.session_id;
 
             removeTyping();
             setStatus("En línea");
 
             await processNode(data);
-
-        } catch (err) {
-
+        } catch {
             removeTyping();
             setStatus("Error");
-
-            addMessage(
-                "bot",
-                "No pude conectarme al servidor.",
-                true
-            );
+            addMessage("bot", "No pude conectarme al servidor.", true);
         }
     }
 
     async function sendMessage(inputOverride = null) {
-
-        const text = inputOverride !== null
-            ? inputOverride
-            : elements.messageInput.value.trim();
-
+        const text = inputOverride ?? elements.messageInput.value.trim();
         if (!text || !SESSION_ID) return;
 
         if (inputOverride === null) {
@@ -378,45 +298,67 @@
             );
 
             const data = await res.json();
-
             removeTyping();
 
-            // Aquí asumimos que si el servidor devuelve un campo 'error' o 'invalid'
-            const isValidationError = data.type === 'validation_error' ||
-                (data.content && data.content.toLowerCase().includes("inválido"));
+            const invalid =
+                (data.type === "email" && !isValidEmail(text)) ||
+                (data.type === "phone" && !isValidPhone(text)) ||
+                (data.type === "number" && !isValidNumber(text));
 
-            if (isValidationError) {
-                addMessage("bot", data.content, true); // El 'true' activa el color rojo
-
-                // Reactivamos el input para que el usuario pueda corregir el dato
+            if (invalid) {
+                addMessage("bot", data.content || "Dato inválido", true);
                 elements.messageInput.disabled = false;
                 elements.sendBtn.disabled = false;
-            } else {
-                await processNode(data);
+                return;
             }
 
-        } catch (err) {
-
+            await processNode(data);
+        } catch {
             removeTyping();
-
-            addMessage(
-                "bot",
-                "Error al procesar tu mensaje.",
-                true
-            );
+            addMessage("bot", "Error al procesar tu mensaje.", true);
         }
     }
 
+    /* =========================
+       EVENTS
+    ========================= */
+
     elements.sendBtn.onclick = () => sendMessage();
 
-    elements.messageInput.addEventListener("keydown", (e) => {
+    elements.messageInput.addEventListener("keydown", e => {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             sendMessage();
         }
     });
-    if (welcomeBubble && !welcomeShown) {
-        setTimeout(showWelcomeOutside, 1200);
-    }
-})();
 
+    let welcomeShown = localStorage.getItem("chat_welcome_seen") === "1";
+
+    function toggleChat() {
+        isOpen = !isOpen;
+        elements.chatWidget.classList.toggle("open", isOpen);
+        elements.chatToggle.classList.toggle("active", isOpen);
+
+        if (isOpen && welcomeBubble) {
+            welcomeBubble.classList.remove("show");
+            localStorage.setItem("chat_welcome_seen", "1");
+            welcomeShown = true;
+        }
+
+        if (isOpen && !started) {
+            started = true;
+            startConversation();
+        }
+    }
+
+    elements.chatToggle.onclick = toggleChat;
+    if (elements.chatClose) elements.chatClose.onclick = toggleChat;
+
+    if (welcomeBubble && !welcomeShown && welcomeMessage) {
+        setTimeout(() => {
+            welcomeBubble.querySelector(".welcome-text").textContent = welcomeMessage;
+            welcomeBubble.classList.add("show");
+        }, 1200);
+    }
+
+})();
