@@ -119,6 +119,10 @@
     if (elements.chatClose) {
         elements.chatClose.onclick = toggleChat;
     }
+    if (elements.chatRestart) {
+        elements.chatRestart.onclick = restartConversation;
+    }
+
 
     function showWelcomeOutside() {
         if (!welcomeMessage || welcomeShown || !welcomeBubble) return;
@@ -284,6 +288,30 @@
             isOnline ? primaryRgb : secondaryRgb
         );
     }
+
+    async function restartConversation() {
+
+        // Confirm opcional (puedes quitarlo)
+        if (!confirm("¿Deseas reiniciar la conversación?")) return;
+
+        // Limpiar mensajes
+        elements.messages.innerHTML = "";
+
+        // Reset estado
+        SESSION_ID = null;
+        started = false;
+
+        elements.messageInput.value = "";
+        elements.messageInput.disabled = true;
+        elements.sendBtn.disabled = true;
+
+        setStatus("Conectando...");
+
+        // Iniciar nueva sesión
+        started = true;
+        await startConversation();
+    }
+
 
     async function startConversation() {
         try {
