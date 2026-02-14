@@ -246,6 +246,8 @@
             addMessage("bot", data.content);
         }
 
+        console.log("Mensaje:", text, "Error:", isError);
+
         if (data.options?.length) {
             addOptions(data.options);
             return;
