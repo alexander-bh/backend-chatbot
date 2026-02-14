@@ -427,10 +427,11 @@ main {
 ================================ */
 footer {
     display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
     border-top: 2px solid #e5e7eb;
     background: white;
-    padding: 4px;
-    gap: 4px;
 }
 
 #messageInput {
@@ -453,26 +454,29 @@ footer {
 }
 
 #sendBtn {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
     background: var(--chat-primary);
-    color: white;
     border: none;
-    padding: 0 24px;
-    font-weight: 600;
     cursor: pointer;
-    border-radius: 12px;
-    min-width: 80px;
+
     transition: all 0.2s ease;
-    box-shadow:
-        0 2px 6px rgba(37, 99, 235, 0.3),
-        inset 0 1px 2px rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
 }
 
+#sendBtn svg {
+    width: 20px;
+    height: 20px;
+}
 #sendBtn:hover:not(:disabled) {
-    background: var(--chat-primary);
-    transform: translateY(-1px);
-    box-shadow:
-        0 4px 12px rgba(37, 99, 235, 0.4),
-        inset 0 1px 2px rgba(255, 255, 255, 0.2);
+    transform: scale(1.08);
+    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.4);
 }
 
 #sendBtn:active:not(:disabled) {
