@@ -346,6 +346,33 @@ body {
     background: rgba(255, 255, 255, 0.2);
 }
 
+/*Boton del header*/
+
+.chat-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.chat-restart {
+    background: rgba(255,255,255,0.15);
+    border: none;
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.chat-restart:hover {
+    background: rgba(255,255,255,0.25);
+    transform: rotate(90deg);
+}
+
 /* ===============================
    MESSAGES - MEJORADOS
 ================================ */
