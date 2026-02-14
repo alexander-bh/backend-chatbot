@@ -31,13 +31,15 @@
         chatAvatarFab: document.getElementById("chatAvatarFab"),
         chatAvatarHeader: document.getElementById("chatAvatarHeader"),
         chatStatus: document.getElementById("chatStatus"),
-        welcomeBubble: document.getElementById("chatWelcome")
+        welcomeBubble: document.getElementById("chatWelcome"),
+        chatRestart: document.getElementById("chatRestart"),
     };
 
     // ✅ alias correcto
     const welcomeBubble = elements.welcomeBubble;
     const required = ["messages", "messageInput", "sendBtn", "chatWidget", "chatToggle"];
     const missing = required.filter(key => !elements[key]);
+
 
     function hexToRgb(hex) {
         if (!hex || !/^#([A-Fa-f0-9]{6})$/.test(hex)) {
@@ -89,6 +91,10 @@
 
     if (secondaryColor) {
         document.documentElement.style.setProperty("--chat-secondary", secondaryColor);
+    }
+
+    if (elements.chatRestart) {
+        elements.chatRestart.addEventListener("click", restartConversation);
     }
 
     elements.messageInput.disabled = true;
@@ -291,13 +297,11 @@
 
     async function restartConversation() {
 
-        // Confirm opcional (puedes quitarlo)
+        if (!SESSION_ID) return;
         if (!confirm("¿Deseas reiniciar la conversación?")) return;
 
-        // Limpiar mensajes
         elements.messages.innerHTML = "";
 
-        // Reset estado
         SESSION_ID = null;
         started = false;
 
@@ -307,7 +311,6 @@
 
         setStatus("Conectando...");
 
-        // Iniciar nueva sesión
         started = true;
         await startConversation();
     }
