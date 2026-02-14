@@ -125,11 +125,6 @@
     if (elements.chatClose) {
         elements.chatClose.onclick = toggleChat;
     }
-    if (elements.chatRestart) {
-        elements.chatRestart.onclick = restartConversation;
-    }
-
-
     function showWelcomeOutside() {
         if (!welcomeMessage || welcomeShown || !welcomeBubble) return;
 
@@ -296,8 +291,7 @@
     }
 
     async function restartConversation() {
-
-        if (!SESSION_ID) return;
+        
         if (!confirm("¿Deseas reiniciar la conversación?")) return;
 
         elements.messages.innerHTML = "";
