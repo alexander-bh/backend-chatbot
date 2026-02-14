@@ -194,9 +194,9 @@ body {
     width: 380px;
     height: 600px;
     max-height: calc(100vh - 120px);
-    background: white;
+    background: rgb(28, 17, 17);
     border-radius: 16px;
-    border: 1px solid rgba(15, 23, 42, 0.06);
+    border: 1px solid rgba(3, 5, 8, 0.06);
     visibility: hidden;
     pointer-events: none;
 
