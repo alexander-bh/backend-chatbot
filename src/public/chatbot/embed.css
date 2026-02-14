@@ -439,6 +439,29 @@ main {
     color: rgba(0, 0, 0, 0.45);
 }
 
+.msg-content {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Hora debajo */
+.message-time {
+    font-size: 12px;
+    margin-top: 4px;
+    opacity: 0.6;
+}
+
+/* Alineación automática */
+.msg.user .message-time {
+    text-align: right;
+    color: #6b7280;
+}
+
+.msg.bot .message-time {
+    text-align: left;
+    color: #6b7280;
+}
+
 /* ===============================
    INPUT - MEJORADO
 ================================ */

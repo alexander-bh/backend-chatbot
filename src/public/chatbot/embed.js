@@ -148,15 +148,22 @@
             msg.appendChild(avatarImg);
         }
 
+        const contentWrapper = document.createElement("div");
+        contentWrapper.className = "msg-content";
+
         const bubble = document.createElement("div");
         bubble.className = "bubble";
+        bubble.textContent = text;
 
-        bubble.innerHTML = `
-        <div class="message-text">${text}</div>
-        <div class="message-time">${formatTime()}</div>
-    `;
+        const time = document.createElement("div");
+        time.className = "message-time";
+        time.textContent = formatTime();
 
-        msg.appendChild(bubble);
+        contentWrapper.appendChild(bubble);
+        contentWrapper.appendChild(time);
+
+        msg.appendChild(contentWrapper);
+
         elements.messages.appendChild(msg);
         elements.messages.scrollTop = elements.messages.scrollHeight;
     }
