@@ -39,6 +39,26 @@
     const required = ["messages", "messageInput", "sendBtn", "chatWidget", "chatToggle"];
     const missing = required.filter(key => !elements[key]);
 
+    function hexToRgb(hex) {
+        if (!hex || !/^#([A-Fa-f0-9]{6})$/.test(hex)) {
+            return "37, 99, 235";
+        }
+
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        return `${r}, ${g}, ${b}`;
+    }
+
+    if (primaryColor) {
+        document.documentElement.style.setProperty("--chat-primary-rgb", hexToRgb(primaryColor));
+    }
+
+    if (secondaryColor) {
+        document.documentElement.style.setProperty("--chat-secondary-rgb", hexToRgb(secondaryColor));
+    }
+
+
     if (missing.length > 0) {
         console.error("[Chatbot] Elementos DOM faltantes:", missing);
         return;
@@ -71,6 +91,14 @@
     elements.messageInput.disabled = true;
     elements.sendBtn.disabled = true;
 
+    document.documentElement.style.setProperty(
+        "--chat-pulse-rgb",
+        getComputedStyle(document.documentElement)
+            .getPropertyValue("--chat-secondary-rgb")
+    );
+
+    let welcomeShown = localStorage.getItem("chat_welcome_seen") === "1";
+
     function toggleChat() {
         isOpen = !isOpen;
 
@@ -94,8 +122,6 @@
     if (elements.chatClose) {
         elements.chatClose.onclick = toggleChat;
     }
-
-    let welcomeShown = localStorage.getItem("chat_welcome_seen") === "1";
 
     function showWelcomeOutside() {
         if (!welcomeMessage || welcomeShown || !welcomeBubble) return;
@@ -232,6 +258,19 @@
         if (elements.chatStatus) {
             elements.chatStatus.textContent = text;
         }
+
+        const root = document.documentElement;
+        const isOnline = text === "En línea";
+
+        elements.chatToggle.style.animation = isOnline ? "none" : "";
+
+        root.style.setProperty(
+            "--chat-pulse-rgb",
+            getComputedStyle(root).getPropertyValue(
+                isOnline ? "--chat-primary-rgb" : "--chat-secondary-rgb"
+            )
+        );
+
     }
 
     async function startConversation() {
