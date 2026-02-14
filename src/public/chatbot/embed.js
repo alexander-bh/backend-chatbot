@@ -379,7 +379,18 @@
 
             removeTyping();
 
-            await processNode(data);
+            const isValidationError = data.type === 'validation_error' ||
+                (data.content && data.content.toLowerCase().includes("inválido"));
+
+            if (isValidationError) {
+                addMessage("bot", data.content, true); // El 'true' activa el color rojo
+
+                // Reactivamos el input para que el usuario pueda corregir el dato
+                elements.messageInput.disabled = false;
+                elements.sendBtn.disabled = false;
+            } else {
+                await processNode(data);
+            }
 
         } catch (err) {
 

@@ -518,6 +518,21 @@
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
+    .msg.error .bubble {
+        background: #ff2d37 !important;
+        /* Rojo intenso */
+        color: white !important;
+        border: none !important;
+        font-weight: 500;
+        box-shadow: 0 4px 12px rgba(255, 45, 55, 0.3);
+    }
+
+    /* Ajuste para que el texto de la hora sea blanco si está dentro de un error */
+    .msg.error .message-time {
+        color: rgba(255, 255, 255, 0.8) !important;
+    }
+
+
     .bubble {
         padding: 14px 18px;
         border-radius: 20px;
