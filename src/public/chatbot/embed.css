@@ -303,8 +303,8 @@
     }
 
     .chat-avatar-fab {
-        width: 60px;
-        height: 60px;
+        width: 50px;
+        height: 50px;
         border-radius: 50%;
         object-fit: cover;
         border: 3px solid rgba(255, 255, 255, 0.3);
@@ -357,27 +357,24 @@
     /* Botón reiniciar mejorado */
     .chat-restart {
         position: relative;
-
-        width: 38px;
-        height: 38px;
+        width: 32px;
+        /* Reducido para igualar al botón de cerrar */
+        height: 32px;
         border-radius: 50%;
-
         display: flex;
         align-items: center;
         justify-content: center;
-
-        background: rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.15);
+        /* Un poco más de opacidad */
         border: none;
-
         color: white;
         cursor: pointer;
-
         backdrop-filter: blur(8px);
-
-        transition:
-            transform .18s ease,
-            background .18s ease,
-            box-shadow .18s ease;
+        transition: all 0.2s ease;
+        padding: 0;
+        /* Elimina paddings internos que descentran el SVG */
+        flex-shrink: 0;
+        /* Evita que se deforme en contenedores flex */
     }
 
     .chat-restart::before {
@@ -392,31 +389,31 @@
         transition: opacity .2s ease;
     }
 
-    /* Hover elegante */
-    .chat-restart:hover {
-        background: rgba(255, 255, 255, 0.2);
-        transform: scale(1.05);
-    }
-
     .chat-restart:hover::before {
         opacity: 1;
-    }
-
-    /* Click feedback */
-    .chat-restart:active {
-        transform: scale(0.95);
-        background: rgba(255, 255, 255, 0.15);
     }
 
     /* SVG tamaño consistente */
     .chat-restart svg {
         width: 18px;
         height: 18px;
-        transition: transform .35s cubic-bezier(.2, .8, .2, 1);
+        display: block;
+        transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Hover elegante */
+    .chat-restart:hover {
+        background: rgba(255, 255, 255, 0.2);
+        transform: scale(1.05);
     }
 
     .chat-restart:hover svg {
-        transform: rotate(-90deg);
+        transform: rotate(-180deg);
+        /* Giro más pronunciado para feedback visual */
+    }
+
+    .chat-restart:active {
+        transform: scale(0.95);
     }
 
     /* ===============================
