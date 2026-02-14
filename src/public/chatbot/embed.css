@@ -600,6 +600,12 @@
         align-items: center;
     }
 
+    .msg.bot.error .bubble {
+        background: #ef4444;
+        color: white;
+        border: none;
+    }
+
     .msg.error .bubble {
         background: #ef4444;
         /* rojo */
