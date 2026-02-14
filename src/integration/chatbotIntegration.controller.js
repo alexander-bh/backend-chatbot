@@ -237,7 +237,7 @@ exports.renderEmbed = async (req, res) => {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
               <path d="M4 4v6h6" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
               <path d="M20 20v-6h-6" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
-              <path d="M20 9a8 8 0 10-2.34 5.66L20 14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M20 9a8 8 0 10-2.34 5.66L20 14" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
             </svg>
           </button>
           <button class="chat-close" id="chatClose" aria-label="Cerrar">×</button>
