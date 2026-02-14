@@ -164,6 +164,8 @@
         time.className = "message-time";
         time.textContent = formatTime();
 
+        console.log("Mensaje:", text, "Error:", isError);
+
         contentWrapper.appendChild(bubble);
         contentWrapper.appendChild(time);
 
