@@ -234,10 +234,9 @@ exports.renderEmbed = async (req, res) => {
       </div>
       <div class="chat-actions">
           <button id="chatRestart" class="chat-restart" aria-label="Reiniciar conversación">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-              <path d="M4 4v6h6" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
-              <path d="M20 20v-6h-6" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
-              <path d="M20 9a8 8 0 10-2.34 5.66L20 14" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M1 4v6h6M23 20v-6h-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
           <button class="chat-close" id="chatClose" aria-label="Cerrar">×</button>
