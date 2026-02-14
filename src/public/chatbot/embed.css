@@ -170,21 +170,27 @@ body {
     box-shadow: none;
 }
 
-
 @keyframes pulse {
     0% {
-        box-shadow: 0 0 0 0 rgba(var(--chat-pulse-rgb), 0.5);
+        box-shadow: 0 0 0 0 rgba(var(--chat-primary-rgb), 0.45);
     }
 
     70% {
-        box-shadow: 0 0 0 15px rgba(var(--chat-pulse-rgb), 0);
+        box-shadow: 0 0 0 18px rgba(var(--chat-primary-rgb), 0);
     }
 
     100% {
-        box-shadow: 0 0 0 0 rgba(var(--chat-pulse-rgb), 0);
+        box-shadow: 0 0 0 0 rgba(var(--chat-primary-rgb), 0);
     }
 }
 
+#chatToggle {
+    animation: pulse 2s infinite;
+}
+
+#chatToggle.active {
+    animation: none;
+}
 
 /* ===============================
    CHAT WIDGET
