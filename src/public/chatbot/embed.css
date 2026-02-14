@@ -351,27 +351,54 @@ body {
 .chat-actions {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
 }
 
+/* Botón reiniciar mejorado */
 .chat-restart {
-    background: rgba(255,255,255,0.15);
-    border: none;
-    color: white;
-    width: 32px;
-    height: 32px;
+    position: relative;
+
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
+
     display: flex;
     align-items: center;
     justify-content: center;
+
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(6px);
+
+    border: 1px solid rgba(255, 255, 255, 0.15);
+
+    color: white;
     cursor: pointer;
-    transition: background 0.2s ease, transform 0.2s ease;
+
+    transition:
+        background 0.25s ease,
+        transform 0.25s ease,
+        box-shadow 0.25s ease;
 }
 
+/* Hover elegante */
 .chat-restart:hover {
-    background: rgba(255,255,255,0.25);
-    transform: rotate(90deg);
+    background: rgba(255, 255, 255, 0.22);
+    transform: rotate(120deg) scale(1.05);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
 }
+
+/* Click feedback */
+.chat-restart:active {
+    transform: rotate(120deg) scale(0.92);
+}
+
+/* SVG tamaño consistente */
+.chat-restart svg {
+    width: 18px;
+    height: 18px;
+    transition: transform 0.3s ease;
+}
+
 
 /* ===============================
    MESSAGES - MEJORADOS
