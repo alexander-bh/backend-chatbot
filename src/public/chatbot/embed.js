@@ -79,6 +79,8 @@
 
         if (isOpen && welcomeBubble) {
             welcomeBubble.classList.remove("show");
+            localStorage.setItem("chat_welcome_seen", "1");
+            welcomeShown = true;
         }
 
         if (isOpen && !started) {
@@ -86,6 +88,7 @@
             startConversation();
         }
     }
+
 
     elements.chatToggle.onclick = toggleChat;
     if (elements.chatClose) {
@@ -102,29 +105,6 @@
 
         textEl.textContent = welcomeMessage;
         welcomeBubble.classList.add("show");
-
-        welcomeShown = true;
-        localStorage.setItem("chat_welcome_seen", "1");
-
-        setTimeout(() => {
-            welcomeBubble.classList.remove("show");
-        }, 8000);
-    }
-
-    function showWelcomeOutside() {
-        if (!welcomeMessage || welcomeShown || !welcomeBubble) return;
-
-        const textEl = welcomeBubble.querySelector(".welcome-text");
-        if (!textEl) return;
-
-        textEl.textContent = welcomeMessage;
-
-        welcomeBubble.classList.add("show");
-        welcomeShown = true;
-
-        setTimeout(() => {
-            welcomeBubble.classList.remove("show");
-        }, 8000);
     }
 
     function addMessage(from, text, isError = false) {
@@ -340,7 +320,7 @@
             sendMessage();
         }
     });
-    if (welcomeBubble) {
+    if (welcomeBubble && !welcomeShown) {
         setTimeout(showWelcomeOutside, 1200);
     }
 })();
