@@ -292,7 +292,7 @@
 
     async function restartConversation() {
         
-        if (!confirm("¿Deseas reiniciar la conversación?")) return;
+        //if (!confirm("¿Deseas reiniciar la conversación?")) return;
 
         elements.messages.innerHTML = "";
 
