@@ -50,12 +50,15 @@
         return `${r}, ${g}, ${b}`;
     }
 
+    const primaryRgb = hexToRgb(primaryColor);
+    const secondaryRgb = hexToRgb(secondaryColor);
+
     if (primaryColor) {
-        document.documentElement.style.setProperty("--chat-primary-rgb", hexToRgb(primaryColor));
+        document.documentElement.style.setProperty("--chat-primary-rgb", primaryRgb);
     }
 
     if (secondaryColor) {
-        document.documentElement.style.setProperty("--chat-secondary-rgb", hexToRgb(secondaryColor));
+        document.documentElement.style.setProperty("--chat-secondary-rgb", secondaryRgb);
     }
 
 
@@ -93,9 +96,9 @@
 
     document.documentElement.style.setProperty(
         "--chat-pulse-rgb",
-        getComputedStyle(document.documentElement)
-            .getPropertyValue("--chat-secondary-rgb")
+        secondaryRgb
     );
+
 
     let welcomeShown = localStorage.getItem("chat_welcome_seen") === "1";
 
@@ -262,15 +265,14 @@
         const root = document.documentElement;
         const isOnline = text === "En línea";
 
+        // Control animación
         elements.chatToggle.style.animation = isOnline ? "none" : "";
 
+        // Cambiar color del pulso
         root.style.setProperty(
             "--chat-pulse-rgb",
-            getComputedStyle(root).getPropertyValue(
-                isOnline ? "--chat-primary-rgb" : "--chat-secondary-rgb"
-            )
+            isOnline ? primaryRgb : secondaryRgb
         );
-
     }
 
     async function startConversation() {
