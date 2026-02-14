@@ -208,7 +208,12 @@
 
         const bubble = document.createElement("div");
         bubble.className = "bubble";
-        bubble.textContent = "Escribiendo…";
+        bubble.innerHTML = `
+        <span class="typing-dots">
+            <span></span>
+            <span></span>
+            <span></span>
+        </span>`;
 
         msg.appendChild(bubble);
         elements.messages.appendChild(msg);
@@ -291,7 +296,7 @@
     }
 
     async function restartConversation() {
-        
+
         //if (!confirm("¿Deseas reiniciar la conversación?")) return;
 
         elements.messages.innerHTML = "";
