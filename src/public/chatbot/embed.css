@@ -40,7 +40,7 @@ body {
     border: 2px solid var(--chat-border);
     border-left: 4px solid var(--chat-primary);
 
-    box-shadow: 
+    box-shadow:
         0 4px 6px -1px var(--chat-shadow-light),
         0 10px 24px -4px var(--chat-shadow-medium),
         0 0 0 1px rgba(0, 0, 0, 0.05);
@@ -67,7 +67,7 @@ body {
     width: 16px;
     height: 16px;
     background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-    
+
     border-right: 2px solid var(--chat-border);
     border-top: 2px solid var(--chat-border);
 
@@ -160,7 +160,7 @@ body {
         0 10px 25px -3px var(--chat-shadow-heavy),
         0 0 0 0 rgba(37, 99, 235, 0.4),
         inset 0 2px 4px 0 rgba(255, 255, 255, 0.2);
-    
+
     animation: pulse 2.5s infinite;
 
     transition:
@@ -229,10 +229,10 @@ body {
 
     opacity: 0;
     transform: translateY(20px) scale(0.95);
-    
+
     /* Borde más visible */
     border: 2px solid var(--chat-border);
-    
+
     /* Sombras más pronunciadas */
     box-shadow:
         0 0 0 1px rgba(0, 0, 0, 0.05),
@@ -252,14 +252,14 @@ body {
     pointer-events: auto;
     opacity: 1;
     transform: translateY(0) scale(1);
-    
+
     /* Sombras aún más pronunciadas cuando está abierto */
     box-shadow:
         0 0 0 1px rgba(0, 0, 0, 0.08),
         0 8px 16px -4px rgba(0, 0, 0, 0.15),
         0 20px 50px -10px rgba(0, 0, 0, 0.25),
         0 30px 60px -15px rgba(0, 0, 0, 0.2);
-    
+
     transition:
         opacity 0.25s ease,
         transform 0.25s ease,
@@ -278,7 +278,7 @@ body {
 }
 
 .chat-header {
-    background: linear-gradient(135deg, var(--chat-primary) 0%, #1d4ed8 100%);
+    background: var(--chat-primary);
     color: white;
     padding: 18px 20px;
     display: flex;
@@ -286,7 +286,7 @@ body {
     gap: 12px;
     border-top-left-radius: 18px;
     border-top-right-radius: 18px;
-    box-shadow: 
+    box-shadow:
         inset 0 -1px 0 rgba(255, 255, 255, 0.15),
         0 2px 8px rgba(0, 0, 0, 0.1);
 }
@@ -407,7 +407,7 @@ main {
     color: var(--chat-secondary);
     border: 2px solid #e5e7eb;
     border-bottom-left-radius: 4px;
-    box-shadow: 
+    box-shadow:
         0 1px 3px rgba(0, 0, 0, 0.08),
         0 0 0 1px rgba(0, 0, 0, 0.02);
 }
@@ -417,7 +417,7 @@ main {
     color: white;
     border-bottom-right-radius: 4px;
     border: none;
-    box-shadow: 
+    box-shadow:
         0 2px 6px rgba(37, 99, 235, 0.3),
         inset 0 1px 2px rgba(255, 255, 255, 0.2);
 }
@@ -447,13 +447,13 @@ footer {
 #messageInput:focus {
     border-color: var(--chat-primary);
     background: white;
-    box-shadow: 
+    box-shadow:
         0 0 0 3px rgba(37, 99, 235, 0.1),
         0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 #sendBtn {
-    background: linear-gradient(135deg, var(--chat-primary) 0%, #1d4ed8 100%);
+    background: var(--chat-primary);
     color: white;
     border: none;
     padding: 0 24px;
@@ -462,7 +462,7 @@ footer {
     border-radius: 12px;
     min-width: 80px;
     transition: all 0.2s ease;
-    box-shadow: 
+    box-shadow:
         0 2px 6px rgba(37, 99, 235, 0.3),
         inset 0 1px 2px rgba(255, 255, 255, 0.2);
 }
@@ -470,7 +470,7 @@ footer {
 #sendBtn:hover:not(:disabled) {
     background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
     transform: translateY(-1px);
-    box-shadow: 
+    box-shadow:
         0 4px 12px rgba(37, 99, 235, 0.4),
         inset 0 1px 2px rgba(255, 255, 255, 0.2);
 }
