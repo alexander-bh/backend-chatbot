@@ -94,12 +94,6 @@
     elements.messageInput.disabled = true;
     elements.sendBtn.disabled = true;
 
-    document.documentElement.style.setProperty(
-        "--chat-pulse-rgb",
-        secondaryRgb
-    );
-
-
     let welcomeShown = localStorage.getItem("chat_welcome_seen") === "1";
 
     function toggleChat() {
@@ -264,9 +258,6 @@
 
         const root = document.documentElement;
         const isOnline = text === "En línea";
-
-        // Control animación
-        elements.chatToggle.style.animation = isOnline ? "none" : "";
 
         // Cambiar color del pulso
         root.style.setProperty(
