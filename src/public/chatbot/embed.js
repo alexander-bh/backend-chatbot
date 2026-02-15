@@ -25,6 +25,7 @@
         welcomeMessage
     } = config;
 
+
     let SESSION_ID = null;
     let started = false;
     let isOpen = false;
@@ -58,6 +59,7 @@
     }
 
     const welcomeBubble = elements.welcomeBubble;
+    let currentExpectedType = null;
 
     /* =========================
        HELPERS
@@ -239,6 +241,9 @@
 
         const requiresInput =
             INPUT_TYPES.includes(data.type) || data.input_type;
+        if (requiresInput) {
+            currentExpectedType = data.type;
+        }
 
         if (!requiresInput && !data.completed) {
             const res = await fetch(
@@ -282,6 +287,18 @@
         const text = inputOverride ?? elements.messageInput.value.trim();
         if (!text || !SESSION_ID) return;
 
+        const invalid =
+            (currentExpectedType === "email" && !isValidEmail(text)) ||
+            (currentExpectedType === "phone" && !isValidPhone(text)) ||
+            (currentExpectedType === "number" && !isValidNumber(text));
+
+        if (invalid) {
+            addMessage("bot", "El dato ingresado no es válido.", true);
+            return;
+        }
+
+        currentExpectedType = null;
+
         if (inputOverride === null) {
             addMessage("user", text);
             elements.messageInput.value = "";
@@ -305,24 +322,13 @@
             const data = await res.json();
             removeTyping();
 
-            const invalid =
-                (data.type === "email" && !isValidEmail(text)) ||
-                (data.type === "phone" && !isValidPhone(text)) ||
-                (data.type === "number" && !isValidNumber(text));
-
-            if (invalid) {
-                addMessage("bot", data.content || "Dato inválido", true);
-                elements.messageInput.disabled = false;
-                elements.sendBtn.disabled = false;
-                return;
-            }
-
             await processNode(data);
         } catch {
             removeTyping();
             addMessage("bot", "Error al procesar tu mensaje.", true);
         }
     }
+
 
     /* =========================
        EVENTS
