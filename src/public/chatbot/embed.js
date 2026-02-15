@@ -3,8 +3,13 @@
     /* =========================
        CONFIG
     ========================= */
+    const currentScript = document.currentScript;
 
-    if (!window.__CHATBOT_CONFIG__) {
+    const config = currentScript?.dataset?.config
+        ? JSON.parse(currentScript.dataset.config)
+        : null;
+
+    if (!config) {
         console.error("[Chatbot] Config no encontrada");
         return;
     }
@@ -18,7 +23,7 @@
         secondaryColor,
         inputPlaceholder,
         welcomeMessage
-    } = window.__CHATBOT_CONFIG__;
+    } = config;
 
     let SESSION_ID = null;
     let started = false;
