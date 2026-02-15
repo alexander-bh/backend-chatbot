@@ -172,24 +172,43 @@ exports.renderEmbed = async (req, res) => {
       return res.status(403).send("Dominio no permitido");
     }
 
+    const apiOrigin = new URL(getBaseUrl()).origin;
+
     function stripProtocol(domain) {
       return domain.replace(/^https?:\/\//, "").replace(/\/$/, "");
     }
 
-    const apiOrigin = new URL(getBaseUrl()).origin;
     const frameAncestors = chatbot.allowed_domains.length
       ? chatbot.allowed_domains
-        .map(d => {
-          if (isLocalhost(d)) {
-            return "http://localhost:* http://127.0.0.1:* https://localhost:*";
-          }
+          .map(d => {
+            if (isLocalhost(d)) {
+              return "http://localhost:* http://127.0.0.1:* https://localhost:*";
+            }
 
-          // Permitir dominio exacto + cualquier subdominio para la pagina 
-          const clean = stripProtocol(d);
-          return `https://${clean} https://*.${clean}`;
-        })
-        .join(" ")
+            const clean = stripProtocol(d);
+            return `https://${clean} https://*.${clean}`;
+          })
+          .join(" ")
       : "'none'";
+
+    /* =========================
+       CONFIG SEGURA
+    ========================= */
+
+    const safeConfig = {
+      apiBase: getBaseUrl(),
+      publicId: public_id,
+      name: chatbot.name,
+      avatar: chatbot.avatar || "",
+      primaryColor: chatbot.primary_color || "#2563eb",
+      secondaryColor: chatbot.secondary_color || "#111827",
+      inputPlaceholder: chatbot.input_placeholder || "Escribe tu mensaje…",
+      welcomeMessage: chatbot.welcome_message || ""
+    };
+
+    /* =========================
+       HEADERS SEGUROS
+    ========================= */
 
     res.setHeader(
       "Content-Security-Policy",
@@ -205,7 +224,14 @@ exports.renderEmbed = async (req, res) => {
 
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Referrer-Policy", "strict-origin");
-    res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+    res.setHeader(
+      "Permissions-Policy",
+      "geolocation=(), microphone=(), camera=()"
+    );
+
+    /* =========================
+       HTML SIN INLINE SCRIPT
+    ========================= */
 
     res.send(`<!DOCTYPE html>
 <html lang="es">
@@ -216,85 +242,53 @@ exports.renderEmbed = async (req, res) => {
 <link rel="stylesheet" href="/public/chatbot/embed.css" />
 </head>
 <body>
+
 <button class="chat-fab" id="chatToggle">
-  <img
-    id="chatAvatarFab"
-    class="chat-avatar-fab"
-    alt="Avatar"
-  />
+  <img id="chatAvatarFab" class="chat-avatar-fab" alt="Avatar" />
 </button>
+
 <div class="chat-welcome" id="chatWelcome">
   <span class="welcome-text"></span>
 </div>
+
 <div class="chat-widget" id="chatWidget">
   <div class="chat">
     <header class="chat-header">
-      <img
-        id="chatAvatarHeader"
-        class="chat-avatar"
-        alt="Avatar"
-      />
+      <img id="chatAvatarHeader" class="chat-avatar" alt="Avatar" />
       <div class="chat-header-info">
         <strong id="chatName">${escapeHTML(chatbot.name)}</strong>
         <div class="chat-status" id="chatStatus">Offline</div>
       </div>
       <div class="chat-actions">
-          <button id="chatRestart" class="chat-restart" aria-label="Reiniciar conversación">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M1 4v6h6M23 20v-6h-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-          <button class="chat-close" id="chatClose" aria-label="Cerrar">×</button>
+        <button id="chatRestart" class="chat-restart" aria-label="Reiniciar conversación">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M1 4v6h6M23 20v-6h-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <button class="chat-close" id="chatClose" aria-label="Cerrar">×</button>
       </div>
     </header>
+
     <main id="messages"></main>
+
     <footer>
-      <input
-        id="messageInput"
-        placeholder="Escribe tu mensaje…"
-        autocomplete="off"
-      />
-    <button id="sendBtn" aria-label="Enviar mensaje">
-      <svg
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path
-          d="M22 2L11 13"
-          stroke="white"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-        <path
-          d="M22 2L15 22L11 13L2 9L22 2Z"
-          stroke="white"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-      </svg>
-    </button>
+      <input id="messageInput" autocomplete="off" />
+      <button id="sendBtn" aria-label="Enviar mensaje">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path d="M22 2L11 13" stroke="white" stroke-width="2"/>
+          <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="white" stroke-width="2"/>
+        </svg>
+      </button>
     </footer>
   </div>
 </div>
-<script>
-  window.__CHATBOT_CONFIG__ = {
-    apiBase: ${JSON.stringify(getBaseUrl())},
-    publicId: ${JSON.stringify(public_id)},
-    name: ${JSON.stringify(chatbot.name)},
-    avatar: ${JSON.stringify(chatbot.avatar || "")},
-    primaryColor: ${JSON.stringify(chatbot.primary_color || "#2563eb")},
-    secondaryColor: ${JSON.stringify(chatbot.secondary_color || "#111827")},
-    inputPlaceholder: ${JSON.stringify(chatbot.input_placeholder || "Escribe tu mensaje…")},
-    welcomeMessage: ${JSON.stringify(chatbot.welcome_message || "")}
-  };
-</script>
-<script src="/public/chatbot/embed.js"></script>
+
+<script
+  src="/public/chatbot/embed.js"
+  data-config='${escapeHTML(JSON.stringify(safeConfig))}'
+></script>
+
 </body>
 </html>`);
   } catch (err) {
@@ -302,6 +296,7 @@ exports.renderEmbed = async (req, res) => {
     res.status(500).send("No se pudo cargar el chatbot");
   }
 };
+
 
 /* =======================================================
    4) AGREGAR DOMINIO
