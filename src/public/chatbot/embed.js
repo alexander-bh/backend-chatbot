@@ -283,6 +283,27 @@
         }
     }
 
+    async function restartConversation() {
+        if (!publicId) return;
+
+        // Reset estados
+        SESSION_ID = null;
+        started = false;
+        currentExpectedType = null;
+
+        // Limpiar mensajes
+        elements.messages.innerHTML = "";
+
+        // Deshabilitar input mientras reinicia
+        elements.messageInput.disabled = true;
+        elements.sendBtn.disabled = true;
+
+        // Iniciar nueva conversación
+        started = true;
+        await startConversation();
+    }
+
+
     async function sendMessage(inputOverride = null) {
         const text = inputOverride ?? elements.messageInput.value.trim();
         if (!text || !SESSION_ID) return;
@@ -336,6 +357,7 @@
 
     elements.sendBtn.onclick = () => sendMessage();
 
+
     elements.messageInput.addEventListener("keydown", e => {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
@@ -364,6 +386,10 @@
 
     elements.chatToggle.onclick = toggleChat;
     if (elements.chatClose) elements.chatClose.onclick = toggleChat;
+    if (elements.chatRestart) {
+        elements.chatRestart.onclick = restartConversation;
+    }
+
 
     if (welcomeBubble && !welcomeShown && welcomeMessage) {
         setTimeout(() => {
