@@ -582,17 +582,6 @@
         max-width: 82%;
     }
 
-    /* Alineación automática */
-    .msg.user .message-time {
-        text-align: right;
-        color: #6b7280;
-    }
-
-    .msg.bot .message-time {
-        text-align: left;
-        color: #6b7280;
-    }
-
     .msg.user .bubble,
     .msg.bot .bubble {
         min-height: 40px;
@@ -600,29 +589,18 @@
         align-items: center;
     }
 
-    .msg.bot.error .bubble {
-        background: #ef4444;
-        color: white;
-        border: none;
-    }
-
     .msg.error .bubble {
         background: #ef4444;
-        /* rojo */
-        color: white;
+        color: #fff;
         border: none;
-        border-bottom-left-radius: 6px;
-        border-bottom-right-radius: 6px;
-
+        border-radius: 16px;
         box-shadow:
-            0 4px 12px rgba(239, 68, 68, 0.35),
-            inset 0 1px 2px rgba(255, 255, 255, 0.25);
+            0 4px 12px rgba(239, 68, 68, 0.35);
     }
 
     .msg.error .message-time {
-        color: rgba(255, 255, 255, 0.8);
+        color: rgba(255, 255, 255, 0.85);
     }
-
 
     /* ===============================
     INPUT - MEJORADO
