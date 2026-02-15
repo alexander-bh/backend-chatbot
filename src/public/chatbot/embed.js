@@ -390,7 +390,6 @@
         elements.chatRestart.onclick = restartConversation;
     }
 
-
     if (welcomeBubble && !welcomeShown && welcomeMessage) {
         setTimeout(() => {
             welcomeBubble.querySelector(".welcome-text").textContent = welcomeMessage;
