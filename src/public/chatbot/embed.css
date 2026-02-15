@@ -219,7 +219,7 @@
         width: 380px;
         height: 600px;
         max-height: calc(100vh - 120px);
-        background: rgb(208, 204, 204);
+        background: rgb(120, 117, 117);
         border-radius: 20px;
         visibility: hidden;
         pointer-events: none;
@@ -566,13 +566,13 @@
     .msg.user .message-time {
         color: rgba(255, 255, 255, 0.75);
         text-align: right;
-        color: #2f3136;
+        color: #252629;
     }
 
     .msg.bot .message-time {
         color: rgba(0, 0, 0, 0.45);
         text-align: left;
-        color: #2f3136;
+        color: #252629;
     }
 
     .msg-content {
