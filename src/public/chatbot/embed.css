@@ -219,7 +219,6 @@
         width: 380px;
         height: 600px;
         max-height: calc(100vh - 120px);
-        background: #c8c8c8;
         border-radius: 20px;
         visibility: hidden;
         pointer-events: none;
