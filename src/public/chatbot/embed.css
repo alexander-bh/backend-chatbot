@@ -431,7 +431,6 @@
         display: flex;
         gap: 10px;
         margin-bottom: 20px;
-        align-items: flex-end;
         width: 100%;
         animation: slideIn 0.3s ease;
     }
@@ -502,11 +501,11 @@
 
 
     .msg.bot {
-        justify-content: flex-start;
+        align-items: flex-start;
     }
 
     .msg.user {
-        justify-content: flex-end;
+          align-items: flex-end;
     }
 
     .msg-avatar {
