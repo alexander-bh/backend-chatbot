@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const flowNodeService = require("../services/flowNode.service");
+const flowNodeService = require("../../../services/flowNode.service");
 
 // Crear nodos
 exports.createNode = async (req, res) => {

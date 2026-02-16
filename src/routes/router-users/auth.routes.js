@@ -1,8 +1,8 @@
 const router = require("express").Router();
 const authCtrl = require("../controllers/auth.controller");
-const auth = require("../middlewares/auth.middleware");
-const role = require("../middlewares/role.middleware");
-const { resolveAccount } = require("../middlewares/resolveAccount");
+const auth = require("../../middlewares/auth.middleware");
+const role = require("../../middlewares/role.middleware");
+const { resolveAccount } = require("../../middlewares/resolveAccount");
 const rateLimit = require("express-rate-limit");
 
 // Crear la primera cuenta 

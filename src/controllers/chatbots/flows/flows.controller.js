@@ -1,11 +1,11 @@
 const mongoose = require("mongoose");
-const Flow = require("../models/Flow");
-const Chatbot = require("../models/Chatbot");
-const FlowNode = require("../models/FlowNode");
-const { acquireFlowLock, releaseFlowLock } = require("../utils/flowLock.engine");
-const { getEditableFlow } = require("../utils/flow.utils");
-const { validateFlow } = require("../validators/flow.validator");
-const withTransactionRetry = require("../utils/withTransactionRetry");
+const Flow = require("../../../models/Flow");
+const Chatbot = require("../../../models/Chatbot");
+const FlowNode = require("../../../models/FlowNode");
+const { acquireFlowLock, releaseFlowLock } = require("../../../utils/flowLock.engine");
+const { getEditableFlow } = require("../../../utils/flow.utils");
+const { validateFlow } = require("../../../validators/flow.validator");
+const withTransactionRetry = require("../../../utils/withTransactionRetry");
 
 // Crear flow
 exports.createFlow = async (req, res) => {
