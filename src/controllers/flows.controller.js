@@ -213,9 +213,13 @@ exports.saveFlow = async (req, res) => {
     const validOldIds = new Set();
 
     nodes.forEach(n => {
-      const oldId = String(n._id);
+
+      // Si no viene id, generar uno temporal
+      const oldId = n._id ? String(n._id) : new mongoose.Types.ObjectId().toString();
+
       validOldIds.add(oldId);
       idMap.set(oldId, new mongoose.Types.ObjectId());
+
       n.__old_id = oldId;
     });
 
@@ -282,7 +286,7 @@ exports.saveFlow = async (req, res) => {
           typing_time: node.typing_time ?? 2,
           next_node_id:
             node.next_node_id &&
-            validOldIds.has(String(node.next_node_id))
+              validOldIds.has(String(node.next_node_id))
               ? idMap.get(String(node.next_node_id))
               : null,
           end_conversation: node.end_conversation === true,
@@ -296,7 +300,7 @@ exports.saveFlow = async (req, res) => {
             ...opt,
             next_node_id:
               opt.next_node_id &&
-              validOldIds.has(String(opt.next_node_id))
+                validOldIds.has(String(opt.next_node_id))
                 ? idMap.get(String(opt.next_node_id))
                 : null
           }));
