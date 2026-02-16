@@ -286,7 +286,7 @@ exports.renderEmbed = async (req, res) => {
 
 <script
   src="/public/chatbot/embed.js"
-  data-config='${JSON.stringify(safeConfig)}'
+  data-config='${escapeHTML(JSON.stringify(safeConfig))}'
 ></script>
 
 </body>
