@@ -1,11 +1,11 @@
 const express = require("express");
 const router = express.Router();
 
-const auth = require("../../../middlewares/auth.middleware");
-const role = require("../../../middlewares/role.middleware");
+const auth = require("../middlewares/auth.middleware");
+const role = require("../middlewares/role.middleware");
 
-const flowController = require("../../../controllers/chatbots/flows/flows.controller");
-const flowEdit = require("../../../controllers/chatbots/flows/flowEditor.controller");
+const flowController = require("../controllers/flows.controller");
+const flowEdit = require("../controllers/flowEditor.controller");
 
 const FLOW_ROLE = role("ADMIN", "CLIENT");
 

@@ -1,10 +1,10 @@
 //controllers/publicChatbot.controller
 const mongoose = require("mongoose");
-const ConversationSession = require("../../models/ConversationSession");
-const Flow = require("../../models/Flow");
-const FlowNode = require("../../models/FlowNode");
-const Chatbot = require("../../models/Chatbot");
-const renderNode = require("../../utils/renderNode");
+const ConversationSession = require("../models/ConversationSession");
+const Flow = require("../models/Flow");
+const FlowNode = require("../models/FlowNode");
+const Chatbot = require("../models/Chatbot");
+const renderNode = require("../utils/renderNode");
 const engine = require("./conversationsession.controller");
 
 // controllers/conversation.controller.js

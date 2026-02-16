@@ -1,9 +1,9 @@
 const express = require("express");
 const router = express.Router();
 
-const auth = require("../../../middlewares/auth.middleware");
-const role = require("../../../middlewares/role.middleware");
-const nodeController = require("../../../controllers/chatbots/flows/flownodes.controller");
+const auth = require("../middlewares/auth.middleware");
+const role = require("../middlewares/role.middleware");
+const nodeController = require("../controllers/flownodes.controller");
 
 // Obtener nodos por flow
 router.get(

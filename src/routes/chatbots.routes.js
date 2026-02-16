@@ -1,9 +1,9 @@
 const express = require("express");
 const router = express.Router();
-const chatbotController = require("../../controllers/chatbots/chatbots.controller");
-const auth = require("../../middlewares/auth.middleware");
-const role = require("../../middlewares/role.middleware");
-const conditionalUpload = require("../../middlewares/conditionalUpload.middleware");
+const chatbotController = require("../controllers/chatbots.controller");
+const auth = require("../middlewares/auth.middleware");
+const role = require("../middlewares/role.middleware");
+const conditionalUpload = require("../middlewares/conditionalUpload.middleware");
 
 console.log({
   auth: typeof auth,

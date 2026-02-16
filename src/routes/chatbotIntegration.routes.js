@@ -1,6 +1,6 @@
 const router = require("express").Router();
-const ctrl = require("../../integration/chatbotIntegration.controller");
-const auth = require("../../middlewares/auth.middleware");
+const ctrl = require("../integration/chatbotIntegration.controller");
+const auth = require("../middlewares/auth.middleware");
 
 router.get("/embed/:public_id", ctrl.renderEmbed);
 // INSTALL DEBE SER PÚBLICO
