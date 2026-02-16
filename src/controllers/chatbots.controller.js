@@ -1,13 +1,13 @@
-const Chatbot = require("../../models/Chatbot");
-const Flow = require("../../models/Flow");
-const FlowNode = require("../../models/FlowNode");
+const Chatbot = require("../models/Chatbot");
+const Flow = require("../models/Flow");
+const FlowNode = require("../models/FlowNode");
 const mongoose = require("mongoose");
 const crypto = require("crypto");
-const systemAvatars = require("../../shared/enum/systemAvatars");
+const systemAvatars = require("../shared/enum/systemAvatars");
 const {
   getBaseName,
   generateCopyName
-} = require("../../utils/chatbotName.helper");
+} = require("../utils/chatbotName.helper");
 
 // ═══════════════════════════════════════════════════════════
 // CREAR CHATBOT

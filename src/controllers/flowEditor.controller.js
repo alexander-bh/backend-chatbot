@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
-const Flow = require("../../../models/Flow");
-const FlowNode = require("../../../models/FlowNode");
+const Flow = require("../models/Flow");
+const FlowNode = require("../models/FlowNode");
 
 exports.getFlowEditorData = async (req, res) => {
   try {

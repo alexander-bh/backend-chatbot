@@ -1,8 +1,8 @@
 //public-chatbot.routes
 const express = require("express");
 const router = express.Router();
-const controller = require("../../controllers/chatbots/publicChatbot.controller");
-const publicRateLimit = require("../../middlewares/publicRateLimit"); 
+const controller = require("../controllers/publicChatbot.controller");
+const publicRateLimit = require("../middlewares/publicRateLimit"); 
 
 router.post(
   "/chatbot-conversation/:public_id/start",
