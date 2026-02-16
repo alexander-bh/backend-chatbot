@@ -589,17 +589,15 @@
         align-items: center;
     }
 
-    .msg.error .bubble {
-        background: #ef4444;
-        color: #fff;
-        border: none;
-        border-radius: 16px;
-        box-shadow:
-            0 4px 12px rgba(239, 68, 68, 0.35);
+    .msg.bot.error .bubble {
+        background: #fee2e2;
+        color: #991b1b;
+        border: 2px solid #fecaca;
+        box-shadow: 0 2px 8px rgba(239, 68, 68, 0.15);
     }
 
-    .msg.error .message-time {
-        color: rgba(255, 255, 255, 0.85);
+    .msg.bot.error .message-time {
+        color: rgba(153, 27, 27, 0.7);
     }
 
     /* ===============================
@@ -610,7 +608,7 @@
         align-items: center;
         gap: 8px;
         padding: 8px;
-        border-top: 2px solid #e5e7eb;
+        border-top: 2px solid #232323;
         background: white;
     }
 
@@ -618,8 +616,8 @@
     #messageInput {
         flex: 1;
         padding: 14px 16px;
-        border: 2px solid #e5e7eb;
-        border-radius: 12px;
+        border: 2px solid #19191a;
+        border-radius: 999px;
         outline: none;
         font-size: 14px;
         transition: border-color 0.2s ease, box-shadow 0.2s ease;
