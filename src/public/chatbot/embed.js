@@ -129,13 +129,12 @@
         const msg = document.createElement("div");
         msg.className = `msg ${from}${isError ? " error" : ""}`;
 
-        if (from === "bot" && avatar && !isError) {
+        if (from === "bot" && avatar) {
             const avatarImg = document.createElement("img");
             avatarImg.src = avatar;
             avatarImg.className = "msg-avatar";
             msg.appendChild(avatarImg);
         }
-
         const content = document.createElement("div");
         content.className = "msg-content";
 
@@ -314,7 +313,21 @@
             (currentExpectedType === "number" && !isValidNumber(text));
 
         if (invalid) {
-            addMessage("bot", "El dato ingresado no es válido.", true);
+            let errorMsg = "El dato ingresado no es válido.";
+
+            if (currentExpectedType === "email") {
+                errorMsg = "Ingresa un email válido.";
+            }
+
+            if (currentExpectedType === "phone") {
+                errorMsg = "Ingresa un número de teléfono válido.";
+            }
+
+            if (currentExpectedType === "number") {
+                errorMsg = "Ingresa un número válido.";
+            }
+
+            addMessage("bot", errorMsg, true);
             return;
         }
 
@@ -349,6 +362,7 @@
             addMessage("bot", "Error al procesar tu mensaje.", true);
         }
     }
+
 
 
     /* =========================
