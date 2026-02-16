@@ -1,4 +1,4 @@
-const Account = require("../models/Account");
+const Account = require("../../models/Account");
 
 // Consultar cuenta
 exports.getMyAccount = async (req, res) => {
