@@ -195,8 +195,6 @@ exports.saveFlow = async (req, res) => {
     const account_id = req.user.account_id;
     const user_id = req.user._id || req.user.id;
 
-    /* ================= VALIDACIONES BÁSICAS ================= */
-
     if (!mongoose.Types.ObjectId.isValid(flowId)) {
       throw new Error("flowId inválido");
     }
@@ -206,55 +204,29 @@ exports.saveFlow = async (req, res) => {
     }
 
     if (!Array.isArray(nodes) || nodes.length === 0) {
-      throw new Error("El flujo debe contener al menos un nodo");
+      throw new Error("nodes requeridos");
     }
 
-    /* ================= NORMALIZAR NODOS ================= */
+    if (!mongoose.Types.ObjectId.isValid(start_node_id)) {
+      throw new Error("start_node_id inválido");
+    }
+
+    /* ================= ID MAP ================= */
 
     const idMap = new Map();
     const validOldIds = new Set();
 
-    nodes.forEach((n, index) => {
-      // Permitir ids temporales o generar uno si no existe
-      const oldId = n._id
-        ? String(n._id)
-        : new mongoose.Types.ObjectId().toString();
-
-      n.__old_id = oldId;
+    nodes.forEach(n => {
+      const oldId = String(n._id);
       validOldIds.add(oldId);
-
-      // Generar nuevo ObjectId real para Mongo
       idMap.set(oldId, new mongoose.Types.ObjectId());
-
-      // Forzar orden consistente
-      n.order = index;
-
-      if (!n.node_type) {
-        throw new Error(`Nodo en posición ${index} sin node_type`);
-      }
+      n.__old_id = oldId;
     });
-
-    /* ================= VALIDAR START NODE ================= */
-
-    let finalStartNodeId = start_node_id;
-
-    if (!start_node_id || !validOldIds.has(String(start_node_id))) {
-      // usar el primer nodo por orden
-      const firstNode = nodes
-        .slice()
-        .sort((a, b) => a.order - b.order)[0];
-
-      finalStartNodeId = firstNode.__old_id;
-    }
-
-    /* ================= VALIDAR ESTRUCTURA ================= */
 
     validateFlow(
       nodes.map(n => ({ ...n, _id: n.__old_id })),
-      finalStartNodeId
+      start_node_id
     );
-
-    /* ================= TRANSACTION ================= */
 
     await withTransactionRetry(async session => {
 
@@ -268,7 +240,7 @@ exports.saveFlow = async (req, res) => {
       const flow = await getEditableFlow(flowId, account_id, session);
       const isPublishing = publish === true;
 
-      /* ================= LIMPIAR NODOS ANTERIORES ================= */
+      /* ================= CLEAN ================= */
 
       await FlowNode.deleteMany(
         {
@@ -279,16 +251,16 @@ exports.saveFlow = async (req, res) => {
         { session }
       );
 
-      /* ================= CONSTRUIR DOCUMENTOS ================= */
+      /* ================= INSERT ================= */
 
       const INPUT_NODES = ["text_input", "email", "phone", "number"];
 
-      const docs = nodes.map(node => {
+      const docs = nodes.map((node, index) => {
         const base = {
           _id: idMap.get(node.__old_id),
           flow_id: flowId,
           account_id,
-          order: node.order,
+          order: index,
           node_type: node.node_type,
           content: node.content ?? "",
           typing_time: node.typing_time ?? 2,
@@ -302,7 +274,7 @@ exports.saveFlow = async (req, res) => {
           is_draft: !isPublishing
         };
 
-        /* OPTIONS */
+        /* 🧠 SOLO OPTIONS */
         if (node.node_type === "options") {
           base.options = (node.options ?? []).map(opt => ({
             ...opt,
@@ -314,19 +286,18 @@ exports.saveFlow = async (req, res) => {
           }));
         }
 
-        /* INPUTS */
+        /* 🧠 SOLO INPUTS */
         if (INPUT_NODES.includes(node.node_type)) {
-          base.variable_key = node.variable_key ?? null;
+          base.variable_key = node.variable_key;
           base.validation = node.validation ?? undefined;
           base.crm_field_key = node.crm_field_key ?? undefined;
         }
 
-        /* LINK */
+        /* 🧠 OTROS TIPOS */
         if (node.node_type === "link") {
           base.link_action = node.link_action ?? undefined;
         }
 
-        /* DATA POLICY */
         if (node.node_type === "data_policy") {
           base.policy = node.policy ?? undefined;
         }
@@ -336,10 +307,10 @@ exports.saveFlow = async (req, res) => {
 
       await FlowNode.insertMany(docs, { session });
 
-      /* ================= ACTUALIZAR FLOW ================= */
+      /* ================= FLOW ================= */
 
       flow.chatbot_id = chatbot_id;
-      flow.start_node_id = idMap.get(String(finalStartNodeId));
+      flow.start_node_id = idMap.get(String(start_node_id));
       flow.lock = null;
 
       if (isPublishing) {
@@ -353,7 +324,7 @@ exports.saveFlow = async (req, res) => {
       await flow.save({ session });
     });
 
-    return res.json({
+    res.json({
       success: true,
       message: publish
         ? "Flow publicado correctamente"
@@ -361,15 +332,13 @@ exports.saveFlow = async (req, res) => {
     });
 
   } catch (error) {
-
-    console.error("SAVE FLOW ERROR:", error);
-
-    return res.status(400).json({
+    res.status(400).json({
       success: false,
-      message: error.message || "Error al guardar el flujo"
+      message: error.message
     });
   }
 };
+
 
 /* ===========================================================
    UNLOCK FLOW
