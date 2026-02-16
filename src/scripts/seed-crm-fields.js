@@ -5,10 +5,7 @@ const CRMField = require("../models/CrmField");
 async function seed() {
   try {
     await mongoose.connect(process.env.MONGO_URI);
-    console.log("Mongo conectado");
-
     await CRMField.deleteMany({}); // ⚠️ usar solo en dev
-
     await CRMField.insertMany([
       { key: "last_name", label: "Apellido del Prospecto", is_active: true },
       { key: "job_title", label: "Cargo en la Empresa" , is_active: true },
