@@ -195,6 +195,8 @@ exports.saveFlow = async (req, res) => {
     const account_id = req.user.account_id;
     const user_id = req.user._id || req.user.id;
 
+    /* ================= VALIDACIONES BÁSICAS ================= */
+
     if (!mongoose.Types.ObjectId.isValid(flowId)) {
       throw new Error("flowId inválido");
     }
@@ -204,39 +206,49 @@ exports.saveFlow = async (req, res) => {
     }
 
     if (!Array.isArray(nodes) || nodes.length === 0) {
-      throw new Error("nodes requeridos");
+      throw new Error("El flujo debe contener al menos un nodo");
     }
 
-    /* ================= ID MAP ================= */
+    /* ================= NORMALIZAR NODOS ================= */
 
     const idMap = new Map();
     const validOldIds = new Set();
 
-    nodes.forEach(n => {
-      const oldId = String(n._id);
-      validOldIds.add(oldId);
-      idMap.set(oldId, new mongoose.Types.ObjectId());
+    nodes.forEach((n, index) => {
+      // Permitir ids temporales o generar uno si no existe
+      const oldId = n._id
+        ? String(n._id)
+        : new mongoose.Types.ObjectId().toString();
+
       n.__old_id = oldId;
+      validOldIds.add(oldId);
+
+      // Generar nuevo ObjectId real para Mongo
+      idMap.set(oldId, new mongoose.Types.ObjectId());
+
+      // Forzar orden consistente
+      n.order = index;
+
+      if (!n.node_type) {
+        throw new Error(`Nodo en posición ${index} sin node_type`);
+      }
     });
 
-    /* ================= VALIDACIÓN START NODE ================= */
-
-    if (!nodes.length) {
-      throw new Error("El flujo debe tener al menos un nodo");
-    }
+    /* ================= VALIDAR START NODE ================= */
 
     let finalStartNodeId = start_node_id;
 
-    // Si el nodo inicial fue eliminado o no existe
     if (!start_node_id || !validOldIds.has(String(start_node_id))) {
+      // usar el primer nodo por orden
       const firstNode = nodes
         .slice()
-        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[0];
+        .sort((a, b) => a.order - b.order)[0];
 
       finalStartNodeId = firstNode.__old_id;
     }
 
-    // Validar flujo usando el start corregido
+    /* ================= VALIDAR ESTRUCTURA ================= */
+
     validateFlow(
       nodes.map(n => ({ ...n, _id: n.__old_id })),
       finalStartNodeId
@@ -256,7 +268,7 @@ exports.saveFlow = async (req, res) => {
       const flow = await getEditableFlow(flowId, account_id, session);
       const isPublishing = publish === true;
 
-      /* ================= CLEAN ================= */
+      /* ================= LIMPIAR NODOS ANTERIORES ================= */
 
       await FlowNode.deleteMany(
         {
@@ -267,16 +279,16 @@ exports.saveFlow = async (req, res) => {
         { session }
       );
 
-      /* ================= INSERT ================= */
+      /* ================= CONSTRUIR DOCUMENTOS ================= */
 
       const INPUT_NODES = ["text_input", "email", "phone", "number"];
 
-      const docs = nodes.map((node, index) => {
+      const docs = nodes.map(node => {
         const base = {
           _id: idMap.get(node.__old_id),
           flow_id: flowId,
           account_id,
-          order: index,
+          order: node.order,
           node_type: node.node_type,
           content: node.content ?? "",
           typing_time: node.typing_time ?? 2,
@@ -304,7 +316,7 @@ exports.saveFlow = async (req, res) => {
 
         /* INPUTS */
         if (INPUT_NODES.includes(node.node_type)) {
-          base.variable_key = node.variable_key;
+          base.variable_key = node.variable_key ?? null;
           base.validation = node.validation ?? undefined;
           base.crm_field_key = node.crm_field_key ?? undefined;
         }
@@ -324,7 +336,7 @@ exports.saveFlow = async (req, res) => {
 
       await FlowNode.insertMany(docs, { session });
 
-      /* ================= FLOW UPDATE ================= */
+      /* ================= ACTUALIZAR FLOW ================= */
 
       flow.chatbot_id = chatbot_id;
       flow.start_node_id = idMap.get(String(finalStartNodeId));
@@ -341,7 +353,7 @@ exports.saveFlow = async (req, res) => {
       await flow.save({ session });
     });
 
-    res.json({
+    return res.json({
       success: true,
       message: publish
         ? "Flow publicado correctamente"
@@ -349,9 +361,12 @@ exports.saveFlow = async (req, res) => {
     });
 
   } catch (error) {
-    res.status(400).json({
+
+    console.error("SAVE FLOW ERROR:", error);
+
+    return res.status(400).json({
       success: false,
-      message: error.message
+      message: error.message || "Error al guardar el flujo"
     });
   }
 };
