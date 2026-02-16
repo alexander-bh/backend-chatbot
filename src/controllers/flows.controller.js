@@ -207,10 +207,10 @@ exports.saveFlow = async (req, res) => {
       throw new Error("nodes requeridos");
     }
 
-    if (!mongoose.Types.ObjectId.isValid(start_node_id)) {
-      throw new Error("start_node_id inválido");
+    if (!validOldIds.has(String(start_node_id))) {
+      throw new Error("start_node_id no existe en nodes");
     }
-
+    
     /* ================= ID MAP ================= */
 
     const idMap = new Map();
@@ -266,7 +266,7 @@ exports.saveFlow = async (req, res) => {
           typing_time: node.typing_time ?? 2,
           next_node_id:
             node.next_node_id &&
-            validOldIds.has(String(node.next_node_id))
+              validOldIds.has(String(node.next_node_id))
               ? idMap.get(String(node.next_node_id))
               : null,
           end_conversation: node.end_conversation === true,
@@ -280,7 +280,7 @@ exports.saveFlow = async (req, res) => {
             ...opt,
             next_node_id:
               opt.next_node_id &&
-              validOldIds.has(String(opt.next_node_id))
+                validOldIds.has(String(opt.next_node_id))
                 ? idMap.get(String(opt.next_node_id))
                 : null
           }));
@@ -310,7 +310,7 @@ exports.saveFlow = async (req, res) => {
       /* ================= FLOW ================= */
 
       flow.chatbot_id = chatbot_id;
-      flow.start_node_id = idMap.get(String(start_node_id));
+      flow.start_node_id = idMap.get(String(start_node_id)) || null;
       flow.lock = null;
 
       if (isPublishing) {
@@ -338,7 +338,6 @@ exports.saveFlow = async (req, res) => {
     });
   }
 };
-
 
 /* ===========================================================
    UNLOCK FLOW
