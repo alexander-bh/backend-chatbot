@@ -608,7 +608,7 @@
         align-items: center;
         gap: 8px;
         padding: 8px;
-        border-top: 2px solid #232323;
+        border-top: 2px solid #2f2f2f;
         background: white;
     }
 
@@ -616,7 +616,7 @@
     #messageInput {
         flex: 1;
         padding: 14px 16px;
-        border: 2px solid #19191a;
+        border: 2px solid #2f2f2f;
         border-radius: 999px;
         outline: none;
         font-size: 14px;
