@@ -231,9 +231,10 @@
         opacity: 0;
         transform: translateY(20px) scale(0.95);
 
-        /* Borde más visible */
+        /* Borde más visible 
         border: none;
-        border: 2px solid var(--chat-border);
+        border: 2px solid var(--chat-border);*/
+        border: 2px solid #2f2f2f;
 
         /* Sombras más pronunciadas */
         box-shadow:
