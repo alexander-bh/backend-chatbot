@@ -8,8 +8,7 @@ exports.getEditableFlow = async (
 ) => {
   const query = {
     _id: flow_id,
-    account_id,
-    status: { $in: ["draft", "active"] }
+    account_id
   };
 
   const q = Flow.findOne(query);
@@ -21,7 +20,7 @@ exports.getEditableFlow = async (
   const flow = await q;
 
   if (!flow) {
-    throw new Error("Flow no editable o no autorizado");
+    throw new Error("Flow no encontrado o no autorizado");
   }
 
   return flow;
