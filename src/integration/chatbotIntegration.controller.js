@@ -169,11 +169,11 @@ exports.renderEmbed = async (req, res) => {
       return res.status(404).send("Chatbot no encontrado");
     }
 
-    const allowLocalhost = process.env.NODE_ENV === "development";
+    const isDev = process.env.NODE_ENV === "development";
 
     const allowed =
       chatbot.allowed_domains.some(d => domainMatches(domain, d)) ||
-      (allowLocalhost && isLocalhost(domain));
+      (isDev && isLocalhost(domain));
 
     if (!allowed) {
       return res.status(403).send("Dominio no permitido");
@@ -181,31 +181,36 @@ exports.renderEmbed = async (req, res) => {
 
     const apiOrigin = new URL(getBaseUrl()).origin;
 
-    function stripProtocol(domain) {
-      return domain.replace(/^https?:\/\//, "").replace(/\/$/, "");
-    }
+    const stripProtocol = d =>
+      d.replace(/^https?:\/\//, "").replace(/\/$/, "");
 
-    let frameAncestors;
+    /* =========================
+       ✅ FRAME-ANCESTORS FIX
+    ========================= */
 
-    if (chatbot.allowed_domains.length > 0) {
-      frameAncestors = chatbot.allowed_domains
-        .map(d => {
-          if (isLocalhost(d)) {
-            return "http://localhost:* http://127.0.0.1:* https://localhost:*";
-          }
+    const ancestors = new Set();
 
-          const clean = stripProtocol(d);
-          return `https://${clean} https://*.${clean}`;
-        })
-        .join(" ");
-    } else {
-      // En desarrollo permitir localhost
-      if (process.env.NODE_ENV === "development") {
-        frameAncestors = "http://localhost:* http://127.0.0.1:*";
+    // 1️⃣ Dominios permitidos en DB
+    chatbot.allowed_domains.forEach(d => {
+      if (isLocalhost(d)) {
+        ancestors.add("http://localhost:*");
+        ancestors.add("http://127.0.0.1:*");
+        ancestors.add("https://localhost:*");
       } else {
-        frameAncestors = "'none'";
+        const clean = stripProtocol(d);
+        ancestors.add(`https://${clean}`);
+        ancestors.add(`https://*.${clean}`);
       }
+    });
+
+    // 2️⃣ FORZAR localhost en desarrollo
+    if (isDev) {
+      ancestors.add("http://localhost:*");
+      ancestors.add("http://127.0.0.1:*");
     }
+
+    const frameAncestors =
+      ancestors.size > 0 ? Array.from(ancestors).join(" ") : "'none'";
 
     /* =========================
        CONFIG SEGURA
