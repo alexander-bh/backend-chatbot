@@ -211,8 +211,6 @@ exports.saveFlow = async (req, res) => {
       throw new Error("start_node_id inválido");
     }
 
-    /* ================= ID MAP ================= */
-
     const idMap = new Map();
     const validOldIds = new Set();
 
@@ -241,12 +239,11 @@ exports.saveFlow = async (req, res) => {
       const isPublishing = publish === true;
 
       /* ================= CLEAN ================= */
-
+      // 🔥 Siempre borramos todos los nodos
       await FlowNode.deleteMany(
         {
           flow_id: flowId,
-          account_id,
-          ...(isPublishing ? {} : { is_draft: true })
+          account_id
         },
         { session }
       );
@@ -274,7 +271,6 @@ exports.saveFlow = async (req, res) => {
           is_draft: !isPublishing
         };
 
-        /* 🧠 SOLO OPTIONS */
         if (node.node_type === "options") {
           base.options = (node.options ?? []).map(opt => ({
             ...opt,
@@ -286,14 +282,12 @@ exports.saveFlow = async (req, res) => {
           }));
         }
 
-        /* 🧠 SOLO INPUTS */
         if (INPUT_NODES.includes(node.node_type)) {
           base.variable_key = node.variable_key;
           base.validation = node.validation ?? undefined;
           base.crm_field_key = node.crm_field_key ?? undefined;
         }
 
-        /* 🧠 OTROS TIPOS */
         if (node.node_type === "link") {
           base.link_action = node.link_action ?? undefined;
         }
@@ -313,12 +307,12 @@ exports.saveFlow = async (req, res) => {
       flow.start_node_id = idMap.get(String(start_node_id));
       flow.lock = null;
 
+      // 🔥 El flow siempre queda editable
+      flow.status = "draft";
+
       if (isPublishing) {
-        flow.status = "draft";
         flow.version = (flow.version ?? 0) + 1;
         flow.published_at = new Date();
-      } else {
-        flow.status = "draft";
       }
 
       await flow.save({ session });
@@ -338,6 +332,7 @@ exports.saveFlow = async (req, res) => {
     });
   }
 };
+
 
 // UNLOCK FLOW
 exports.unlockFlow = async (req, res) => {

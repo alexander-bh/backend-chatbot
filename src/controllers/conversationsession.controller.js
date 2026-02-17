@@ -48,8 +48,8 @@ exports.startConversation = async (req, res) => {
       flow = await Flow.findOne({
         chatbot_id,
         account_id: req.user.account_id,
-        status: "draft"
-      });
+        published_at: { $exists: true }
+      }).sort({ version: -1 });
 
     } else {
 
@@ -78,8 +78,10 @@ exports.startConversation = async (req, res) => {
     const startNode = await FlowNode.findOne({
       _id: flow.start_node_id,
       flow_id: flow._id,
-      account_id: req.user.account_id
+      account_id: req.user.account_id,
+      ...(mode === "production" ? { is_draft: false } : {})
     });
+
 
     if (!startNode) {
       return res.status(500).json({ message: "Nodo inicial inválido" });
