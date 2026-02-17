@@ -2,8 +2,8 @@ const router = require("express").Router();
 const ctrl = require("../integration/chatbotIntegration.controller");
 const auth = require("../middlewares/auth.middleware");
 
+//RUTAS PARA LA INSTALCION DEL CHTABOT
 router.get("/embed/:public_id", ctrl.renderEmbed);
-// INSTALL DEBE SER PÚBLICO
 router.get("/:public_id/install", ctrl.getInstallScript);
 //RUTAS PRIVADAS
 router.use(auth);
