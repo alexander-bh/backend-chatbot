@@ -73,6 +73,7 @@ exports.serveWidget = async (req, res) => {
 exports.getInstallScript = async (req, res) => {
   try {
     const { public_id } = req.params;
+    const token = req.query.t;
 
     const chatbot = await Chatbot.findOne({
       public_id,
@@ -82,6 +83,11 @@ exports.getInstallScript = async (req, res) => {
 
     if (!chatbot) {
       return res.status(404).send("// Chatbot no encontrado");
+    }
+
+    // 🔐 VALIDAR TOKEN
+    if (!token || token !== chatbot.install_token) {
+      return res.status(403).send("// Token inválido");
     }
 
     const rawOrigin =
@@ -134,6 +140,7 @@ exports.getInstallScript = async (req, res) => {
 
   document.body.appendChild(iframe);
 })();`);
+
   } catch (err) {
     console.error("INSTALL SCRIPT ERROR:", err);
     res.status(500).send("// Error interno");
@@ -410,21 +417,30 @@ exports.removeAllowedDomain = async (req, res) => {
 exports.InstallationCode = async (req, res) => {
   try {
     const { public_id } = req.params;
+
     const chatbot = await Chatbot.findOne({ public_id });
+
     if (!chatbot) {
       return res.status(404).json({ error: "Chatbot no encontrado" });
     }
-    chatbot.install_token = crypto.randomBytes(32).toString("hex");
-    await chatbot.save();
+
     const baseUrl = getBaseUrl();
-    const script = `<script src="${baseUrl}/api/chatbot-integration/${public_id}/install" async></script>`;
-    res.type("text/plain").send(script);
+
+    const script = `<script src="${baseUrl}/api/chatbot-integration/${public_id}/install?t=${chatbot.install_token}" async></script>`;
+
+    res.json({
+      script,
+      install_token: chatbot.install_token,
+      allowed_domains: chatbot.allowed_domains || [],
+      has_domains: chatbot.allowed_domains.length > 0
+    });
 
   } catch (err) {
     console.error("INSTALL CODE ERROR:", err);
     res.status(500).json({ error: "Error interno" });
   }
 };
+
 
 /* =======================================================
    7) REGENERAR TOKEN DE INSTALACIÓN
