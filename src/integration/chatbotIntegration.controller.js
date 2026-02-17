@@ -185,18 +185,27 @@ exports.renderEmbed = async (req, res) => {
       return domain.replace(/^https?:\/\//, "").replace(/\/$/, "");
     }
 
-    const frameAncestors = chatbot.allowed_domains.length
-      ? chatbot.allowed_domains
-          .map(d => {
-            if (isLocalhost(d)) {
-              return "http://localhost:* http://127.0.0.1:* https://localhost:*";
-            }
+    let frameAncestors;
 
-            const clean = stripProtocol(d);
-            return `https://${clean} https://*.${clean}`;
-          })
-          .join(" ")
-      : "'none'";
+    if (chatbot.allowed_domains.length > 0) {
+      frameAncestors = chatbot.allowed_domains
+        .map(d => {
+          if (isLocalhost(d)) {
+            return "http://localhost:* http://127.0.0.1:* https://localhost:*";
+          }
+
+          const clean = stripProtocol(d);
+          return `https://${clean} https://*.${clean}`;
+        })
+        .join(" ");
+    } else {
+      // En desarrollo permitir localhost
+      if (process.env.NODE_ENV === "development") {
+        frameAncestors = "http://localhost:* http://127.0.0.1:*";
+      } else {
+        frameAncestors = "'none'";
+      }
+    }
 
     /* =========================
        CONFIG SEGURA
@@ -440,7 +449,6 @@ exports.InstallationCode = async (req, res) => {
     res.status(500).json({ error: "Error interno" });
   }
 };
-
 
 /* =======================================================
    7) REGENERAR TOKEN DE INSTALACIÓN
