@@ -7,7 +7,7 @@ router.get("/embed/:public_id", ctrl.renderEmbed);
 router.get("/:public_id/install", ctrl.getInstallScript);
 //RUTAS PRIVADAS
 router.use(auth);
-router.post("/:public_id/send-installation", ctrl.sendInstallationCode);
+router.get("/:public_id/installation", ctrl.InstallationCode);
 router.post("/:public_id/domain/add", ctrl.addAllowedDomain);
 router.delete("/:public_id/domain/remove", ctrl.removeAllowedDomain);
 router.post("/:public_id/token/regenerate", ctrl.regenerateInstallToken);  

@@ -407,7 +407,7 @@ exports.removeAllowedDomain = async (req, res) => {
    6) GENERAR CÓDIGO DE INSTALACIÓN
 ======================================================= */
 
-exports.sendInstallationCode = async (req, res) => {
+exports.InstallationCode = async (req, res) => {
   try {
     const { public_id } = req.params;
     const chatbot = await Chatbot.findOne({ public_id });
