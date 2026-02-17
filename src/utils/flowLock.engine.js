@@ -1,3 +1,4 @@
+// utils/flowLock.js
 const mongoose = require("mongoose");
 const Flow = require("../models/Flow");
 
@@ -15,7 +16,6 @@ const validateIds = ({ flow_id, user_id, account_id }) => {
     throw new Error("user_id inválido");
 };
 
-
 exports.acquireFlowLock = async ({
   flow_id,
   user_id,
@@ -23,41 +23,34 @@ exports.acquireFlowLock = async ({
   session
 }) => {
 
-  validateIds({ flow_id, user_id, account_id });
-
   const now = new Date();
-  const expires = new Date(now.getTime() + LOCK_MINUTES * 60000);
+  const expires = new Date(now.getTime() + 15 * 60000);
 
-  const flow = await Flow.findOne({
-    _id: flow_id,
-    account_id
-  }).session(session);
+  const flow = await Flow.findOneAndUpdate(
+    {
+      _id: flow_id,
+      account_id,
+      $or: [
+        { lock: null },
+        { "lock.lock_expires_at": { $lt: now } },
+        { "lock.locked_by": user_id }
+      ]
+    },
+    {
+      $set: {
+        lock: {
+          locked_by: user_id,
+          locked_at: now,
+          lock_expires_at: expires
+        }
+      }
+    },
+    { new: true, session }
+  );
 
   if (!flow) {
-    throw new Error("Flow no encontrado");
-  }
-
-  const lock = flow.lock || {};
-
-  const lockExpired =
-    !lock.lock_expires_at ||
-    new Date(lock.lock_expires_at) < now;
-
-  const sameUser =
-    lock.locked_by &&
-    String(lock.locked_by) === String(user_id);
-
-  if (lock.locked_by && !lockExpired && !sameUser) {
     throw new Error("Flow bloqueado por otro usuario");
   }
-
-  flow.lock = {
-    locked_by: user_id,
-    locked_at: now,
-    lock_expires_at: expires
-  };
-
-  await flow.save({ session });
 
   return flow;
 };

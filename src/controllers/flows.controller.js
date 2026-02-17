@@ -199,23 +199,41 @@ exports.saveFlow = async (req, res) => {
       throw new Error("flowId inválido");
     }
 
-    if (!mongoose.Types.ObjectId.isValid(chatbot_id)) {
+    if (!chatbot_id) {
       throw new Error("chatbot_id requerido");
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(chatbot_id)) {
+      throw new Error("chatbot_id inválido");
     }
 
     if (!Array.isArray(nodes) || nodes.length === 0) {
       throw new Error("nodes requeridos");
     }
 
-    if (!mongoose.Types.ObjectId.isValid(start_node_id)) {
-      throw new Error("start_node_id inválido");
+    if (!start_node_id) {
+      throw new Error("start_node_id requerido");
     }
 
     const idMap = new Map();
     const validOldIds = new Set();
 
     nodes.forEach(n => {
+
+      if (!n._id) {
+        throw new Error("Nodo sin _id");
+      }
+
+      if (typeof n.order !== "number") {
+        throw new Error(`Nodo sin order válido: ${n._id}`);
+      }
+
       const oldId = String(n._id);
+
+      if (validOldIds.has(oldId)) {
+        throw new Error(`_id duplicado: ${oldId}`);
+      }
+
       validOldIds.add(oldId);
       idMap.set(oldId, new mongoose.Types.ObjectId());
       n.__old_id = oldId;
@@ -238,21 +256,15 @@ exports.saveFlow = async (req, res) => {
       const flow = await getEditableFlow(flowId, account_id, session);
       const isPublishing = publish === true;
 
-      /* ================= CLEAN ================= */
-      // 🔥 Siempre borramos todos los nodos
       await FlowNode.deleteMany(
-        {
-          flow_id: flowId,
-          account_id
-        },
+        { flow_id: flowId, account_id },
         { session }
       );
-
-      /* ================= INSERT ================= */
 
       const INPUT_NODES = ["text_input", "email", "phone", "number"];
 
       const docs = nodes.map((node, index) => {
+
         const base = {
           _id: idMap.get(node.__old_id),
           flow_id: flowId,
@@ -283,6 +295,13 @@ exports.saveFlow = async (req, res) => {
         }
 
         if (INPUT_NODES.includes(node.node_type)) {
+
+          if (!node.variable_key) {
+            throw new Error(
+              `Nodo ${node.node_type} requiere variable_key`
+            );
+          }
+
           base.variable_key = node.variable_key;
           base.validation = node.validation ?? undefined;
           base.crm_field_key = node.crm_field_key ?? undefined;
@@ -301,13 +320,9 @@ exports.saveFlow = async (req, res) => {
 
       await FlowNode.insertMany(docs, { session });
 
-      /* ================= FLOW ================= */
-
       flow.chatbot_id = chatbot_id;
       flow.start_node_id = idMap.get(String(start_node_id));
       flow.lock = null;
-
-      // 🔥 El flow siempre queda editable
       flow.status = "draft";
 
       if (isPublishing) {
@@ -332,6 +347,7 @@ exports.saveFlow = async (req, res) => {
     });
   }
 };
+
 
 
 // UNLOCK FLOW
