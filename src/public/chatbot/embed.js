@@ -129,26 +129,45 @@
     function applyPosition(position) {
         const chatButton = elements.chatToggle;
         const chatWindow = elements.chatWidget;
+        const welcome = elements.welcomeBubble;
 
         if (!chatButton || !chatWindow) return;
 
-        const isTop = position?.includes("top");
-        const isRight = position?.includes("right");
-
-        // Reset limpio
         ["top", "bottom", "left", "right"].forEach(prop => {
             chatButton.style[prop] = "";
             chatWindow.style[prop] = "";
+            if (welcome) welcome.style[prop] = "";
         });
 
-        // Botón flotante
-        chatButton.style[isTop ? "top" : "bottom"] = "20px";
-        chatButton.style[isRight ? "right" : "left"] = "20px";
+        switch (position) {
+            case "bottom-right":
+                chatButton.style.bottom = "20px";
+                chatButton.style.right = "20px";
 
-        // Ventana
-        chatWindow.style[isTop ? "top" : "bottom"] = "90px";
-        chatWindow.style[isRight ? "right" : "left"] = "20px";
+                chatWindow.style.bottom = "90px";
+                chatWindow.style.right = "20px";
+                break;
+
+            case "bottom-left":
+                chatButton.style.bottom = "20px";
+                chatButton.style.left = "20px";
+
+                chatWindow.style.bottom = "90px";
+                chatWindow.style.left = "20px";
+                break;
+
+            case "middle-right":
+                chatButton.style.top = "50%";
+                chatButton.style.right = "20px";
+                chatButton.style.transform = "translateY(-50%)";
+
+                chatWindow.style.top = "50%";
+                chatWindow.style.right = "90px";
+                chatWindow.style.transform = "translateY(-50%)";
+                break;
+        }
     }
+
 
     if (position) {
         applyPosition(position);
@@ -347,7 +366,7 @@
         await startConversation();
     }
 
-   async function sendMessage(inputOverride = null) {
+    async function sendMessage(inputOverride = null) {
         const text = inputOverride ?? elements.messageInput.value.trim();
         if (!text || !SESSION_ID) return;
 

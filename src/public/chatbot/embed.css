@@ -36,7 +36,7 @@
         font-size: 14px;
         font-weight: 500;
         line-height: 1.45;
-
+        pointer-events: auto;
         border-radius: 18px;
         border: 2px solid var(--chat-border);
         border-left: 4px solid var(--chat-primary);
@@ -140,7 +140,6 @@
         position: fixed;
         bottom: 20px;
         right: 20px;
-
         width: 60px;
         height: 60px;
         border-radius: 50%;
@@ -148,7 +147,7 @@
         color: white;
         border: none;
         cursor: pointer;
-
+        pointer-events: auto;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -222,7 +221,7 @@
         background: rgb(120, 117, 117);
         border-radius: 20px;
         visibility: hidden;
-        pointer-events: none;
+        pointer-events: auto;
         display: flex;
         flex-direction: column;
         overflow: hidden;
