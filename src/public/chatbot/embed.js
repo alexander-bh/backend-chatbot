@@ -385,26 +385,29 @@
         elements.messageInput.disabled = true;
         elements.sendBtn.disabled = true;
 
-        if (!requiresInput && !data.completed) {
-            try {
-                const res = await fetch(
-                    `${apiBase}/api/public-chatbot/chatbot-conversation/${data.session_id}/next`,
-                    {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" }
-                    }
-                );
+        try {
+            showTyping();
 
-                if (!res.ok) throw new Error("Request failed");
+            const res = await fetch(
+                `${apiBase}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ input: text })
+                }
+            );
 
-                const json = await res.json();
-                return processNode(json, depth + 1);
+            if (!res.ok) throw new Error("Request failed");
 
-            } catch {
-                addMessage("bot", "Hubo un problema al continuar la conversación.", true);
-            }
+            const data = await res.json();
+
+            removeTyping();
+            await processNode(data);
+
+        } catch {
+            removeTyping();
+            addMessage("bot", "Error al procesar tu mensaje.", true);
         }
-
     }
 
     /* =========================
