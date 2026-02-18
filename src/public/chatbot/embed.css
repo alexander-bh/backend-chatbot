@@ -216,38 +216,15 @@
         position: fixed;
         bottom: 90px;
         right: 20px;
-        width: 380px;
-        height: 600px;
-        max-height: calc(100vh - 120px);
-        background: rgb(120, 117, 117);
+        width: 100%;
+        height: 100%;
+        background: #ffffff;
         border-radius: 20px;
-        visibility: hidden;
-        pointer-events: none;
         display: flex;
         flex-direction: column;
         overflow: hidden;
-        z-index: 10000;
-
-        opacity: 0;
-        transform: translateY(20px) scale(0.95);
-
-        /* Borde más visible */
-        border: none;
-        border: 2px solid var(--chat-border);
-
-        /* Sombras más pronunciadas */
-        box-shadow:
-            0 0 0 1px rgba(0, 0, 0, 0.05),
-            0 4px 6px -1px rgba(0, 0, 0, 0.1),
-            0 10px 30px -5px rgba(0, 0, 0, 0.15),
-            0 20px 40px -10px rgba(0, 0, 0, 0.12);
-
-        transition:
-            opacity 0.25s ease,
-            transform 0.25s ease,
-            box-shadow 0.25s ease,
-            visibility 0s linear 0.25s;
     }
+
 
     .chat-widget.open {
         visibility: visible;
