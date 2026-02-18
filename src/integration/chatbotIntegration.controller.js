@@ -85,7 +85,7 @@ exports.getInstallScript = async (req, res) => {
       return res.status(404).send("// Chatbot no encontrado");
     }
 
-    // 🔐 VALIDAR TOKEN
+    // VALIDAR TOKEN
     if (!token || token !== chatbot.install_token) {
       return res.status(403).send("// Token inválido");
     }
