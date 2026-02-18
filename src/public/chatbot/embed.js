@@ -22,10 +22,7 @@
         primaryColor,
         secondaryColor,
         inputPlaceholder,
-        welcomeMessage,
-        welcomeDelay,
-        showWelcomeOnMobile,
-        position
+        welcomeMessage
     } = config;
 
 
@@ -63,8 +60,6 @@
 
     const welcomeBubble = elements.welcomeBubble;
     let currentExpectedType = null;
-
-
 
     /* =========================
        HELPERS
@@ -125,38 +120,6 @@
 
     elements.messageInput.disabled = true;
     elements.sendBtn.disabled = true;
-
-    function applyPosition(position) {
-        const chatButton = elements.chatToggle;
-        const chatWindow = elements.chatWidget;
-
-        if (!chatButton || !chatWindow) return;
-
-        const isTop = position?.includes("top");
-        const isRight = position?.includes("right");
-
-        // Reset limpio
-        ["top", "bottom", "left", "right"].forEach(prop => {
-            chatButton.style[prop] = "";
-            chatWindow.style[prop] = "";
-        });
-
-        // Botón flotante
-        chatButton.style[isTop ? "top" : "bottom"] = "20px";
-        chatButton.style[isRight ? "right" : "left"] = "20px";
-
-        // Ventana
-        chatWindow.style[isTop ? "top" : "bottom"] = "90px";
-        chatWindow.style[isRight ? "right" : "left"] = "20px";
-    }
-
-    if (position) {
-        applyPosition(position);
-    }
-
-    function isMobile() {
-        return window.matchMedia("(max-width: 480px)").matches;
-    }
 
     /* =========================
        UI HELPERS
@@ -305,21 +268,13 @@
                 { method: "POST" }
             );
 
-            if (!res.ok) throw new Error("Start failed");
-
             const data = await res.json();
-
-            if (!data.session_id) {
-                throw new Error("No session id");
-            }
-
             SESSION_ID = data.session_id;
 
             removeTyping();
             setStatus("En línea");
 
             await processNode(data);
-
         } catch {
             removeTyping();
             setStatus("Error");
@@ -346,6 +301,7 @@
         started = true;
         await startConversation();
     }
+
 
     async function sendMessage(inputOverride = null) {
         const text = inputOverride ?? elements.messageInput.value.trim();
@@ -385,33 +341,36 @@
         elements.messageInput.disabled = true;
         elements.sendBtn.disabled = true;
 
-        if (!requiresInput && !data.completed) {
-            try {
-                const res = await fetch(
-                    `${apiBase}/api/public-chatbot/chatbot-conversation/${data.session_id}/next`,
-                    {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" }
-                    }
-                );
+        try {
+            showTyping();
 
-                if (!res.ok) throw new Error("Request failed");
+            const res = await fetch(
+                `${apiBase}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ input: text })
+                }
+            );
 
-                const json = await res.json();
-                return processNode(json, depth + 1);
+            const data = await res.json();
+            removeTyping();
 
-            } catch {
-                addMessage("bot", "Hubo un problema al continuar la conversación.", true);
-            }
+            await processNode(data);
+        } catch {
+            removeTyping();
+            addMessage("bot", "Error al procesar tu mensaje.", true);
         }
-
     }
+
+
 
     /* =========================
        EVENTS
     ========================= */
 
     elements.sendBtn.onclick = () => sendMessage();
+
 
     elements.messageInput.addEventListener("keydown", e => {
         if (e.key === "Enter" && !e.shiftKey) {
@@ -420,18 +379,16 @@
         }
     });
 
-    const welcomeKey = `chat_welcome_seen_${publicId}`;
-    let welcomeShown = localStorage.getItem(welcomeKey) === "1";
+    let welcomeShown = localStorage.getItem("chat_welcome_seen") === "1";
 
     function toggleChat() {
         isOpen = !isOpen;
-
         elements.chatWidget.classList.toggle("open", isOpen);
         elements.chatToggle.classList.toggle("active", isOpen);
 
         if (isOpen && welcomeBubble) {
             welcomeBubble.classList.remove("show");
-            localStorage.setItem(welcomeKey, "1"); // 👈 FIX SaaS
+            localStorage.setItem("chat_welcome_seen", "1");
             welcomeShown = true;
         }
 
@@ -441,39 +398,17 @@
         }
     }
 
-
     elements.chatToggle.onclick = toggleChat;
     if (elements.chatClose) elements.chatClose.onclick = toggleChat;
     if (elements.chatRestart) {
         elements.chatRestart.onclick = restartConversation;
     }
-    if (!welcomeShown && welcomeMessage) {
-        const delay = (welcomeDelay ?? 2) * 1000;
 
+    if (welcomeBubble && !welcomeShown && welcomeMessage) {
         setTimeout(() => {
-            if (
-                !elements.chatWidget.classList.contains("open") &&
-                (!isMobile() || showWelcomeOnMobile)
-            ) {
-                const textEl = welcomeBubble?.querySelector(".welcome-text");
-
-                if (textEl) {
-                    textEl.textContent = welcomeMessage;
-                }
-
-                if (welcomeBubble) {
-                    welcomeBubble.style.display = "block";
-                }
-
-                localStorage.setItem(welcomeKey, "1");
-                welcomeShown = true;
-            }
-        }, delay);
+            welcomeBubble.querySelector(".welcome-text").textContent = welcomeMessage;
+            welcomeBubble.classList.add("show");
+        }, 1200);
     }
 
-    window.addEventListener("resize", () => {
-        if (position) {
-            applyPosition(position);
-        }
-    });
 })();
