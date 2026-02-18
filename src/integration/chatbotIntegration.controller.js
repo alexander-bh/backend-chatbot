@@ -132,7 +132,7 @@ exports.getInstallScript = async (req, res) => {
       "border:none",
       "z-index:2147483647",
       "background:transparent",
-      "pointer-events:none"
+      "pointer-events:auto"
     ].join(";");
 
 
