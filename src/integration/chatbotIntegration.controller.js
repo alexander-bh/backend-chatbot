@@ -123,17 +123,17 @@ exports.getInstallScript = async (req, res) => {
 
   iframe.src = "${baseUrl}/api/chatbot-integration/embed/${public_id}?d=${safeDomain}";
 
-  iframe.style.cssText = [
-    "position:fixed",
-    "bottom:0",
-    "right:0",
-    "width:420px",
-    "height:700px",
-    "max-height:100vh",
-    "border:none",
-    "z-index:2147483647",
-    "background:transparent"
-  ].join(";");
+    iframe.style.cssText = [
+      "position:fixed",
+      "bottom:0",
+      "right:0",
+      "width:100%",
+      "height:100%",
+      "border:none",
+      "z-index:2147483647",
+      "background:transparent",
+      "pointer-events:none"
+    ].join(";");
 
 
   iframe.sandbox = "allow-scripts allow-same-origin allow-forms allow-modals";
