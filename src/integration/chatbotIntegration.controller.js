@@ -219,8 +219,12 @@ exports.renderEmbed = async (req, res) => {
       primaryColor: chatbot.primary_color || "#2563eb",
       secondaryColor: chatbot.secondary_color || "#111827",
       inputPlaceholder: chatbot.input_placeholder || "Escribe tu mensaje…",
-      welcomeMessage: chatbot.welcome_message || ""
+      welcomeMessage: chatbot.welcome_message || "",
+      welcomeDelay: chatbot.welcome_delay ?? 2,
+      showWelcomeOnMobile: chatbot.show_welcome_on_mobile ?? true,
+      position: chatbot.position || "bottom-right"
     };
+
 
     /* =========================
        HEADERS SEGUROS
