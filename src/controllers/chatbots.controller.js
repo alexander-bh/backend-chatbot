@@ -259,7 +259,7 @@ exports.updateChatbot = async (req, res) => {
     if (position !== undefined) chatbot.position = position;
     if (show_branding !== undefined) chatbot.show_branding = show_branding;
     if (is_enabled !== undefined) chatbot.is_enabled = is_enabled;
-    if (status !== undefined) chatbot.status = (is_enabled !== true)?"deactivate":"active";
+    if (status !== undefined) chatbot.status = status;
 
     // ─────────── AVATAR POR ARCHIVO (upload) ───────────
     if (req.file) {
