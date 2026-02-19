@@ -7,7 +7,6 @@ const { domainMatches } = require("../utils/domainMatch");
 const { normalizeDomain } = require("../utils/domain.utils");
 const { domainExists } = require("../utils/domain.validator");
 
-
 //UTILIDADES
 const escapeHTML = (str = "") =>
   str.replace(/[&<>"']/g, m =>
@@ -317,7 +316,6 @@ exports.renderEmbed = async (req, res) => {
     res.status(500).send("No se pudo cargar el chatbot");
   }
 };
-
 
 /* =======================================================
    4) AGREGAR DOMINIO
