@@ -2,23 +2,10 @@
 const Chatbot = require("../models/Chatbot");
 const crypto = require("crypto");
 const path = require("path");
-const { parseOrigin } = require("../utils/origin.utils");
 const { isLocalhost } = require("../utils/domainValidation");
 const { domainMatches } = require("../utils/domainMatch");
 const { normalizeDomain } = require("../utils/domain.utils");
 const { domainExists } = require("../utils/domain.validator");
-
-//UTILIDADES
-const escapeHTML = (str = "") =>
-  str.replace(/[&<>"']/g, m =>
-    ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#39;"
-    })[m]
-  );
 
 const getBaseUrl = () =>
   process.env.APP_BASE_URL || "https://backend-chatbot-omega.vercel.app";
@@ -50,7 +37,7 @@ exports.serveWidget = async (req, res) => {
       return res.status(403).json({ error: "Dominio no permitido" });
     }
 
-    res.sendFile(path.join(__dirname, "../public/widget.js"));
+    res.sendFile(path.join(__dirname, "../public/views/views"));
 
   } catch (error) {
     console.error("Error serveWidget:", error);
@@ -70,7 +57,6 @@ exports.getInstallScript = async (req, res) => {
       return res.status(404).json({ error: "Chatbot no encontrado" });
     }
 
-    /* 🔐 VALIDAR INSTALL TOKEN */
     if (!req.query.t || req.query.t !== chatbot.install_token) {
       return res.status(403).json({ error: "Token inválido" });
     }
@@ -89,14 +75,16 @@ exports.getInstallScript = async (req, res) => {
       return res.status(403).json({ error: "Dominio no autorizado" });
     }
 
+    const baseUrl = getBaseUrl();
+
     const script = `
-  (function(){
-    var s = document.createElement('script');
-    s.src = '${process.env.APP_DOMAIN}/widget/${chatbot.public_id}?t=${chatbot.install_token}';
-    s.async = true;
-    document.body.appendChild(s);
-  })();
-`;
+      (function(){
+        var s = document.createElement('script');
+        s.src = '${baseUrl}/api/chatbot-integration/widget/${chatbot.public_id}?t=${chatbot.install_token}';
+        s.async = true;
+        document.body.appendChild(s);
+      })();
+    `;
 
     res.setHeader("Content-Type", "application/javascript");
     res.send(script);
@@ -106,6 +94,7 @@ exports.getInstallScript = async (req, res) => {
     res.status(500).json({ error: "Error del servidor" });
   }
 };
+
 
 
 
