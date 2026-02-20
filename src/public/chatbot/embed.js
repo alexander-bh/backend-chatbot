@@ -1,57 +1,51 @@
 (function () {
   "use strict";
 
-  // 🔒 Evita múltiples cargas del widget
+  // Evita doble carga
   if (window.__CHATBOT_WIDGET_LOADED__) return;
   window.__CHATBOT_WIDGET_LOADED__ = true;
 
-  const scriptTag = document.currentScript;
-  if (!scriptTag) {
-    console.error("[Chatbot] No se pudo detectar el script actual.");
-    return;
-  }
+  const script = document.currentScript;
+  if (!script) return;
 
-  const configAttr = scriptTag.getAttribute("data-config");
-  if (!configAttr) {
-    console.error("[Chatbot] Falta data-config.");
+  const configRaw = script.getAttribute("data-config");
+  if (!configRaw) {
+    console.error("[Chatbot] data-config faltante");
     return;
   }
 
   let config;
   try {
-    config = JSON.parse(configAttr);
-  } catch (err) {
-    console.error("[Chatbot] JSON inválido en data-config.");
+    config = JSON.parse(configRaw);
+  } catch {
+    console.error("[Chatbot] data-config inválido");
     return;
   }
 
   const { chatbotId, apiBase } = config;
-
-  // 🔒 Validación básica del apiBase
-  if (!apiBase || typeof apiBase !== "string" || !apiBase.startsWith("http")) {
-    console.error("[Chatbot] apiBase inválido.");
-    return;
-  }
-
-  if (!chatbotId) {
-    console.error("[Chatbot] chatbotId faltante.");
+  if (!chatbotId || !apiBase) {
+    console.error("[Chatbot] Config incompleta");
     return;
   }
 
   // ===============================
-  // 🔐 Utilidad: fetch con timeout
+  // DOM
   // ===============================
-  function fetchWithTimeout(resource, options = {}, timeout = 15000) {
-    return Promise.race([
-      fetch(resource, options),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Request timeout")), timeout)
-      )
-    ]);
+  const chatWidget = document.getElementById("chatWidget");
+  const chatToggle = document.getElementById("chatToggle");
+  const chatClose = document.getElementById("chatClose");
+  const messages = document.getElementById("messages");
+  const input = document.getElementById("messageInput");
+  const sendBtn = document.getElementById("sendBtn");
+  const restartBtn = document.getElementById("chatRestart");
+
+  if (!chatWidget || !chatToggle) {
+    console.error("[Chatbot] DOM incompleto");
+    return;
   }
 
   // ===============================
-  // 📦 Estado
+  // Estado
   // ===============================
   let sessionId = localStorage.getItem("chatbot_session_id");
   if (!sessionId) {
@@ -63,89 +57,123 @@
   let isTyping = false;
 
   // ===============================
-  // 🧱 Crear UI
+  // UI Helpers
   // ===============================
-  const container = document.createElement("div");
-  container.id = "chatbot-widget";
-  container.innerHTML = `
-    <div id="chatbot-button">💬</div>
-    <div id="chatbot-window" style="display:none;">
-      <div id="chatbot-messages"></div>
-      <div id="chatbot-input-area">
-        <input type="text" id="chatbot-input" placeholder="Escribe tu mensaje..." />
-        <button id="chatbot-send">Enviar</button>
+  function openChat() {
+    chatWidget.classList.add("open");
+    chatToggle.classList.add("active");
+    input.focus();
+  }
+
+  function closeChat() {
+    chatWidget.classList.remove("open");
+    chatToggle.classList.remove("active");
+  }
+
+  function scrollBottom() {
+    messages.scrollTop = messages.scrollHeight;
+  }
+
+  function createMessage(type, text) {
+    const msg = document.createElement("div");
+    msg.className = `msg ${type}`;
+
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.textContent = text;
+
+    msg.appendChild(bubble);
+    messages.appendChild(msg);
+    scrollBottom();
+  }
+
+  function showTyping() {
+    if (isTyping) return;
+    isTyping = true;
+
+    const msg = document.createElement("div");
+    msg.className = "msg bot typing";
+    msg.id = "typingIndicator";
+
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+
+    bubble.innerHTML = `
+      <div class="typing-dots">
+        <span></span><span></span><span></span>
       </div>
-    </div>
-  `;
-  document.body.appendChild(container);
+    `;
 
-  const button = document.getElementById("chatbot-button");
-  const windowEl = document.getElementById("chatbot-window");
-  const messagesEl = document.getElementById("chatbot-messages");
-  const inputEl = document.getElementById("chatbot-input");
-  const sendBtn = document.getElementById("chatbot-send");
+    msg.appendChild(bubble);
+    messages.appendChild(msg);
+    scrollBottom();
+  }
 
-  button.addEventListener("click", () => {
-    windowEl.style.display =
-      windowEl.style.display === "none" ? "block" : "none";
-  });
-
-  sendBtn.addEventListener("click", sendMessage);
-  inputEl.addEventListener("keypress", (e) => {
-    if (e.key === "Enter") sendMessage();
-  });
+  function hideTyping() {
+    isTyping = false;
+    const typing = document.getElementById("typingIndicator");
+    if (typing) typing.remove();
+  }
 
   // ===============================
-  // 📨 Enviar mensaje
+  // Fetch con timeout
+  // ===============================
+  function fetchWithTimeout(url, options = {}, timeout = 15000) {
+    return Promise.race([
+      fetch(url, options),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Timeout")), timeout)
+      )
+    ]);
+  }
+
+  // ===============================
+  // Enviar mensaje
   // ===============================
   async function sendMessage() {
-    const message = inputEl.value.trim();
-    if (!message || isTyping) return;
+    const text = input.value.trim();
+    if (!text || isTyping) return;
 
-    appendMessage("user", message);
-    inputEl.value = "";
+    createMessage("user", text);
+    input.value = "";
+
+    showTyping();
 
     try {
-      isTyping = true;
-
       const res = await fetchWithTimeout(
         `${apiBase}/chatbot/${chatbotId}/message`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            message,
+            message: text,
             session_id: sessionId,
             current_node_id: currentNodeId
           })
         }
       );
 
-      if (!res.ok) {
-        throw new Error("Error en respuesta del servidor");
-      }
+      if (!res.ok) throw new Error("Respuesta inválida");
 
       const data = await res.json();
+      hideTyping();
       await processNode(data);
 
     } catch (err) {
-      console.error("[Chatbot] Error enviando mensaje:", err);
-      appendMessage("bot", "⚠️ Ocurrió un error. Intenta nuevamente.");
-    } finally {
-      isTyping = false;
+      hideTyping();
+      console.error(err);
+      createMessage("bot error", "⚠️ Error de conexión. Intenta de nuevo.");
     }
   }
 
   // ===============================
-  // 🔁 Procesar nodo
+  // Procesar flujo
   // ===============================
   async function processNode(data, depth = 0) {
     if (!data || depth > 20) return;
 
     if (data.message) {
-      appendMessage("bot", data.message);
+      createMessage("bot", data.message);
     }
 
     if (data.link_action) {
@@ -155,6 +183,7 @@
     currentNodeId = data.node_id || null;
 
     if (data.next) {
+      showTyping();
       try {
         const res = await fetchWithTimeout(
           `${apiBase}/chatbot/${chatbotId}/next`,
@@ -168,29 +197,35 @@
           }
         );
 
-        if (!res.ok) {
-          throw new Error("Error en next");
-        }
+        if (!res.ok) throw new Error("Error next");
 
         const nextData = await res.json();
+        hideTyping();
         return processNode(nextData, depth + 1);
 
-      } catch (err) {
-        console.error("[Chatbot] Error en next:", err);
+      } catch {
+        hideTyping();
       }
     }
   }
 
   // ===============================
-  // 💬 Agregar mensaje a UI
+  // Eventos
   // ===============================
-  function appendMessage(type, text) {
-    const msg = document.createElement("div");
-    msg.className = `chatbot-message ${type}`;
-    msg.textContent = text;
-    messagesEl.appendChild(msg);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
-  }
+  chatToggle.addEventListener("click", openChat);
+  chatClose.addEventListener("click", closeChat);
 
-  console.log("[Chatbot] Widget cargado correctamente.");
+  sendBtn.addEventListener("click", sendMessage);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") sendMessage();
+  });
+
+  restartBtn.addEventListener("click", () => {
+    messages.innerHTML = "";
+    currentNodeId = null;
+    sessionId = crypto.randomUUID();
+    localStorage.setItem("chatbot_session_id", sessionId);
+  });
+
+  console.log("[Chatbot] Widget listo ✅");
 })();
