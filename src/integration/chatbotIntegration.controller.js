@@ -46,7 +46,7 @@ exports.getInstallScript = async (req, res) => {
   window.__CHATBOT_WIDGET_LOADED__ = true;
 
   var s = document.createElement("script");
-  s.src = "${baseUrl}/public/chatbot/embed.js";
+  s.src = "${baseUrl}/public/chatbot/embed.ejs";
   s.async = true;
 
   s.setAttribute("data-config", '${JSON.stringify({
