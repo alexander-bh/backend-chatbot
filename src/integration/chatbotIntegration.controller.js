@@ -40,24 +40,24 @@ exports.getInstallScript = async (req, res) => {
 
     const baseUrl = getBaseUrl();
 
-    const script = `
+const script = `
 (function(){
   if (window.__CHATBOT_WIDGET_LOADED__) return;
   window.__CHATBOT_WIDGET_LOADED__ = true;
 
   var s = document.createElement("script");
-  s.src = "${baseUrl}/public/chatbot/embed.ejs";
+  s.src = "${baseUrl}/public/chatbot/embed.js";
   s.async = true;
 
   s.setAttribute("data-config", '${JSON.stringify({
-      chatbotId: chatbot.public_id,
-      apiBase: baseUrl,
-      primaryColor: chatbot.primary_color,
-      secondaryColor: chatbot.secondary_color,
-      avatarUrl: chatbot.avatar_url,
-      welcomeMessage: chatbot.welcome_message,
-      position: chatbot.position
-    })}');
+    chatbotId: chatbot.public_id,
+    apiBase: baseUrl,
+    primaryColor: chatbot.primary_color,
+    secondaryColor: chatbot.secondary_color,
+    avatarUrl: chatbot.avatar_url,
+    welcomeMessage: chatbot.welcome_message,
+    position: chatbot.position
+  })}');
 
   document.body.appendChild(s);
 })();
