@@ -47,8 +47,9 @@ exports.serveWidget = async (req, res) => {
   const domainAllowed = chatbot.allowed_domains.some(a =>
     domainMatches(originDomain, a)
   );
+  const isDev = process.env.NODE_ENV !== "production";
 
-  if (!domainAllowed) {
+  if (!domainAllowed && !(isDev && isLocalhost(originDomain))) {
     return res.status(403).json({ error: "Dominio no permitido" });
   }
 
@@ -102,7 +103,7 @@ exports.getInstallScript = async (req, res) => {
 
     const allowed =
       chatbot.allowed_domains.some(d => domainMatches(domain, d)) ||
-      (process.env.NODE_ENV === "development" && isLocalhost(domain));
+      (process.env.NODE_ENV !== "production" && isLocalhost(domain));
 
     if (!allowed) {
       return res.status(403).send("// Dominio no autorizado");
@@ -169,7 +170,7 @@ exports.renderEmbed = async (req, res) => {
       return res.status(404).send("Chatbot no encontrado");
     }
 
-    const allowLocalhost = process.env.NODE_ENV === "development";
+    const allowLocalhost = process.env.NODE_ENV !== "production";
 
     const allowed =
       chatbot.allowed_domains.some(d => domainMatches(domain, d)) ||
