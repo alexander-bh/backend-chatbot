@@ -54,7 +54,7 @@ exports.serveWidget = async (req, res) => {
 
   // 🔐 Validar puerto SOLO en localhost
   if (isLocalhost(originDomain)) {
-    const ALLOWED_PORTS = ["3000", "5500"];
+    const ALLOWED_PORTS = ["3000", "5173"];
 
     if (port && !ALLOWED_PORTS.includes(port)) {
       return res.status(403).json({
