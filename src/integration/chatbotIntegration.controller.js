@@ -1,7 +1,6 @@
 //chatbotIntegration.controller
 const Chatbot = require("../models/Chatbot");
 const crypto = require("crypto");
-const path = require("path");
 const { isLocalhost } = require("../utils/domainValidation");
 const { domainMatches } = require("../utils/domainMatch");
 const { normalizeDomain } = require("../utils/domain.utils");
@@ -37,14 +36,26 @@ exports.serveWidget = async (req, res) => {
       return res.status(403).json({ error: "Dominio no permitido" });
     }
 
-    res.sendFile(path.join(__dirname, "../public/views/embed.ejs"));
+    const safeConfig = {
+      chatbotId: chatbot.public_id,
+      apiBase: getBaseUrl(),
+      primaryColor: chatbot.primary_color || "#2563eb",
+      secondaryColor: chatbot.secondary_color || "#111827",
+      avatarUrl: chatbot.avatar_url || "",
+      welcomeMessage: chatbot.welcome_message || "",
+      position: chatbot.position || "bottom-right",
+    };
+
+    return res.render("embed", {
+      chatbot,
+      safeConfig
+    });
 
   } catch (error) {
     console.error("Error serveWidget:", error);
     res.status(500).json({ error: "Error del servidor" });
   }
 };
-
 
 /* =======================================================
    1) GET INSTALL SCRIPT  → /:public_id/install
@@ -94,71 +105,6 @@ exports.getInstallScript = async (req, res) => {
     res.status(500).json({ error: "Error del servidor" });
   }
 };
-
-
-
-
-/* =======================================================
-   3) RENDER EMBED (HTML)
-======================================================= */
-exports.renderEmbed = async (req, res) => {
-  try {
-    const chatbot = await Chatbot.findOne({ public_id: req.params.publicId });
-
-    if (!chatbot) {
-      return res.status(404).send("Chatbot no encontrado");
-    }
-
-    const isProd = process.env.NODE_ENV === "production";
-    const allowLocalhost = !isProd;
-
-    let allowedOrigins = [];
-
-    chatbot.allowed_domains.forEach(domain => {
-      const clean = normalizeDomain(domain);
-      if (!clean) return;
-
-      allowedOrigins.push(`https://${clean}`);
-      allowedOrigins.push(`https://*.${clean}`);
-
-      if (allowLocalhost && isLocalhost(clean)) {
-        allowedOrigins.push(`http://${clean}`);
-        allowedOrigins.push(`http://${clean}:*`);
-      }
-    });
-
-    const backendHost = normalizeDomain(process.env.APP_DOMAIN || "");
-
-    allowedOrigins = allowedOrigins.filter(origin => {
-      if (!backendHost) return true;
-      return !origin.includes(backendHost);
-    });
-
-    const frameAncestors =
-      allowedOrigins.length > 0
-        ? allowedOrigins.join(" ")
-        : "'none'";
-
-    res.setHeader(
-      "Content-Security-Policy",
-      `frame-ancestors ${frameAncestors}`
-    );
-
-    res.render("embed", {
-      chatbot,
-      primaryColor: chatbot.primary_color || "#2563eb",
-      secondaryColor: chatbot.secondary_color || "#111827",
-      avatarUrl: chatbot.avatar_url || "",
-      welcomeMessage: chatbot.welcome_message || "",
-      position: chatbot.position || "bottom-right"
-    });
-
-  } catch (err) {
-    console.error("RENDER EMBED ERROR:", err);
-    res.status(500).send("No se pudo cargar el chatbot");
-  }
-};
-
 
 /* =======================================================
    4) AGREGAR DOMINIO
