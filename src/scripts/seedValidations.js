@@ -9,7 +9,7 @@ async function seed() {
         console.log("URI usada:", process.env.MONGO_URI);
 
         await mongoose.connect(process.env.MONGO_URI);
-        console.log("✅ Mongo conectado");
+        console.log("Mongo conectado");
 
         const deleted = await ValidationRule.deleteMany({});
         console.log("Eliminados:", deleted.deletedCount);

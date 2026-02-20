@@ -9,19 +9,21 @@ module.exports.domainMatches = (origin, allowed) => {
   origin = origin.toLowerCase();
   allowed = allowed.toLowerCase();
 
-  // Wildcard *.midominio.com
-  if (allowed.startsWith("*.")) {
-    const base = allowed.slice(2);
+  const localAliases = ["localhost", "127.0.0.1", "::1"];
 
-    return (
-      origin === base ||
-      origin.endsWith(`.${base}`)
-    );
+  if (
+    localAliases.includes(origin) &&
+    localAliases.includes(allowed)
+  ) {
+    return true;
   }
 
-  // Dominio exacto
+  if (allowed.startsWith("*.")) {
+    const base = allowed.slice(2);
+    return origin === base || origin.endsWith(`.${base}`);
+  }
+
   if (origin === allowed) return true;
 
-  // Subdominio REAL (evita evil-midominio.com)
   return origin.endsWith(`.${allowed}`);
 };
