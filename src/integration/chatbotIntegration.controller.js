@@ -186,28 +186,32 @@ exports.renderEmbed = async (req, res) => {
       return domain.replace(/^https?:\/\//, "").replace(/\/$/, "");
     }
 
-    let frameAncestors;
+    let frameAncestors = "'none'";
 
-    if (chatbot.allowed_domains.length > 0) {
+    if (process.env.NODE_ENV === "development") {
+      frameAncestors = `
+    http://localhost:*
+    http://127.0.0.1:*
+    https://localhost:*
+    https://127.0.0.1:*
+  `;
+    } else if (chatbot.allowed_domains.length > 0) {
       frameAncestors = chatbot.allowed_domains
         .map(d => {
           if (isLocalhost(d)) {
-            return "http://localhost:* http://127.0.0.1:* https://localhost:*";
+            return `
+          http://localhost:*
+          http://127.0.0.1:*
+          https://localhost:*
+          https://127.0.0.1:*
+        `;
           }
 
           const clean = stripProtocol(d);
           return `https://${clean} https://*.${clean}`;
         })
         .join(" ");
-    } else {
-      // En desarrollo permitir localhost
-      if (process.env.NODE_ENV === "development") {
-        frameAncestors = "http://localhost:* http://127.0.0.1:*";
-      } else {
-        frameAncestors = "'none'";
-      }
     }
-
     /* =========================
        CONFIG SEGURA
     ========================= */
