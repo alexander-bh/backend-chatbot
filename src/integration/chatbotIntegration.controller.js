@@ -188,10 +188,6 @@ exports.renderEmbed = async (req, res) => {
 
     let frameAncestors;
 
-    if (process.env.NODE_ENV === "development") {
-      frameAncestors = "http://localhost:* http://127.0.0.1:* https://localhost:* https://127.0.0.1:*";
-    }
-
     if (chatbot.allowed_domains.length > 0) {
       frameAncestors = chatbot.allowed_domains
         .map(d => {
@@ -206,8 +202,9 @@ exports.renderEmbed = async (req, res) => {
     } else {
       // En desarrollo permitir localhost
       if (process.env.NODE_ENV === "development") {
-        frameAncestors = "http://localhost:* http://127.0.0.1:*";
-      } else {
+        frameAncestors = "http://localhost:* http://127.0.0.1:* https://localhost:* https://127.0.0.1:*";
+      }
+      else {
         frameAncestors = "'none'";
       }
     }
