@@ -4,7 +4,6 @@ const auth = require("../middlewares/auth.middleware");
 
 //RUTAS PARA LA INSTALCION DEL CHTABOT
 router.get("/:public_id/install", ctrl.getInstallScript);
-router.get("/widget/:public_id", ctrl.serveWidget);
 //RUTAS PRIVADAS
 router.use(auth);
 router.get("/:public_id/installation", ctrl.InstallationCode);
