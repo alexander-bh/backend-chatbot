@@ -9,54 +9,6 @@ const { domainExists } = require("../utils/domain.validator");
 const getBaseUrl = () =>
   process.env.APP_BASE_URL || "https://backend-chatbot-omega.vercel.app";
 
-//Extraer dominio y puerto desde Origin
-exports.serveWidget = async (req, res) => {
-  try {
-    const chatbot = await Chatbot.findOne({ public_id: req.params.publicId });
-
-    if (!chatbot) {
-      return res.status(404).json({ error: "Chatbot no encontrado" });
-    }
-
-    if (!req.query.t || req.query.t !== chatbot.install_token) {
-      return res.status(403).json({ error: "Token inválido" });
-    }
-
-    const rawOrigin = req.headers.origin || req.headers.referer || "";
-    const originDomain = normalizeDomain(rawOrigin);
-
-    const isProd = process.env.NODE_ENV === "production";
-    const isDev = !isProd;
-
-    const domainAllowed = chatbot.allowed_domains.some(a =>
-      domainMatches(originDomain, a)
-    );
-
-    if (!domainAllowed && !(isDev && isLocalhost(originDomain))) {
-      return res.status(403).json({ error: "Dominio no permitido" });
-    }
-
-    const safeConfig = {
-      chatbotId: chatbot.public_id,
-      apiBase: getBaseUrl(),
-      primaryColor: chatbot.primary_color || "#2563eb",
-      secondaryColor: chatbot.secondary_color || "#111827",
-      avatarUrl: chatbot.avatar_url || "",
-      welcomeMessage: chatbot.welcome_message || "",
-      position: chatbot.position || "bottom-right",
-    };
-
-    return res.render("embed", {
-      chatbot,
-      safeConfig
-    });
-
-  } catch (error) {
-    console.error("Error serveWidget:", error);
-    res.status(500).json({ error: "Error del servidor" });
-  }
-};
-
 /* =======================================================
    1) GET INSTALL SCRIPT  → /:public_id/install
 ======================================================= */
@@ -89,13 +41,27 @@ exports.getInstallScript = async (req, res) => {
     const baseUrl = getBaseUrl();
 
     const script = `
-      (function(){
-        var s = document.createElement('script');
-        s.src = '${baseUrl}/api/chatbot-integration/widget/${chatbot.public_id}?t=${chatbot.install_token}';
-        s.async = true;
-        document.body.appendChild(s);
-      })();
-    `;
+(function(){
+  if (window.__CHATBOT_WIDGET_LOADED__) return;
+  window.__CHATBOT_WIDGET_LOADED__ = true;
+
+  var s = document.createElement("script");
+  s.src = "${baseUrl}/public/chatbot/embed.js";
+  s.async = true;
+
+  s.setAttribute("data-config", '${JSON.stringify({
+      chatbotId: chatbot.public_id,
+      apiBase: baseUrl,
+      primaryColor: chatbot.primary_color,
+      secondaryColor: chatbot.secondary_color,
+      avatarUrl: chatbot.avatar_url,
+      welcomeMessage: chatbot.welcome_message,
+      position: chatbot.position
+    })}');
+
+  document.body.appendChild(s);
+})();
+`;
 
     res.setHeader("Content-Type", "application/javascript");
     res.send(script);
