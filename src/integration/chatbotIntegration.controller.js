@@ -90,13 +90,13 @@ exports.getInstallScript = async (req, res) => {
     }
 
     const script = `
-      (function(){
-        var s = document.createElement('script');
-        s.src = '${process.env.APP_DOMAIN}/widget/${chatbot.public_id}';
-        s.async = true;
-        document.body.appendChild(s);
-      })();
-    `;
+  (function(){
+    var s = document.createElement('script');
+    s.src = '${process.env.APP_DOMAIN}/widget/${chatbot.public_id}?t=${chatbot.install_token}';
+    s.async = true;
+    document.body.appendChild(s);
+  })();
+`;
 
     res.setHeader("Content-Type", "application/javascript");
     res.send(script);
