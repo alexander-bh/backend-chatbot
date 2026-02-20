@@ -37,7 +37,7 @@ exports.serveWidget = async (req, res) => {
       return res.status(403).json({ error: "Dominio no permitido" });
     }
 
-    res.sendFile(path.join(__dirname, "../public/views/views"));
+    res.sendFile(path.join(__dirname, "../public/views/embed.ejs"));
 
   } catch (error) {
     console.error("Error serveWidget:", error);
