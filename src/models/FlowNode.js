@@ -33,7 +33,7 @@ const OptionSchema = new Schema(
     },
 
     next_branch_id: {
-      type: Schema.Types.ObjectId,
+      type: String,
       default: null
     }
   },
@@ -98,9 +98,8 @@ const FlowNodeSchema = new Schema(
       index: true
     },
 
-    /* 🔥 Rama a la que pertenece el nodo */
     branch_id: {
-      type: Schema.Types.ObjectId,
+      type: String,
       default: null,
       index: true
     },
