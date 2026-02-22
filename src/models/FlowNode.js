@@ -26,14 +26,14 @@ const OptionSchema = new Schema(
     value: { type: String, required: true },
     order: { type: Number, default: 0 },
 
-    next_branch_id: {
-      type: String,
-      default: null
-    },
-    
     next_node_id: {
       type: Schema.Types.ObjectId,
       ref: "FlowNode",
+      default: null
+    },
+
+    next_branch_id: {
+      type: String,
       default: null
     }
   },
