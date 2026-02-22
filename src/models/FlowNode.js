@@ -121,8 +121,8 @@ const FlowNodeSchema = new Schema(
         "text_input",
         "options",
         "jump",
+        "policy",
         "link",
-        "policy"
       ],
       required: true
     },
