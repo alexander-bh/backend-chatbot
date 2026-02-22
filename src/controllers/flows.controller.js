@@ -373,7 +373,7 @@ exports.saveFlow = async (req, res) => {
 
           /* ===== DATA POLICY ===== */
 
-          if (node.node_type === "data_policy") {
+          if (node.node_type === "policy") {
             base.policy = node.policy ?? undefined;
           }
 
