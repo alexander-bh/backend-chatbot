@@ -122,7 +122,7 @@ const FlowNodeSchema = new Schema(
         "options",
         "jump",
         "link",
-        "data_policy"
+        "policy"
       ],
       required: true
     },
