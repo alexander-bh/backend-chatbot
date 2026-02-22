@@ -22,12 +22,18 @@ const LinkActionSchema = new Schema(
 
 const OptionSchema = new Schema(
   {
-    label: String,
-    value: String,
+    label: { type: String, required: true },
+    value: { type: String, required: true },
     order: { type: Number, default: 0 },
+
     next_node_id: {
       type: Schema.Types.ObjectId,
       ref: "FlowNode",
+      default: null
+    },
+
+    next_branch_id: {
+      type: Schema.Types.ObjectId,
       default: null
     }
   },
@@ -41,7 +47,14 @@ const ValidationSchema = new Schema(
       {
         type: {
           type: String,
-          enum: ["required", "min_max", "email", "phone", "integer", "decimal"],
+          enum: [
+            "required",
+            "min_max",
+            "email",
+            "phone",
+            "integer",
+            "decimal"
+          ],
           required: true
         },
         min: Number,
@@ -85,6 +98,13 @@ const FlowNodeSchema = new Schema(
       index: true
     },
 
+    /* 🔥 Rama a la que pertenece el nodo */
+    branch_id: {
+      type: Schema.Types.ObjectId,
+      default: null,
+      index: true
+    },
+
     order: {
       type: Number,
       default: 0,
@@ -109,7 +129,8 @@ const FlowNodeSchema = new Schema(
     },
 
     content: { type: String, default: "" },
-    variable_key: { type: String},
+
+    variable_key: { type: String },
 
     options: {
       type: [OptionSchema],
@@ -173,9 +194,12 @@ const FlowNodeSchema = new Schema(
 // multi-tenant
 FlowNodeSchema.index({ flow_id: 1, account_id: 1 });
 
-// traversal y runtime
+// soporte ramas
+FlowNodeSchema.index({ flow_id: 1, branch_id: 1 });
+
+//orden independiente por rama
 FlowNodeSchema.index(
-  { flow_id: 1, order: 1, is_draft: 1 },
+  { flow_id: 1, branch_id: 1, order: 1, is_draft: 1 },
   { unique: true }
 );
 
@@ -184,6 +208,7 @@ FlowNodeSchema.index({ flow_id: 1, next_node_id: 1 });
 
 // branching options
 FlowNodeSchema.index({ "options.next_node_id": 1 });
+FlowNodeSchema.index({ "options.next_branch_id": 1 });
 
 // notificaciones
 FlowNodeSchema.index({ "meta.notify.enabled": 1 });
