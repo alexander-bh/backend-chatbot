@@ -343,7 +343,7 @@ exports.saveFlow = async (req, res) => {
               ...opt,
               next_node_id:
                 opt.next_node_id &&
-                  validOldIds.has(String(opt.next_node_id))
+                validOldIds.has(String(opt.next_node_id))
                   ? idMap.get(String(opt.next_node_id))
                   : null,
               next_branch_id: opt.next_branch_id ?? null
@@ -388,7 +388,7 @@ exports.saveFlow = async (req, res) => {
       flow.chatbot_id = chatbot_id;
       flow.start_node_id = idMap.get(String(start_node_id));
       flow.lock = null;
-      flow.status = isPublishing ? "published" : "draft";
+      flow.status = "draft";
 
       if (isPublishing) {
         flow.version = (flow.version ?? 0) + 1;
@@ -406,11 +406,9 @@ exports.saveFlow = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("SAVE FLOW ERROR:", error);
     return res.status(400).json({
       success: false,
-      message: error.message,
-      stack: error.stack
+      message: error.message
     });
   }
 };
