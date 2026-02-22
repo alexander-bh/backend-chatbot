@@ -190,12 +190,18 @@ exports.deleteFlow = async (req, res) => {
 exports.saveFlow = async (req, res) => {
   try {
     const flowId = req.params.id;
-    const { nodes, start_node_id, publish = false, chatbot_id } = req.body;
+    const {
+      nodes = [],
+      branches = [],
+      start_node_id,
+      publish = false,
+      chatbot_id
+    } = req.body;
 
     const account_id = req.user.account_id;
     const user_id = req.user._id || req.user.id;
 
-    /* ================= VALIDACIONES BÁSICAS ================= */
+    /* ================= VALIDACIONES ================= */
 
     if (!mongoose.Types.ObjectId.isValid(flowId)) {
       throw new Error("flowId inválido");
@@ -213,19 +219,25 @@ exports.saveFlow = async (req, res) => {
       throw new Error("start_node_id requerido");
     }
 
+    /* ================= UNIFICAR NODOS ================= */
+
+    const allNodes = [
+      ...nodes.map(n => ({ ...n, branch_id: null })),
+      ...branches.flatMap(branch =>
+        (branch.nodes || []).map(n => ({
+          ...n,
+          branch_id: branch.id
+        }))
+      )
+    ];
+
     /* ================= MAPEO DE IDS ================= */
 
     const idMap = new Map();
     const validOldIds = new Set();
 
-    nodes.forEach(n => {
-      if (!n._id) {
-        throw new Error("Nodo sin _id");
-      }
-
-      if (typeof n.order !== "number") {
-        throw new Error(`Nodo sin order válido: ${n._id}`);
-      }
+    allNodes.forEach(n => {
+      if (!n._id) throw new Error("Nodo sin _id");
 
       const oldId = String(n._id);
 
@@ -242,10 +254,10 @@ exports.saveFlow = async (req, res) => {
       throw new Error("start_node_id no existe en nodes");
     }
 
-    /* ================= VALIDACIÓN DE ESTRUCTURA ================= */
+    /* ================= VALIDACIÓN ESTRUCTURAL ================= */
 
     validateFlow(
-      nodes.map(n => ({ ...n, _id: n.__old_id })),
+      allNodes.map(n => ({ ...n, _id: n.__old_id })),
       start_node_id
     );
 
@@ -263,88 +275,111 @@ exports.saveFlow = async (req, res) => {
       const flow = await getEditableFlow(flowId, account_id, session);
       const isPublishing = publish === true;
 
-      /* ===== LIMPIAR NODOS ANTERIORES ===== */
       await FlowNode.deleteMany(
         { flow_id: flowId, account_id },
         { session }
       );
 
-      /* ================= CREAR DOCUMENTOS ================= */
-
       const INPUT_NODES = ["text_input", "email", "phone", "number"];
 
-      const sortedNodes = [...nodes].sort((a, b) => a.order - b.order);
+      /* ================= ORDEN POR RAMA ================= */
 
-      const docs = sortedNodes.map((node, index) => {
+      const groupedByBranch = {};
 
-        const oldId = node.__old_id;
-        const newId = idMap.get(oldId);
-
-        /* ===== AUTO NEXT POR ORDER ===== */
-        let nextNodeId = null;
-
-        if (node.next_node_id && validOldIds.has(String(node.next_node_id))) {
-          nextNodeId = idMap.get(String(node.next_node_id));
-        } else {
-          // Auto-conectar al siguiente por order
-          const nextNode = sortedNodes[index + 1];
-          if (nextNode) {
-            nextNodeId = idMap.get(nextNode.__old_id);
-          }
-        }
-
-        const base = {
-          _id: newId,
-          flow_id: flowId,
-          account_id,
-          order: index,
-          node_type: node.node_type,
-          content: node.content ?? "",
-          typing_time: node.typing_time ?? 2,
-          next_node_id: nextNodeId,
-          end_conversation: node.end_conversation === true,
-          meta: node.meta ?? {},
-          is_draft: !isPublishing
-        };
-
-        /* ===== OPTIONS ===== */
-        if (node.node_type === "options") {
-          base.options = (node.options ?? []).map(opt => ({
-            ...opt,
-            next_node_id:
-              opt.next_node_id &&
-              validOldIds.has(String(opt.next_node_id))
-                ? idMap.get(String(opt.next_node_id))
-                : null
-          }));
-        }
-
-        /* ===== INPUT NODES ===== */
-        if (INPUT_NODES.includes(node.node_type)) {
-
-          if (!node.variable_key) {
-            throw new Error(
-              `Nodo ${node.node_type} requiere variable_key`
-            );
-          }
-
-          base.variable_key = node.variable_key;
-          base.validation = node.validation ?? undefined;
-          base.crm_field_key = node.crm_field_key ?? undefined;
-        }
-
-        /* ===== LINK ===== */
-        if (node.node_type === "link") {
-          base.link_action = node.link_action ?? undefined;
-        }
-
-        /* ===== DATA POLICY ===== */
-        if (node.node_type === "data_policy") {
-          base.policy = node.policy ?? undefined;
-        }
-
-        return base;
+      allNodes.forEach(node => {
+        const key = node.branch_id || "__main__";
+        if (!groupedByBranch[key]) groupedByBranch[key] = [];
+        groupedByBranch[key].push(node);
       });
+
+      const docs = [];
+
+      for (const branchKey in groupedByBranch) {
+
+        const branchNodes = groupedByBranch[branchKey]
+          .sort((a, b) => a.order - b.order);
+
+        branchNodes.forEach((node, index) => {
+
+          const oldId = node.__old_id;
+          const newId = idMap.get(oldId);
+
+          /* ===== RESOLVER NEXT ===== */
+
+          let nextNodeId = null;
+
+          if (
+            node.next_node_id &&
+            validOldIds.has(String(node.next_node_id))
+          ) {
+            nextNodeId = idMap.get(String(node.next_node_id));
+          } else {
+            // auto conectar dentro de la misma rama
+            const nextNode = branchNodes[index + 1];
+            if (nextNode) {
+              nextNodeId = idMap.get(nextNode.__old_id);
+            }
+          }
+
+          const base = {
+            _id: newId,
+            flow_id: flowId,
+            account_id,
+            branch_id: branchKey === "__main__" ? null : branchKey,
+            order: index,
+            node_type: node.node_type,
+            content: node.content ?? "",
+            typing_time: node.typing_time ?? 2,
+            next_node_id: nextNodeId,
+            end_conversation: node.end_conversation === true,
+            meta: node.meta ?? {},
+            is_draft: !isPublishing
+          };
+
+          /* ===== OPTIONS ===== */
+
+          if (node.node_type === "options") {
+            base.options = (node.options ?? []).map(opt => ({
+              ...opt,
+              next_node_id:
+                opt.next_node_id &&
+                validOldIds.has(String(opt.next_node_id))
+                  ? idMap.get(String(opt.next_node_id))
+                  : null,
+              next_branch_id: opt.next_branch_id ?? null
+            }));
+          }
+
+          /* ===== INPUT NODES ===== */
+
+          if (INPUT_NODES.includes(node.node_type)) {
+
+            if (!node.variable_key) {
+              throw new Error(
+                `Nodo ${node.node_type} requiere variable_key`
+              );
+            }
+
+            base.variable_key = node.variable_key;
+            base.validation = node.validation ?? undefined;
+            base.crm_field_key = node.crm_field_key ?? undefined;
+          }
+
+          /* ===== LINK ===== */
+
+          if (node.node_type === "link") {
+            base.link_action = node.link_action ?? undefined;
+          }
+
+          /* ===== DATA POLICY ===== */
+
+          if (node.node_type === "data_policy") {
+            base.policy = node.policy ?? undefined;
+          }
+
+          docs.push(base);
+        });
+      }
 
       await FlowNode.insertMany(docs, { session });
 
