@@ -113,7 +113,7 @@ const FlowNodeSchema = new Schema(
         "text_input",
         "options",
         "jump",
-        "policy_options",
+        "policy",
         "link"
       ],
       required: true
@@ -123,14 +123,14 @@ const FlowNodeSchema = new Schema(
 
     variable_key: { type: String },
 
-    /*OPTIONS (para node_type = options) */
+    /* 🔥 OPTIONS (para node_type = options) */
     options: {
       type: [OptionBaseSchema],
       default: []
     },
 
-    /*POLICY (ahora es ARRAY, igual que options) */
-    policy_options: {
+    /* 🔥 POLICY (ahora es ARRAY, igual que options) */
+    policy: {
       type: [OptionBaseSchema],
       default: []
     },

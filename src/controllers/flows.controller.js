@@ -340,13 +340,13 @@ exports.saveFlow = async (req, res) => {
 
           if (
             node.node_type === "options" ||
-            node.node_type === "policy_options"
+            node.node_type === "policy"
           ) {
 
             const sourceArray =
               node.node_type === "options"
                 ? node.options
-                : node.policy_options;
+                : node.policy;
 
             const mappedOptions = (sourceArray ?? []).map(opt => {
 
@@ -371,7 +371,7 @@ exports.saveFlow = async (req, res) => {
             if (node.node_type === "options") {
               base.options = mappedOptions;
             } else {
-              base.policy_options = mappedOptions;
+              base.policy = mappedOptions;
             }
           }
 
