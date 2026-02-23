@@ -190,6 +190,7 @@ exports.deleteFlow = async (req, res) => {
 exports.saveFlow = async (req, res) => {
   try {
     const flowId = req.params.id;
+
     const {
       nodes = [],
       branches = [],
@@ -256,11 +257,7 @@ exports.saveFlow = async (req, res) => {
 
     /* ================= VALIDACIÓN ESTRUCTURAL ================= */
 
-    validateFlow(
-      nodes,
-      branches,
-      start_node_id
-    );
+    validateFlow(nodes, branches, start_node_id);
 
     /* ================= TRANSACCIÓN ================= */
 
@@ -274,8 +271,10 @@ exports.saveFlow = async (req, res) => {
       });
 
       const flow = await getEditableFlow(flowId, account_id, session);
+
       const isPublishing = publish === true;
 
+      /* ===== BORRAR NODOS ANTERIORES ===== */
       await FlowNode.deleteMany(
         { flow_id: flowId, account_id },
         { session }
@@ -336,12 +335,9 @@ exports.saveFlow = async (req, res) => {
             is_draft: !isPublishing
           };
 
-          /* ===== OPTIONS & POLICY (MISMA LÓGICA) ===== */
+          /* ===== OPTIONS / POLICY ===== */
 
-          if (
-            node.node_type === "options" ||
-            node.node_type === "policy"
-          ) {
+          if (node.node_type === "options" || node.node_type === "policy") {
 
             const sourceArray =
               node.node_type === "options"
@@ -404,10 +400,16 @@ exports.saveFlow = async (req, res) => {
 
       /* ================= ACTUALIZAR FLOW ================= */
 
+      const newStartNodeId = idMap.get(String(start_node_id));
+
+      if (!newStartNodeId || !mongoose.Types.ObjectId.isValid(newStartNodeId)) {
+        throw new Error("start_node_id inválido después del mapeo");
+      }
+
       flow.chatbot_id = chatbot_id;
-      flow.start_node_id = idMap.get(String(start_node_id));
+      flow.start_node_id = newStartNodeId;
       flow.lock = null;
-      flow.status = "draft";
+      flow.status = isPublishing ? "published" : "draft";
 
       if (isPublishing) {
         flow.version = (flow.version ?? 0) + 1;
@@ -425,7 +427,9 @@ exports.saveFlow = async (req, res) => {
     });
 
   } catch (error) {
+
     console.log("🔥 BACKEND ERROR:", error);
+
     return res.status(400).json({
       success: false,
       message: error.message

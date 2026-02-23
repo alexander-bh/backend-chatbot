@@ -17,7 +17,8 @@ const INPUT_NODES = [
   "phone",
   "number",
   "text_input",
-  "options"
+  "options",
+  "policy"
 ];
 
 /* --------------------------------------------------
@@ -48,7 +49,7 @@ exports.startConversation = async (req, res) => {
       flow = await Flow.findOne({
         chatbot_id,
         account_id: req.user.account_id,
-        published_at: { $exists: true }
+        status: "published"
       }).sort({ version: -1 });
 
     } else {
@@ -78,10 +79,8 @@ exports.startConversation = async (req, res) => {
     const startNode = await FlowNode.findOne({
       _id: flow.start_node_id,
       flow_id: flow._id,
-      account_id: req.user.account_id,
-      ...(mode === "production" ? { is_draft: false } : {})
+      account_id: req.user.account_id
     });
-
 
     if (!startNode) {
       return res.status(500).json({ message: "Nodo inicial inválido" });
@@ -126,6 +125,7 @@ exports.nextStep = async (req, res) => {
     const session = await ConversationSession.findById(sessionId);
     if (!session) {
       return res.status(404).json({ message: "Sesión no encontrada" });
+      
     }
 
     if (session.is_completed) {
@@ -174,29 +174,39 @@ exports.nextStep = async (req, res) => {
     }
 
     /* RESOLVE NEXT NODE */
-
     const resolveNextNode = (node) => {
 
+      /* ================= OPTIONS / POLICY ================= */
+
       if (
-        node.node_type === "options" &&
-        Array.isArray(node.options) &&
+        (node.node_type === "options" || node.node_type === "policy") &&
         input !== undefined
       ) {
 
-        const orderedOptions = node.options
-          .slice()
-          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        const sourceArray =
+          node.node_type === "options"
+            ? node.options
+            : node.policy;
 
-        const match = orderedOptions.find((opt, index) =>
-          String(index) === String(input) ||
-          String(opt.value) === String(input) ||
-          String(opt.label || "").toLowerCase() === String(input).toLowerCase()
-        );
+        if (Array.isArray(sourceArray) && sourceArray.length > 0) {
 
-        if (match?.next_node_id) {
-          return nodesMap.get(String(match.next_node_id));
+          const orderedOptions = sourceArray
+            .slice()
+            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+          const match = orderedOptions.find((opt, index) =>
+            String(index) === String(input) ||
+            String(opt.value) === String(input) ||
+            String(opt.label || "").toLowerCase() === String(input).toLowerCase()
+          );
+
+          if (match?.next_node_id) {
+            return nodesMap.get(String(match.next_node_id));
+          }
         }
       }
+
+      /* ================= DEFAULT NEXT ================= */
 
       if (node.next_node_id) {
         return nodesMap.get(String(node.next_node_id));

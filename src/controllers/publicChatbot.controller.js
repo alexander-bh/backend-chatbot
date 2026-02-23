@@ -24,8 +24,8 @@ exports.startConversation = async (req, res) => {
     const flow = await Flow.findOne({
       chatbot_id: chatbot._id,
       account_id: chatbot.account_id,
-      status: "draft"
-    }).sort({ published_at: -1 });
+      status: "published"
+    }).sort({ version: -1 });
 
     if (!flow || !flow.start_node_id) {
       return res.status(404).json({
@@ -36,10 +36,8 @@ exports.startConversation = async (req, res) => {
     const startNode = await FlowNode.findOne({
       _id: flow.start_node_id,
       flow_id: flow._id,
-      account_id: chatbot.account_id,
-      is_draft: false
+      account_id: chatbot.account_id
     });
-
     if (!startNode) {
       return res.status(500).json({
         message: "Nodo inicial inválido"
