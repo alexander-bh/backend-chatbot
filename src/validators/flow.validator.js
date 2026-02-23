@@ -1,5 +1,5 @@
 // utils/validateFlow.js
-exports.validateFlow = function (nodes, branches = [], start_node_id) {
+exports.validateFlow = function (nodes, start_node_id) {
 
   if (!Array.isArray(nodes) || nodes.length === 0) {
     throw new Error("Flow vacío");
@@ -8,29 +8,21 @@ exports.validateFlow = function (nodes, branches = [], start_node_id) {
   const nodeMap = new Map();
   const ids = new Set();
 
-  // 🔥 1️⃣ Unificar todos los nodos (main + ramas)
-  const allNodes = [
-    ...nodes,
-    ...branches.flatMap(b => b.nodes || [])
-  ];
-
-  allNodes.forEach(node => {
+  nodes.forEach(node => {
 
     if (!node._id) {
       throw new Error("Nodo sin _id");
     }
 
-    const id = String(node._id);
-
-    if (ids.has(id)) {
-      throw new Error(`_id duplicado: ${id}`);
+    if (ids.has(String(node._id))) {
+      throw new Error(`_id duplicado: ${node._id}`);
     }
 
-    ids.add(id);
-    nodeMap.set(id, node);
+    ids.add(String(node._id));
+    nodeMap.set(String(node._id), node);
 
     if (typeof node.order !== "number") {
-      throw new Error(`Nodo sin order válido: ${id}`);
+      throw new Error(`Nodo sin order válido: ${node._id}`);
     }
   });
 
@@ -39,8 +31,13 @@ exports.validateFlow = function (nodes, branches = [], start_node_id) {
     throw new Error("start_node_id inválido");
   }
 
+  const sortedNodes = [...nodes].sort((a, b) => a.order - b.order);
+  const indexMap = new Map(
+    sortedNodes.map((n, i) => [String(n._id), i])
+  );
+
   /* VALIDAR SALIDAS */
-  allNodes.forEach(node => {
+  nodes.forEach(node => {
 
     const hasOptionNext =
       Array.isArray(node.options) &&
@@ -51,17 +48,23 @@ exports.validateFlow = function (nodes, branches = [], start_node_id) {
     const isTerminal = node.end_conversation === true;
     const isLink = node.node_type === "link";
 
-    if (!hasNext && !isTerminal && !isLink) {
+    const idx = indexMap.get(String(node._id));
+    const hasOrderFallback =
+      typeof idx === "number" && idx < sortedNodes.length - 1;
+
+    if (!hasNext && !hasOrderFallback && !isTerminal && !isLink) {
       throw new Error(`Nodo sin salida: ${node._id}`);
     }
+  });
 
-    // 🔥 VALIDAR next_node_id
+  /* VALIDAR REFERENCIAS */
+  nodes.forEach(node => {
+
     if (node.next_node_id &&
         !nodeMap.has(String(node.next_node_id))) {
       throw new Error(`next_node_id inválido en ${node._id}`);
     }
 
-    // 🔥 VALIDAR options.next_node_id
     if (Array.isArray(node.options)) {
       node.options.forEach(opt => {
         if (opt.next_node_id &&
