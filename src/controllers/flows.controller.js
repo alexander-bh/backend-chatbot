@@ -374,7 +374,14 @@ exports.saveFlow = async (req, res) => {
           /* ===== DATA POLICY ===== */
 
           if (node.node_type === "policy") {
-            base.policy = node.policy ?? undefined;
+            base.policy = (node.policy ?? []).map(opt => ({
+              ...opt,
+              next_node_id:
+                opt.next_node_id &&
+                  validOldIds.has(String(opt.next_node_id))
+                  ? idMap.get(String(opt.next_node_id))
+                  : null,
+            }));
           }
 
           docs.push(base);

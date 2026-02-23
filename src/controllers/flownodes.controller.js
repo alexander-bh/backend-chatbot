@@ -1,6 +1,21 @@
 const mongoose = require("mongoose");
 const flowNodeService = require("../services/flowNode.service");
 
+
+// Obtener nodos por flow
+exports.getNodesByFlow = async (req, res) => {
+  try {
+    const nodes = await flowNodeService.getNodesByFlow(
+      req.params.flowId,
+      req.user.account_id
+    );
+
+    res.json(nodes);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+};
+
 // Crear nodos
 exports.createNode = async (req, res) => {
   const session = await mongoose.startSession();
@@ -48,20 +63,6 @@ exports.connectNode = async (req, res) => {
 
   } finally {
     session.endSession();
-  }
-};
-
-// Obtener nodos por flow
-exports.getNodesByFlow = async (req, res) => {
-  try {
-    const nodes = await flowNodeService.getNodesByFlow(
-      req.params.flowId,
-      req.user.account_id
-    );
-
-    res.json(nodes);
-  } catch (err) {
-    res.status(400).json({ message: err.message });
   }
 };
 
