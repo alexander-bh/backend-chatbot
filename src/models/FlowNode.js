@@ -4,7 +4,6 @@ const { Schema, model } = require("mongoose");
 
 const PolicySchema = new Schema(
   {
-    required: { type: Boolean, default: true },
     label: { type: String, required: true },
     value: { type: String, required: true },
     order: { type: Number, default: 0 },
@@ -14,6 +13,11 @@ const PolicySchema = new Schema(
       ref: "FlowNode",
       default: null
     },
+
+    next_branch_id: {
+      type: String,
+      default: null
+    }
   },
   { _id: false }
 );
