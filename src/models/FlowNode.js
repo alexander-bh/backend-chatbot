@@ -25,9 +25,10 @@ const OptionBaseSchema = new Schema(
 
 const LinkActionSchema = new Schema(
   {
-    type: { type: String, enum: ["url", "email", "phone", "whatsapp"] },
+    type: { type: String, enum: ["link", "email", "phone", "whatsapp"] },
     title: String,
-    value: String
+    value: String,
+    new_tab: { type: Boolean, default: false }
   },
   { _id: false }
 );
@@ -123,13 +124,11 @@ const FlowNodeSchema = new Schema(
 
     variable_key: { type: String },
 
-    /* 🔥 OPTIONS (para node_type = options) */
     options: {
       type: [OptionBaseSchema],
       default: []
     },
 
-    /* 🔥 POLICY (ahora es ARRAY, igual que options) */
     policy: {
       type: [OptionBaseSchema],
       default: []
@@ -144,6 +143,11 @@ const FlowNodeSchema = new Schema(
     link_action: {
       type: LinkActionSchema,
       default: undefined
+    },
+
+    link_actions: {
+      type: [LinkActionSchema],
+      default: []
     },
 
     typing_time: {
