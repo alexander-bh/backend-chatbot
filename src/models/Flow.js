@@ -21,7 +21,7 @@ const FlowSchema = new Schema(
 
     status: {
       type: String,
-      enum: ["draft", "active", "archived"],
+      enum: ["draft", "published", "archived"],
       default: "draft"
     },
 
