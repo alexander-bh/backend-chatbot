@@ -4,9 +4,7 @@ const { Schema, model } = require("mongoose");
 
 const PolicySchema = new Schema(
   {
-    required: { type: Boolean, default: true },
-    accept_label: { type: String, default: "Aceptar" },
-    reject_label: { type: String, default: "Rechazar" }
+    required: { type: Boolean, default: true }
   },
   { _id: false }
 );
@@ -198,7 +196,7 @@ FlowNodeSchema.index({ flow_id: 1, branch_id: 1 });
 
 //orden independiente por rama
 FlowNodeSchema.index(
-  { flow_id: 1, branch_id: 1, order: 1, is_draft: 1 },
+  { flow_id: 1, branch_id: 1, order: 1 },
   { unique: true }
 );
 
