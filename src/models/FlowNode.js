@@ -41,7 +41,7 @@ const ValidationSchema = new Schema(
           type: String,
           enum: [
             "required",
-            "min_max",
+            "MinMax",
             "email",
             "phone",
             "integer",
