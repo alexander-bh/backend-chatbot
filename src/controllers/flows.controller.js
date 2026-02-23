@@ -381,6 +381,7 @@ exports.saveFlow = async (req, res) => {
                   validOldIds.has(String(opt.next_node_id))
                   ? idMap.get(String(opt.next_node_id))
                   : null,
+              next_branch_id: opt.next_branch_id ?? null
             }));
           }
 
