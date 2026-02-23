@@ -343,7 +343,7 @@ exports.saveFlow = async (req, res) => {
               ...opt,
               next_node_id:
                 opt.next_node_id &&
-                validOldIds.has(String(opt.next_node_id))
+                  validOldIds.has(String(opt.next_node_id))
                   ? idMap.get(String(opt.next_node_id))
                   : null,
               next_branch_id: opt.next_branch_id ?? null
@@ -406,6 +406,7 @@ exports.saveFlow = async (req, res) => {
     });
 
   } catch (error) {
+    console.log("🔥 BACKEND ERROR:", error);
     return res.status(400).json({
       success: false,
       message: error.message
