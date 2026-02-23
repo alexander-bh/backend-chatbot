@@ -257,7 +257,8 @@ exports.saveFlow = async (req, res) => {
     /* ================= VALIDACIÓN ESTRUCTURAL ================= */
 
     validateFlow(
-      allNodes.map(n => ({ ...n, _id: n.__old_id })),
+      nodes,
+      branches,
       start_node_id
     );
 
