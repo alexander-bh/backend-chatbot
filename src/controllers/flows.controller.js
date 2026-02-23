@@ -282,7 +282,7 @@ exports.saveFlow = async (req, res) => {
 
       const INPUT_NODES = ["text_input", "email", "phone", "number"];
 
-      /* ================= ORDEN POR RAMA ================= */
+      /* ================= AGRUPAR POR RAMA ================= */
 
       const groupedByBranch = {};
 
@@ -314,7 +314,6 @@ exports.saveFlow = async (req, res) => {
           ) {
             nextNodeId = idMap.get(String(node.next_node_id));
           } else {
-            // auto conectar dentro de la misma rama
             const nextNode = branchNodes[index + 1];
             if (nextNode) {
               nextNodeId = idMap.get(nextNode.__old_id);
@@ -336,18 +335,43 @@ exports.saveFlow = async (req, res) => {
             is_draft: !isPublishing
           };
 
-          /* ===== OPTIONS ===== */
+          /* ===== OPTIONS & POLICY (MISMA LÓGICA) ===== */
 
-          if (node.node_type === "options") {
-            base.options = (node.options ?? []).map(opt => ({
-              ...opt,
-              next_node_id:
+          if (
+            node.node_type === "options" ||
+            node.node_type === "policy"
+          ) {
+
+            const sourceArray =
+              node.node_type === "options"
+                ? node.options
+                : node.policy;
+
+            const mappedOptions = (sourceArray ?? []).map(opt => {
+
+              let mappedNextNodeId = null;
+
+              if (
                 opt.next_node_id &&
-                  validOldIds.has(String(opt.next_node_id))
-                  ? idMap.get(String(opt.next_node_id))
-                  : null,
-              next_branch_id: opt.next_branch_id ?? null
-            }));
+                validOldIds.has(String(opt.next_node_id))
+              ) {
+                mappedNextNodeId = idMap.get(String(opt.next_node_id));
+              }
+
+              return {
+                label: opt.label,
+                value: opt.value,
+                order: opt.order ?? 0,
+                next_node_id: mappedNextNodeId,
+                next_branch_id: opt.next_branch_id ?? null
+              };
+            });
+
+            if (node.node_type === "options") {
+              base.options = mappedOptions;
+            } else {
+              base.policy = mappedOptions;
+            }
           }
 
           /* ===== INPUT NODES ===== */
@@ -369,20 +393,6 @@ exports.saveFlow = async (req, res) => {
 
           if (node.node_type === "link") {
             base.link_action = node.link_action ?? undefined;
-          }
-
-          /* ===== DATA POLICY ===== */
-
-          if (node.node_type === "policy") {
-            base.policy = (node.policy ?? []).map(opt => ({
-              ...opt,
-              next_node_id:
-                opt.next_node_id &&
-                  validOldIds.has(String(opt.next_node_id))
-                  ? idMap.get(String(opt.next_node_id))
-                  : null,
-              next_branch_id: opt.next_branch_id ?? null
-            }));
           }
 
           docs.push(base);

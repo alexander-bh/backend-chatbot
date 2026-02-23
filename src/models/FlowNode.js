@@ -2,7 +2,8 @@ const { Schema, model } = require("mongoose");
 
 /* ================= SUBSCHEMAS ================= */
 
-const PolicySchema = new Schema(
+// 🔥 Unificamos estructura reutilizable para options y policy
+const OptionBaseSchema = new Schema(
   {
     label: { type: String, required: true },
     value: { type: String, required: true },
@@ -27,26 +28,6 @@ const LinkActionSchema = new Schema(
     type: { type: String, enum: ["url", "email", "phone", "whatsapp"] },
     title: String,
     value: String
-  },
-  { _id: false }
-);
-
-const OptionSchema = new Schema(
-  {
-    label: { type: String, required: true },
-    value: { type: String, required: true },
-    order: { type: Number, default: 0 },
-
-    next_node_id: {
-      type: Schema.Types.ObjectId,
-      ref: "FlowNode",
-      default: null
-    },
-
-    next_branch_id: {
-      type: String,
-      default: null
-    }
   },
   { _id: false }
 );
@@ -133,7 +114,7 @@ const FlowNodeSchema = new Schema(
         "options",
         "jump",
         "policy",
-        "link",
+        "link"
       ],
       required: true
     },
@@ -142,8 +123,15 @@ const FlowNodeSchema = new Schema(
 
     variable_key: { type: String },
 
+    /* 🔥 OPTIONS (para node_type = options) */
     options: {
-      type: [OptionSchema],
+      type: [OptionBaseSchema],
+      default: []
+    },
+
+    /* 🔥 POLICY (ahora es ARRAY, igual que options) */
+    policy: {
+      type: [OptionBaseSchema],
       default: []
     },
 
@@ -155,11 +143,6 @@ const FlowNodeSchema = new Schema(
 
     link_action: {
       type: LinkActionSchema,
-      default: undefined
-    },
-
-    policy: {
-      type: PolicySchema,
       default: undefined
     },
 
@@ -207,7 +190,7 @@ FlowNodeSchema.index({ flow_id: 1, account_id: 1 });
 // soporte ramas
 FlowNodeSchema.index({ flow_id: 1, branch_id: 1 });
 
-//orden independiente por rama
+// orden independiente por rama
 FlowNodeSchema.index(
   { flow_id: 1, branch_id: 1, order: 1 },
   { unique: true }
@@ -219,6 +202,10 @@ FlowNodeSchema.index({ flow_id: 1, next_node_id: 1 });
 // branching options
 FlowNodeSchema.index({ "options.next_node_id": 1 });
 FlowNodeSchema.index({ "options.next_branch_id": 1 });
+
+// branching policy
+FlowNodeSchema.index({ "policy.next_node_id": 1 });
+FlowNodeSchema.index({ "policy.next_branch_id": 1 });
 
 // notificaciones
 FlowNodeSchema.index({ "meta.notify.enabled": 1 });
