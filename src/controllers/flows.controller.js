@@ -389,7 +389,7 @@ exports.saveFlow = async (req, res) => {
           /* ===== LINK ===== */
 
           if (node.node_type === "link") {
-            base.link_action = node.link_action ?? undefined;
+            base.link_actions = node.link_actions ?? undefined;
           }
 
           docs.push(base);
