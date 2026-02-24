@@ -189,6 +189,8 @@
     async function process(node, depth = 0) {
         if (!node || depth > 20) return;
 
+        console.log("NODE COMPLETO:", node);
+
         const nodeType = node.type;
 
         if (node.validation_error) {
