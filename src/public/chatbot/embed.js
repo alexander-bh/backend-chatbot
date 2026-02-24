@@ -91,69 +91,57 @@
        UI
     ========================= */
 
-    function renderLinkActions(actions, bubble) {
-        if (!Array.isArray(actions) || !bubble) return;
+   function renderLinkActions(actions, bubble) {
+    if (!Array.isArray(actions) || !bubble) return;
 
-        const container = document.createElement("div");
-        container.className = "link-actions";
+    const container = document.createElement("div");
+    container.className = "link-actions";
 
-        actions.forEach(action => {
-            const a = document.createElement("a");
-            a.className = `link-action link-${action.type}`;
-            a.textContent = action.title || action.value;
+    actions.forEach(action => {
+        const a = document.createElement("a");
+        a.className = `link-action link-${action.type}`;
+        a.textContent = action.title || action.value;
 
-            let href = "#";
+        switch (action.type) {
+            case "link":
+                a.href = action.value;
+                a.target = action.new_tab ? "_blank" : "_self";
+                break;
 
-            switch (action.type) {
-                case "link":
-                    href = action.value;
-                    break;
+            case "email": {
+                const email = action.value.trim();
+                const subject = encodeURIComponent("Contacto desde el chatbot");
+                const body = encodeURIComponent("Hola, quiero más información.");
 
-                case "email": {
-                    const email = action.value.trim();
-
-                    const subject = encodeURIComponent("Contacto desde el chatbot");
-                    const body = encodeURIComponent("Hola, quiero más información.");
-
-                    a.href = `mailto:${email}?subject=${subject}&body=${body}`;
-                    a.target = "_self";
-                    break;
-                }
-
-                case "phone":
-                    href = `tel:${action.value}`;
-                    break;
-
-                case "whatsapp": {
-                    const phone = action.value.replace(/\D/g, "");
-
-                    // 🇲🇽 fuerza prefijo si no viene
-                    const fullPhone = phone.startsWith("52") ? phone : `52${phone}`;
-
-                    href = `https://wa.me/${fullPhone}`;
-
-                    a.target = "_blank";
-                    a.rel = "noopener noreferrer";
-                    break;
-                }
-
-                default:
-                    return;
+                a.href = `mailto:${email}?subject=${subject}&body=${body}`;
+                a.target = "_self"; // mailto SIEMPRE self
+                break;
             }
 
-            a.href = href;
+            case "phone":
+                a.href = `tel:${action.value}`;
+                a.target = "_self";
+                break;
 
-            // new tab
-            if (action.new_tab) {
-                a.target = "_blank";
+            case "whatsapp": {
+                const phone = action.value.replace(/\D/g, "");
+                const fullPhone = phone.startsWith("52") ? phone : `52${phone}`;
+
+                a.href = `https://wa.me/${fullPhone}`;
+                a.target = "_blank"; // 🔥 obligatorio
                 a.rel = "noopener noreferrer";
+                break;
             }
 
-            container.appendChild(a);
-        });
+            default:
+                return;
+        }
 
-        bubble.appendChild(container);
-    }
+        container.appendChild(a);
+    });
+
+    bubble.appendChild(container);
+}
 
     function message(from, text, error = false) {
         const m = document.createElement("div");
