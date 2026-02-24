@@ -123,26 +123,6 @@
         el.messages.scrollTop = el.messages.scrollHeight;
     }
 
-    function options(list) {
-        const m = document.createElement("div");
-        m.className = "msg bot";
-        const b = document.createElement("div");
-        b.className = "bubble options";
-
-        list.forEach((o, i) => {
-            const btn = document.createElement("button");
-            btn.textContent = o.label;
-            btn.onclick = () => {
-                send(o.value ?? o.label);
-                m.remove();
-            };
-            b.appendChild(btn);
-        });
-
-        m.appendChild(b);
-        el.messages.appendChild(m);
-    }
-
     function typing(show) {
         if (show && !typingElement) {
             typingElement = document.createElement("div");
@@ -221,49 +201,83 @@
             typing(false);
         }
 
-        /* ===== Validation ===== */
         currentValidation = node.validation?.rules?.length
             ? node.validation
             : null;
 
-        /* ===== Mostrar mensaje ===== */
+        let bubbleElement = null;
+
+        /* ===== Crear mensaje ===== */
         if (node.content) {
-            message("bot", node.content);
+            const m = document.createElement("div");
+            m.className = "msg bot";
+
+            const avatarImg = document.createElement("img");
+            avatarImg.src = avatar;
+            avatarImg.className = "msg-avatar";
+
+            const contentWrapper = document.createElement("div");
+            contentWrapper.className = "msg-content";
+
+            const bubble = document.createElement("div");
+            bubble.className = "bubble";
+            bubble.textContent = node.content;
+
+            const timeEl = document.createElement("div");
+            timeEl.className = "message-time";
+            timeEl.textContent = time();
+
+            contentWrapper.append(bubble, timeEl);
+            m.append(avatarImg, contentWrapper);
+
+            el.messages.appendChild(m);
+            el.messages.scrollTop = el.messages.scrollHeight;
+
+            bubbleElement = bubble; // 👈 guardamos referencia
         }
 
-        /* ===== OPTIONS ===== */
-        if (node.type === "options" && Array.isArray(node.options) && node.options.length) {
-            options(node.options);
+        /* ===== OPTIONS / POLICY dentro del mismo bubble ===== */
+        if (
+            (node.type === "options" && node.options?.length) ||
+            (node.type === "policy" && node.policy?.length)
+        ) {
+            const list = node.options || node.policy;
+
+            const optionsContainer = document.createElement("div");
+            optionsContainer.className = "inline-options";
+
+            list.forEach(o => {
+                const btn = document.createElement("button");
+                btn.textContent = o.label;
+                btn.onclick = () => {
+                    send(o.value ?? o.label);
+                };
+                optionsContainer.appendChild(btn);
+            });
+
+            bubbleElement.appendChild(optionsContainer);
+
             el.input.disabled = true;
             el.send.disabled = true;
             return;
         }
 
-        /* ===== POLICY ===== */
-        if (node.type === "policy" && Array.isArray(node.policy) && node.policy.length) {
-            options(node.policy);
-            el.input.disabled = true;
-            el.send.disabled = true;
-            return;
-        }
-
-        /* ===== Auto-next solo si NO requiere input ===== */
+        /* ===== Auto-next ===== */
         if (!node.completed && !INPUT_TYPES.includes(node.type)) {
             const r = await fetch(
                 `${apiBase}/api/public-chatbot/chatbot-conversation/${node.session_id}/next`,
                 { method: "POST" }
             );
-
             const nextNode = await r.json();
             return process(nextNode, depth + 1);
         }
 
-        /* ===== Habilitar input si requiere respuesta ===== */
         if (!node.completed) {
             el.input.disabled = false;
             el.send.disabled = false;
         }
     }
+
     async function start() {
         try {
             typing(true);
