@@ -197,7 +197,7 @@
     async function process(node, depth = 0) {
         if (!node || depth > 20) return;
 
-        const nodeType = node.type;
+        const nodeType = node.node_type;
 
         /* ===== Typing animation ===== */
         if (node.typing_time) {
