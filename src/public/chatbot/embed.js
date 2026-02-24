@@ -191,105 +191,178 @@
                 break;
         }
     }
+
+    function renderOptions(options) {
+        const container = document.createElement("div");
+        container.className = "inline-options";
+
+        options.forEach(opt => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "option-btn";
+            btn.textContent = opt.label;
+
+            btn.onclick = () => {
+                // bloquear múltiples clicks
+                container.querySelectorAll("button").forEach(b => b.disabled = true);
+
+                // mostrar como mensaje usuario
+                message("user", opt.label);
+
+                send(opt.value);
+            };
+
+            container.appendChild(btn);
+        });
+
+        el.messages.appendChild(container);
+        el.messages.scrollTop = el.messages.scrollHeight;
+    }
+
+    function renderPolicy(policy) {
+        const container = document.createElement("div");
+        container.className = "inline-options";
+
+        policy.forEach(opt => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "option-btn policy-btn";
+            btn.textContent = opt.label;
+
+            btn.onclick = () => {
+                container.querySelectorAll("button").forEach(b => b.disabled = true);
+
+                message("user", opt.label);
+
+                send(opt.value);
+            };
+
+            container.appendChild(btn);
+        });
+
+        el.messages.appendChild(container);
+        el.messages.scrollTop = el.messages.scrollHeight;
+    }
+
+    function renderLinkActions(actions) {
+        const container = document.createElement("div");
+        container.className = "inline-options";
+
+        actions.forEach(action => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "option-btn link-btn";
+            btn.textContent = action.label;
+
+            btn.onclick = () => {
+                if (action.url) {
+                    window.open(action.url, "_blank");
+                }
+
+                if (action.value) {
+                    message("user", action.label);
+                    send(action.value);
+                }
+            };
+
+            container.appendChild(btn);
+        });
+
+        el.messages.appendChild(container);
+        el.messages.scrollTop = el.messages.scrollHeight;
+    }
+
+    async function nextStep() {
+        if (!SESSION_ID) return;
+
+        typing(true);
+
+        try {
+            const r = await fetch(
+                `${apiBase}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({})
+                }
+            );
+
+            typing(false);
+
+            const data = await r.json();
+            process(data);
+
+        } catch {
+            typing(false);
+            message("bot", "Error al continuar la conversación", true);
+        }
+    }
+
     /* =========================
        FLOW
     ========================= */
-    async function process(node, depth = 0) {
-        if (!node || depth > 20) return;
+    function process(node) {
+        if (!node) return;
 
-        const nodeType = node.type || node.node_type;
+        const nodeType = node.type;
 
-        /* ===== Typing animation ===== */
-        if (node.typing_time) {
-            typing(true);
-            await new Promise(r => setTimeout(r, node.typing_time * 1000));
-            typing(false);
+        /* ================= RESET UI STATE ================= */
+
+        // eliminar opciones anteriores
+        document.querySelectorAll(".inline-options").forEach(el => el.remove());
+
+        // limpiar estado
+        el.input.value = "";
+        el.input.disabled = true;
+        el.send.disabled = true;
+        el.input.style.pointerEvents = "auto";
+
+        currentValidation = null;
+
+        /* ================= VALIDATION ================= */
+
+        if (node.validation?.rules?.length) {
+            currentValidation = node.validation;
         }
 
-        /* ===== Guardar validación ===== */
-        currentValidation = node.validation?.rules?.length
-            ? node.validation
-            : null;
+        /* ================= NODE TYPE DETECTION ================= */
 
-        let bubbleElement = null;
+        const TEXT_INPUT_TYPES = [
+            "question",
+            "email",
+            "phone",
+            "number",
+            "text_input"
+        ];
 
-        /* ===== Crear mensaje bot ===== */
-        if (node.content) {
-            const m = document.createElement("div");
-            m.className = "msg bot";
+        const isInputNode = TEXT_INPUT_TYPES.includes(nodeType);
+        const isOptionsNode = nodeType === "options";
+        const isPolicyNode = nodeType === "policy";
+        const isLinkNode = nodeType === "link";
 
-            const avatarImg = document.createElement("img");
-            avatarImg.src = avatar;
-            avatarImg.className = "msg-avatar";
+        /* ================= OPTIONS ================= */
 
-            const contentWrapper = document.createElement("div");
-            contentWrapper.className = "msg-content";
-
-            const bubble = document.createElement("div");
-            bubble.className = "bubble";
-            bubble.innerHTML = node.content;
-
-            const timeEl = document.createElement("div");
-            timeEl.className = "message-time";
-            timeEl.textContent = time();
-
-            contentWrapper.append(bubble, timeEl);
-            m.append(avatarImg, contentWrapper);
-            el.messages.appendChild(m);
-
-            el.messages.scrollTop = el.messages.scrollHeight;
-
-            bubbleElement = bubble;
-        }
-
-        /* ===== OPTIONS / POLICY ===== */
-        if (
-            (nodeType === "options" && node.options?.length) ||
-            (nodeType === "policy" && node.policy?.length)
-        ) {
-            const list =
-                nodeType === "policy"
-                    ? node.policy
-                    : node.options;
-
-            const optionsContainer = document.createElement("div");
-            optionsContainer.className = "inline-options";
-
-            list.forEach(o => {
-                const btn = document.createElement("button");
-                btn.textContent = o.label;
-                btn.onclick = () => {
-                    el.input.disabled = true;
-                    el.send.disabled = true;
-                    send(o.value ?? o.label);
-                };
-                optionsContainer.appendChild(btn);
-            });
-
-            bubbleElement?.appendChild(optionsContainer);
-
-            el.input.disabled = true;
-            el.send.disabled = true;
-            console.log(nodeType, list);
+        if (isOptionsNode && Array.isArray(node.options)) {
+            renderOptions(node.options);
             return;
         }
 
-        /* ===== NODOS QUE ESPERAN INTERACCIÓN ===== */
-        const isInputNode =
-            TEXT_INPUT_TYPES.includes(nodeType) ||
-            !!node.validation?.rules?.length;
+        /* ================= POLICY ================= */
 
-        const isSelectableNode =
-            nodeType === "options" || nodeType === "policy";
-
-        // 🔒 options / policy → siempre esperan botón
-        if (isSelectableNode) {
-            el.input.disabled = true;
-            el.send.disabled = true;
+        if (isPolicyNode && Array.isArray(node.policy)) {
+            renderPolicy(node.policy);
             return;
         }
 
-        // ⌨️ nodos de texto → habilitan input
+        /* ================= LINK ================= */
+
+        if (isLinkNode && Array.isArray(node.link_actions)) {
+            renderLinkActions(node.link_actions);
+            return;
+        }
+
+        /* ================= INPUT NODES ================= */
+
         if (isInputNode) {
             el.input.disabled = false;
             el.send.disabled = false;
@@ -297,22 +370,12 @@
             return;
         }
 
-        /* ===== SOLO AUTO NEXT SI ES NODO INFORMATIVO ===== */
-        try {
-            const r = await fetch(
-                `${apiBase}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`,
-                { method: "POST" }
-            );
+        /* ================= AUTO ADVANCE ================= */
 
-            const nextNode = await r.json();
-
-            if (nextNode?.completed) return;
-
-            return process(nextNode, depth + 1);
-
-        } catch (err) {
-            message("bot", "Ocurrió un error al continuar el flujo.", true);
-        }
+        // nodos informativos (text, media, etc)
+        setTimeout(() => {
+            nextStep();
+        }, node.typing_time || 500);
     }
 
     async function start() {
