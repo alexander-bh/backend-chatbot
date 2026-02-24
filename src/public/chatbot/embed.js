@@ -194,20 +194,23 @@
     async function process(node, depth = 0) {
         if (!node || depth > 20) return;
 
-        /* ===== Typing ===== */
+        const nodeType = node.type;
+
+        /* ===== Typing animation ===== */
         if (node.typing_time) {
             typing(true);
             await new Promise(r => setTimeout(r, node.typing_time * 1000));
             typing(false);
         }
 
+        /* ===== Guardar validación ===== */
         currentValidation = node.validation?.rules?.length
             ? node.validation
             : null;
 
         let bubbleElement = null;
 
-        /* ===== Crear mensaje ===== */
+        /* ===== Crear mensaje bot ===== */
         if (node.content) {
             const m = document.createElement("div");
             m.className = "msg bot";
@@ -229,17 +232,19 @@
 
             contentWrapper.append(bubble, timeEl);
             m.append(avatarImg, contentWrapper);
-
             el.messages.appendChild(m);
+
             el.messages.scrollTop = el.messages.scrollHeight;
 
-            bubbleElement = bubble; // 👈 guardamos referencia
+            bubbleElement = bubble;
         }
 
-        /* ===== OPTIONS / POLICY dentro del mismo bubble ===== */
+        /* =====================================================
+           ===== OPTIONS / POLICY  =====
+        ===================================================== */
         if (
-            (node.type === "options" && node.options?.length) ||
-            (node.type === "policy" && node.policy?.length)
+            (nodeType === "options" && node.options?.length) ||
+            (nodeType === "policy" && node.policy?.length)
         ) {
             const list = node.options || node.policy;
 
@@ -250,31 +255,44 @@
                 const btn = document.createElement("button");
                 btn.textContent = o.label;
                 btn.onclick = () => {
+                    el.input.disabled = true;
+                    el.send.disabled = true;
                     send(o.value ?? o.label);
                 };
                 optionsContainer.appendChild(btn);
             });
 
-            bubbleElement.appendChild(optionsContainer);
+            bubbleElement?.appendChild(optionsContainer);
 
             el.input.disabled = true;
             el.send.disabled = true;
-            return;
+            return; // NO auto-next
         }
 
-        /* ===== Auto-next ===== */
-        if (!node.completed && !INPUT_TYPES.includes(node.type)) {
+        /* =====================================================
+           ===== INPUT TYPES =====
+        ===================================================== */
+        if (INPUT_TYPES.includes(nodeType)) {
+            el.input.disabled = false;
+            el.send.disabled = false;
+            el.input.focus();
+            return; // Espera respuesta usuario
+        }
+
+        /* =====================================================
+           ===== AUTO NEXT (nodos informativos, link, etc.) =====
+        ===================================================== */
+        try {
             const r = await fetch(
                 `${apiBase}/api/public-chatbot/chatbot-conversation/${node.session_id}/next`,
                 { method: "POST" }
             );
+
             const nextNode = await r.json();
             return process(nextNode, depth + 1);
-        }
 
-        if (!node.completed) {
-            el.input.disabled = false;
-            el.send.disabled = false;
+        } catch (err) {
+            message("bot", "Ocurrió un error al continuar el flujo.", true);
         }
     }
 
