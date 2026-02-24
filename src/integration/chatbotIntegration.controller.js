@@ -132,6 +132,8 @@ exports.getInstallScript = async (req, res) => {
       "z-index:2147483647",
       "background:transparent",
     ].join(";");
+    document.getElementById("messageInput").disabled
+    getComputedStyle(document.getElementById("messageInput")).pointerEvents
 
   iframe.sandbox = "allow-scripts allow-same-origin allow-forms allow-modals";
   iframe.setAttribute("allow", "clipboard-write");
