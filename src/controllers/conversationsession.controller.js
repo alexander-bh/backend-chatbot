@@ -133,8 +133,8 @@ exports.nextStep = async (req, res) => {
     if (!currentNode) {
       throw new Error("Nodo actual no encontrado");
     }
-
     /* ================= INPUT PROCESSING ================= */
+    /* ================= BLOCK AUTO ADVANCE FOR INPUT NODES ================= */
 
     const TEXT_INPUT_NODES = [
       "question",
@@ -146,28 +146,9 @@ exports.nextStep = async (req, res) => {
 
     if (
       TEXT_INPUT_NODES.includes(currentNode.node_type) &&
-      input !== undefined
+      input === undefined
     ) {
-      const errors = validateNodeInput(currentNode, input);
-
-      if (errors.length > 0) {
-        return res.json({
-          session_id: session._id,
-          node_id: currentNode._id,
-          type: currentNode.node_type,
-          content: errors[0],
-          typing_time: 1,
-          completed: false,
-          is_error: true
-        });
-      }
-
-      if (session.mode === "production" && currentNode.variable_key) {
-        session.variables[currentNode.variable_key] = String(input);
-        session.markModified("variables");
-      }
-
-      await session.save();
+      return res.json(renderNode(currentNode, session._id));
     }
 
     /* ================= NEXT NODE RESOLUTION ================= */
