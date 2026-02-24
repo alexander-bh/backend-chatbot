@@ -24,7 +24,6 @@
     const TEXT_INPUT_TYPES = [
         "question",
         "email",
-        "text",
         "phone",
         "number",
         "text_input"
