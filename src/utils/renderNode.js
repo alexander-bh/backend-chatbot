@@ -31,7 +31,7 @@ module.exports = function renderNode(node, session_id) {
 
   /* ===== LINK ===== */
   if (node.node_type === "link") {
-    payload.link_action = node.link_action;
+    payload.link_actions = node.link_actions || [];
   }
 
   /* ===== INPUT TYPES ===== */

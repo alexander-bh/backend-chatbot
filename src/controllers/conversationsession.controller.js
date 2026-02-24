@@ -136,19 +136,25 @@ exports.nextStep = async (req, res) => {
 
     /* ================= INPUT PROCESSING ================= */
 
-    const INPUT_NODES = [
+    const TEXT_INPUT_NODES = [
       "question",
       "email",
       "phone",
       "number",
-      "text_input",
+      "text_input"
+    ];
+
+    const SELECTABLE_NODES = [
       "options",
       "policy"
     ];
 
-    const requiresInput = INPUT_NODES.includes(currentNode.node_type);
+    /* ===== TEXT INPUT VALIDATION ===== */
 
-    if (requiresInput) {
+    if (
+      TEXT_INPUT_NODES.includes(currentNode.node_type) &&
+      input !== undefined
+    ) {
       const errors = validateNodeInput(currentNode, input);
 
       if (errors.length > 0) {
@@ -185,35 +191,19 @@ exports.nextStep = async (req, res) => {
             ? node.options
             : node.policy;
 
-        const ordered = sourceArray
-          .slice()
-          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-
-        const match = ordered.find((opt, index) =>
-          String(index) === String(input) ||
+        const match = sourceArray.find(opt =>
           String(opt.value) === String(input) ||
-          String(opt.label || "").toLowerCase() ===
-          String(input).toLowerCase()
+          String(opt.label) === String(input) ||
+          String(sourceArray.indexOf(opt)) === String(input)
         );
 
         if (!match) return null;
 
-        // 🔥 PRIORIDAD 1: next_node_id directo
         if (match.next_node_id) {
           return nodesMap.get(String(match.next_node_id));
         }
 
-        // 🔥 PRIORIDAD 2: next_branch_id
-        if (match.next_branch_id) {
-          const branchStart = nodes.find(n =>
-            n.branch_id === match.next_branch_id &&
-            n.order === 0
-          );
-
-          if (branchStart) {
-            return branchStart;
-          }
-        }
+        return null;
       }
 
       if (node.next_node_id) {
@@ -222,9 +212,8 @@ exports.nextStep = async (req, res) => {
 
       return null;
     };
-    let nextNode = resolveNextNode(currentNode);
 
-    /* ================= END IF NO NEXT ================= */
+    let nextNode = resolveNextNode(currentNode);
 
     if (!nextNode) {
       session.is_completed = true;
@@ -237,69 +226,25 @@ exports.nextStep = async (req, res) => {
       return res.json({ completed: true });
     }
 
-    /* ================= AUTO EXECUTION LOOP ================= */
+    session.current_node_id = nextNode._id;
 
-    let safetyCounter = 0;
+    /* ===== notifications ===== */
 
-    while (nextNode) {
-      if (safetyCounter++ > 50) {
-        throw new Error("Loop infinito detectado");
-      }
-
-      session.current_node_id = nextNode._id;
-
-      /* ===== NOTIFICATIONS ===== */
-
-      if (nextNode.meta?.notify?.enabled && session.mode === "production") {
-        await executeNodeNotification(nextNode, session);
-      }
-
-      /* ===== END CONVERSATION NODE ===== */
-
-      if (nextNode.end_conversation) {
-        session.is_completed = true;
-        await session.save();
-
-        if (session.mode === "production") {
-          await upsertContactFromSession(session);
-        }
-
-        return res.json(renderNode(nextNode, session._id));
-      }
-
-      /* ===== IF NODE REQUIRES INPUT ===== */
-
-      if (INPUT_NODES.includes(nextNode.node_type)) {
-        await session.save();
-        return res.json(renderNode(nextNode, session._id));
-      }
-
-      /* ===== DETECT TERMINAL NON-INTERACTIVE NODE ===== */
-
-      const isInteractive =
-        INPUT_NODES.includes(nextNode.node_type);
-
-      const hasBranches =
-        nextNode.options?.length ||
-        nextNode.policy?.length;
-
-      if (!nextNode.next_node_id && !hasBranches && !isInteractive) {
-        session.is_completed = true;
-        await session.save();
-
-        if (session.mode === "production") {
-          await upsertContactFromSession(session);
-        }
-
-        return res.json(renderNode(nextNode, session._id));
-      }
-
-      /* ===== CONTINUE LOOP ===== */
-
-      await session.save();
-      currentNode = nextNode;
-      nextNode = resolveNextNode(currentNode);
+    if (nextNode.meta?.notify?.enabled && session.mode === "production") {
+      await executeNodeNotification(nextNode, session);
     }
+
+    /* ===== END CONVERSATION ===== */
+
+    if (nextNode.end_conversation) {
+      session.is_completed = true;
+    }
+
+    /* ===== SAVE ===== */
+
+    await session.save();
+
+    return res.json(renderNode(nextNode, session._id));
 
   } catch (error) {
     console.error("nextStep:", error);
