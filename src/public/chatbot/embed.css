@@ -20,7 +20,6 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     background: transparent;
     overflow: hidden;
-    pointer-events: none;
 }
 
 /* ===============================
@@ -593,6 +592,7 @@ footer {
     border-top: 2px solid #e5e7eb;
     background: white;
     flex-shrink: 0;
+    pointer-events: auto;
 }
 
 #messageInput {
@@ -610,6 +610,7 @@ footer {
     appearance: none;
     resize: none;
     font-family: inherit;
+    pointer-events: auto;
 }
 
 #messageInput:focus {
