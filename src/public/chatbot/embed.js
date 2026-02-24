@@ -214,52 +214,56 @@
     async function process(node, depth = 0) {
         if (!node || depth > 20) return;
 
+        /* ===== Typing ===== */
         if (node.typing_time) {
             typing(true);
             await new Promise(r => setTimeout(r, node.typing_time * 1000));
             typing(false);
         }
 
+        /* ===== Validation ===== */
         currentValidation = node.validation?.rules?.length
             ? node.validation
             : null;
 
-        if (node.content) message("bot", node.content);
+        /* ===== Mostrar mensaje ===== */
+        if (node.content) {
+            message("bot", node.content);
+        }
 
-        // OPTIONS NODE
-        if (node.options?.length) {
+        /* ===== OPTIONS ===== */
+        if (node.type === "options" && Array.isArray(node.options) && node.options.length) {
             options(node.options);
-            el.input.disabled = el.send.disabled = true;
+            el.input.disabled = true;
+            el.send.disabled = true;
             return;
         }
 
-        // POLICY NODE
-        if (node.node_type === "policy" && node.policy) {
-            const policyOptions = [
-                {
-                    label: node.policy.label || "Si",
-                    value: node.policy.value
-                },
-                {
-                    label: node.policy.label || "No",
-                    value: node.policy.value
-                }
-            ];
-
-            options(policyOptions);
-            el.input.disabled = el.send.disabled = true;
+        /* ===== POLICY ===== */
+        if (node.type === "policy" && Array.isArray(node.policy) && node.policy.length) {
+            options(node.policy);
+            el.input.disabled = true;
+            el.send.disabled = true;
             return;
         }
+
+        /* ===== Auto-next solo si NO requiere input ===== */
         if (!node.completed && !INPUT_TYPES.includes(node.type)) {
-            const r = await fetch(`${apiBase}/api/public-chatbot/chatbot-conversation/${node.session_id}/next`, { method: "POST" });
-            return process(await r.json(), depth + 1);
+            const r = await fetch(
+                `${apiBase}/api/public-chatbot/chatbot-conversation/${node.session_id}/next`,
+                { method: "POST" }
+            );
+
+            const nextNode = await r.json();
+            return process(nextNode, depth + 1);
         }
 
+        /* ===== Habilitar input si requiere respuesta ===== */
         if (!node.completed) {
-            el.input.disabled = el.send.disabled = false;
+            el.input.disabled = false;
+            el.send.disabled = false;
         }
     }
-
     async function start() {
         try {
             typing(true);
