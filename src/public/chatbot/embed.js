@@ -228,7 +228,7 @@
 
             const bubble = document.createElement("div");
             bubble.className = "bubble";
-            bubble.textContent = node.content;
+            bubble.innerHTML = node.content;
 
             const timeEl = document.createElement("div");
             timeEl.className = "message-time";
@@ -270,15 +270,20 @@
             return;
         }
 
-        /* ===== INPUT TYPES ===== */
-        if (TEXT_INPUT_TYPES.includes(nodeType)) {
-            el.input.disabled = false;
-            el.send.disabled = false;
-            el.input.focus();
+        /* ===== NODOS QUE ESPERAN INTERACCIÓN ===== */
+        const isInputNode = TEXT_INPUT_TYPES.includes(nodeType);
+        const isSelectableNode =
+            (nodeType === "options" && node.options?.length) ||
+            (nodeType === "policy" && node.policy?.length);
+
+        if (isInputNode || isSelectableNode) {
+            el.input.disabled = !isInputNode;
+            el.send.disabled = !isInputNode;
+            if (isInputNode) el.input.focus();
             return;
         }
 
-        /* ===== AUTO NEXT ===== */
+        /* ===== SOLO AUTO NEXT SI ES NODO INFORMATIVO ===== */
         try {
             const r = await fetch(
                 `${apiBase}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`,
@@ -295,6 +300,7 @@
             message("bot", "Ocurrió un error al continuar el flujo.", true);
         }
     }
+
     async function start() {
         try {
             typing(true);
