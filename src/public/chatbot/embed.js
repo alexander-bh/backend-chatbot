@@ -183,6 +183,89 @@
                 break;
         }
     }
+
+    function renderBotMessage(html) {
+        const m = document.createElement("div");
+        m.className = "msg bot";
+
+        const avatarImg = document.createElement("img");
+        avatarImg.src = avatar;
+        avatarImg.className = "msg-avatar";
+
+        const contentWrapper = document.createElement("div");
+        contentWrapper.className = "msg-content";
+
+        const bubble = document.createElement("div");
+        bubble.className = "bubble";
+        bubble.innerHTML = html;
+
+        const timeEl = document.createElement("div");
+        timeEl.className = "message-time";
+        timeEl.textContent = time();
+
+        contentWrapper.append(bubble, timeEl);
+        m.append(avatarImg, contentWrapper);
+        el.messages.appendChild(m);
+        el.messages.scrollTop = el.messages.scrollHeight;
+
+        return bubble;
+    }
+    function renderInlineOptions(node, bubbleElement) {
+        const list = node.type === "policy" ? node.policy : node.options;
+
+        const optionsContainer = document.createElement("div");
+        optionsContainer.className = "inline-options";
+
+        list.forEach(o => {
+            const btn = document.createElement("button");
+            btn.textContent = o.label;
+            btn.onclick = () => {
+                disableInput();
+                send(o.value ?? o.label);
+            };
+            optionsContainer.appendChild(btn);
+        });
+
+        bubbleElement?.appendChild(optionsContainer);
+    }
+
+    function expectsTextInput(node) {
+        return (
+            TEXT_INPUT_TYPES.includes(node.type) ||
+            !!node.validation?.rules?.length
+        );
+    }
+
+    function enableInput() {
+        el.input.disabled = false;
+        el.send.disabled = false;
+        el.input.focus();
+    }
+
+    function disableInput() {
+        el.input.disabled = true;
+        el.send.disabled = true;
+    }
+
+    function configureInputForNode(type) {
+        el.input.type = "text";
+        el.input.placeholder = inputPlaceholder;
+
+        if (type === "email") {
+            el.input.type = "email";
+            el.input.placeholder = "correo@ejemplo.com";
+        }
+
+        if (type === "phone") {
+            el.input.type = "tel";
+            el.input.placeholder = "Ej. +52 999 123 4567";
+        }
+
+        if (type === "number") {
+            el.input.type = "number";
+        }
+    }
+    
     /* =========================
        FLOW
     ========================= */
@@ -193,107 +276,57 @@
 
         const nodeType = node.type;
 
+        /* =========================
+           ERRORES DE VALIDACIÓN
+        ========================= */
         if (node.validation_error) {
             message("bot", node.message, true);
-            el.input.disabled = false;
-            el.send.disabled = false;
-            el.input.focus();
+            enableInput();
             return;
         }
 
-        /* ===== Typing animation ===== */
+        /* =========================
+           TYPING
+        ========================= */
         if (node.typing_time) {
             typing(true);
             await new Promise(r => setTimeout(r, node.typing_time * 1000));
             typing(false);
         }
 
+        /* =========================
+           RENDER MENSAJE BOT
+        ========================= */
         let bubbleElement = null;
 
-        /* ===== Crear mensaje bot ===== */
         if (node.content) {
-            const m = document.createElement("div");
-            m.className = "msg bot";
-
-            const avatarImg = document.createElement("img");
-            avatarImg.src = avatar;
-            avatarImg.className = "msg-avatar";
-
-            const contentWrapper = document.createElement("div");
-            contentWrapper.className = "msg-content";
-
-            const bubble = document.createElement("div");
-            bubble.className = "bubble";
-            bubble.innerHTML = node.content;
-
-            const timeEl = document.createElement("div");
-            timeEl.className = "message-time";
-            timeEl.textContent = time();
-
-            contentWrapper.append(bubble, timeEl);
-            m.append(avatarImg, contentWrapper);
-            el.messages.appendChild(m);
-
-            el.messages.scrollTop = el.messages.scrollHeight;
-
-            bubbleElement = bubble;
+            bubbleElement = renderBotMessage(node.content);
         }
 
-        /* ===== OPTIONS / POLICY ===== */
+        /* =========================
+           OPTIONS / POLICY
+        ========================= */
         if (
             (nodeType === "options" && node.options?.length) ||
             (nodeType === "policy" && node.policy?.length)
         ) {
-            const list =
-                nodeType === "policy"
-                    ? node.policy
-                    : node.options;
+            renderInlineOptions(node, bubbleElement);
+            disableInput();
+            return; // 👈 aquí SÍ es correcto
+        }
 
-            const optionsContainer = document.createElement("div");
-            optionsContainer.className = "inline-options";
-
-            list.forEach(o => {
-                const btn = document.createElement("button");
-                btn.textContent = o.label;
-                btn.onclick = () => {
-                    el.input.disabled = true;
-                    el.send.disabled = true;
-                    send(o.value ?? o.label);
-                };
-                optionsContainer.appendChild(btn);
-            });
-
-            bubbleElement?.appendChild(optionsContainer);
-
-            el.input.disabled = true;
-            el.send.disabled = true;
+        /* =========================
+           NODOS QUE ESPERAN INPUT
+        ========================= */
+        if (expectsTextInput(node)) {
+            configureInputForNode(nodeType);
+            enableInput();
             return;
         }
 
-        /* ===== NODOS QUE ESPERAN INTERACCIÓN ===== */
-        const isInputNode =
-            TEXT_INPUT_TYPES.includes(nodeType) ||
-            !!node.validation?.rules?.length;
-
-        const isSelectableNode =
-            nodeType === "options" || nodeType === "policy";
-
-        // 🔒 options / policy → siempre esperan botón
-        if (isSelectableNode) {
-            el.input.disabled = true;
-            el.send.disabled = true;
-            return;
-        }
-
-        // ⌨️ nodos de texto → habilitan input
-        if (isInputNode) {
-            el.input.disabled = false;
-            el.send.disabled = false;
-            el.input.focus();
-            return;
-        }
-
-        /* ===== SOLO AUTO NEXT SI ES NODO INFORMATIVO ===== */
+        /* =========================
+           AUTO-NEXT (informativo)
+        ========================= */
         try {
             const r = await fetch(
                 `${apiBase}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`,
@@ -301,10 +334,9 @@
             );
 
             const nextNode = await r.json();
-
-            if (nextNode?.completed) return;
-
-            return process(nextNode, depth + 1);
+            if (!nextNode?.completed) {
+                return process(nextNode, depth + 1);
+            }
 
         } catch (err) {
             message("bot", "Ocurrió un error al continuar el flujo.", true);
