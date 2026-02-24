@@ -113,11 +113,14 @@
                     const subject = encodeURIComponent("Contacto desde el chatbot");
                     const body = encodeURIComponent("Hola, quiero más información.");
 
-                    a.href = `mailto:${email}?subject=${subject}&body=${body}`;
-                    a.target = "_blank";
+                    a.href = "#";
+                    a.onclick = e => {
+                        e.preventDefault();
+                        window.location.href =
+                            `mailto:${email}?subject=${subject}&body=${body}`;
+                    };
                     break;
                 }
-
                 case "phone":
                     a.href = `tel:${action.value}`;
                     a.target = "_self";
