@@ -26,6 +26,11 @@ const ConversationSessionSchema = new mongoose.Schema(
       required: true
     },
 
+    current_branch_id: {
+      type: String,
+      default: null
+    },
+
     variables: {
       type: Object,
       default: {}

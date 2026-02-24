@@ -144,13 +144,6 @@ exports.nextStep = async (req, res) => {
       "text_input"
     ];
 
-    const SELECTABLE_NODES = [
-      "options",
-      "policy"
-    ];
-
-    /* ===== TEXT INPUT VALIDATION ===== */
-
     if (
       TEXT_INPUT_NODES.includes(currentNode.node_type) &&
       input !== undefined
@@ -181,11 +174,12 @@ exports.nextStep = async (req, res) => {
 
     const resolveNextNode = (node) => {
 
+      /* ===== OPTIONS / POLICY ===== */
+
       if (
         (node.node_type === "options" || node.node_type === "policy") &&
         input !== undefined
       ) {
-
         const sourceArray =
           node.node_type === "options"
             ? node.options
@@ -193,11 +187,17 @@ exports.nextStep = async (req, res) => {
 
         const match = sourceArray.find(opt =>
           String(opt.value) === String(input) ||
-          String(opt.label) === String(input) ||
-          String(sourceArray.indexOf(opt)) === String(input)
+          String(opt.label) === String(input)
         );
 
         if (!match) return null;
+
+        // 🔥 GUARDAR BRANCH SI EXISTE
+        if (match.next_branch_id) {
+          session.current_branch_id = match.next_branch_id;
+        } else {
+          session.current_branch_id = null;
+        }
 
         if (match.next_node_id) {
           return nodesMap.get(String(match.next_node_id));
@@ -206,8 +206,22 @@ exports.nextStep = async (req, res) => {
         return null;
       }
 
+      /* ===== NORMAL NEXT ===== */
+
       if (node.next_node_id) {
-        return nodesMap.get(String(node.next_node_id));
+
+        const candidate = nodesMap.get(String(node.next_node_id));
+        if (!candidate) return null;
+
+        // 🔥 VALIDAR BRANCH ACTIVO
+        if (candidate.branch_id) {
+          if (candidate.branch_id === session.current_branch_id) {
+            return candidate;
+          }
+          return null;
+        }
+
+        return candidate;
       }
 
       return null;
@@ -228,7 +242,7 @@ exports.nextStep = async (req, res) => {
 
     session.current_node_id = nextNode._id;
 
-    /* ===== notifications ===== */
+    /* ===== NOTIFICATIONS ===== */
 
     if (nextNode.meta?.notify?.enabled && session.mode === "production") {
       await executeNodeNotification(nextNode, session);
@@ -238,9 +252,8 @@ exports.nextStep = async (req, res) => {
 
     if (nextNode.end_conversation) {
       session.is_completed = true;
+      session.current_branch_id = null;
     }
-
-    /* ===== SAVE ===== */
 
     await session.save();
 
@@ -253,4 +266,3 @@ exports.nextStep = async (req, res) => {
     });
   }
 };
-
