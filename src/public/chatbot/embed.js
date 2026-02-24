@@ -234,8 +234,19 @@
         }
 
         // POLICY NODE
-        if (node.policy?.length) {
-            options(node.policy);
+        if (node.node_type === "policy" && node.policy) {
+            const policyOptions = [
+                {
+                    label: node.policy.label || "Si",
+                    value: node.policy.value
+                },
+                {
+                    label: node.policy.label || "No",
+                    value: node.policy.value
+                }
+            ];
+
+            options(policyOptions);
             el.input.disabled = el.send.disabled = true;
             return;
         }
