@@ -239,9 +239,6 @@
             bubbleElement = bubble;
         }
 
-        console.log("NODE TYPE:", nodeType);
-        console.log("VALIDATION:", node.validation);
-
         /* ===== OPTIONS / POLICY ===== */
         if (
             (nodeType === "options" && node.options?.length) ||
