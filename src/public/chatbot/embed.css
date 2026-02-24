@@ -73,25 +73,29 @@ body {
 }
 
 .inline-options {
-    margin-top: 12px;
+    margin-top: 14px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
+    width: 100%;
 }
 
 .inline-options button {
-    padding: 10px;
-    border-radius: 12px;
-    border: 1px solid var(--chat-primary);
-    background: white;
-    cursor: pointer;
+    width: 100%;
+    padding: 12px 16px;
+    border-radius: 999px;
+    border: 1.5px solid #e5e7eb;
+    background: #f9fafb;
     font-size: 14px;
-    transition: 0.2s;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all .2s ease;
 }
 
 .inline-options button:hover {
-    background: var(--chat-primary);
-    color: white;
+    background: white;
+    border-color: var(--chat-primary);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 /* ===============================
@@ -506,11 +510,21 @@ main {
         inset 0 1px 2px rgba(255, 255, 255, 0.25);
 }
 
-.msg.user .bubble,
-.msg.bot .bubble {
+.msg.user .bubble {
     min-height: 40px;
     display: inline-flex;
     align-items: center;
+}
+
+.msg.bot .bubble {
+    min-height: 40px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.msg.bot .bubble {
+    gap: 4px;
 }
 
 .msg.bot.error .bubble {
