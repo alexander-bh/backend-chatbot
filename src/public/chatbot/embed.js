@@ -243,7 +243,6 @@
         }
 
         /* ===== OPTIONS / POLICY ===== */
-        /* ===== OPTIONS / POLICY ===== */
         if (
             (nodeType === "options" && node.options?.length) ||
             (nodeType === "policy" && node.policy?.length)
