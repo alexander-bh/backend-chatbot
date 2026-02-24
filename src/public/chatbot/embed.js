@@ -91,6 +91,10 @@
        UI
     ========================= */
 
+    function isMobileDevice() {
+        return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    }
+
     function renderLinkActions(actions, bubble) {
         if (!Array.isArray(actions) || !bubble) return;
 
@@ -110,14 +114,27 @@
 
                 case "email": {
                     const email = action.value.trim();
+                    const subject = encodeURIComponent("Contacto desde el chatbot");
+                    const body = encodeURIComponent("Hola, quiero más información.");
 
                     a.href = "#";
+
                     a.onclick = e => {
                         e.preventDefault();
 
-                        navigator.clipboard.writeText(email);
-                        alert(`Copia este correo y escríbenos:\n${email}`);
+                        if (isMobileDevice()) {
+                            // 📱 MÓVIL → abre app de correo
+                            window.location.href =
+                                `mailto:${email}?subject=${subject}&body=${body}`;
+                        } else {
+                            // 💻 DESKTOP → alerta + copia
+                            navigator.clipboard?.writeText(email);
+                            alert(
+                                `📧 Escríbenos a:\n\n${email}\n\nEl correo fue copiado al portapapeles`
+                            );
+                        }
                     };
+
                     break;
                 }
                 case "phone":
