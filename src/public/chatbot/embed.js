@@ -196,115 +196,105 @@
        FLOW
     ========================= */
     async function process(node, depth = 0) {
-        if (!node || depth > 20 || processing) return;
-        processing = true;
+        if (!node || depth > 20) return;
+
+        const nodeType = node.type;
+
+        /* ===== Typing animation ===== */
+        if (node.typing_time) {
+            typing(true);
+            await new Promise(r => setTimeout(r, node.typing_time * 1000));
+            typing(false);
+        }
+
+        /* ===== Guardar validación ===== */
+        currentValidation = node.validation?.rules?.length
+            ? node.validation
+            : null;
+
+        let bubbleElement = null;
+
+        /* ===== Crear mensaje bot ===== */
+        if (node.content) {
+            const m = document.createElement("div");
+            m.className = "msg bot";
+
+            const avatarImg = document.createElement("img");
+            avatarImg.src = avatar;
+            avatarImg.className = "msg-avatar";
+
+            const contentWrapper = document.createElement("div");
+            contentWrapper.className = "msg-content";
+
+            const bubble = document.createElement("div");
+            bubble.className = "bubble";
+            bubble.textContent = node.content;
+
+            const timeEl = document.createElement("div");
+            timeEl.className = "message-time";
+            timeEl.textContent = time();
+
+            contentWrapper.append(bubble, timeEl);
+            m.append(avatarImg, contentWrapper);
+            el.messages.appendChild(m);
+
+            el.messages.scrollTop = el.messages.scrollHeight;
+
+            bubbleElement = bubble;
+        }
+
+        /* ===== OPTIONS / POLICY ===== */
+        if (
+            (nodeType === "options" && node.options?.length) ||
+            (nodeType === "policy" && node.policy?.length)
+        ) {
+            const list = node.options || node.policy;
+
+            const optionsContainer = document.createElement("div");
+            optionsContainer.className = "inline-options";
+
+            list.forEach(o => {
+                const btn = document.createElement("button");
+                btn.textContent = o.label;
+                btn.onclick = () => {
+                    el.input.disabled = true;
+                    el.send.disabled = true;
+                    send(o.value ?? o.label);
+                };
+                optionsContainer.appendChild(btn);
+            });
+
+            bubbleElement?.appendChild(optionsContainer);
+            el.input.disabled = true;
+            el.send.disabled = true;
+            return;
+        }
+
+        /* ===== INPUT TYPES ===== */
+        if (TEXT_INPUT_TYPES.includes(nodeType)) {
+            el.input.disabled = false;
+            el.send.disabled = false;
+            el.input.focus();
+            return;
+        }
+
+        /* ===== AUTO NEXT ===== */
         try {
-            if (!node || depth > 20) return;
+            const r = await fetch(
+                `${apiBase}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`,
+                { method: "POST" }
+            );
 
-            const nodeType = node.type;
+            const nextNode = await r.json();
 
-            /* ===== Typing animation ===== */
-            if (node.typing_time) {
-                typing(true);
-                await new Promise(r => setTimeout(r, node.typing_time * 1000));
-                typing(false);
-            }
+            if (nextNode?.completed) return;
 
-            /* ===== Guardar validación ===== */
-            currentValidation = node.validation?.rules?.length
-                ? node.validation
-                : null;
+            return process(nextNode, depth + 1);
 
-            let bubbleElement = null;
-
-            /* ===== Crear mensaje bot ===== */
-            if (node.content) {
-                const m = document.createElement("div");
-                m.className = "msg bot";
-
-                const avatarImg = document.createElement("img");
-                avatarImg.src = avatar;
-                avatarImg.className = "msg-avatar";
-
-                const contentWrapper = document.createElement("div");
-                contentWrapper.className = "msg-content";
-
-                const bubble = document.createElement("div");
-                bubble.className = "bubble";
-                bubble.textContent = node.content;
-
-                const timeEl = document.createElement("div");
-                timeEl.className = "message-time";
-                timeEl.textContent = time();
-
-                contentWrapper.append(bubble, timeEl);
-                m.append(avatarImg, contentWrapper);
-                el.messages.appendChild(m);
-
-                el.messages.scrollTop = el.messages.scrollHeight;
-
-                bubbleElement = bubble;
-            }
-
-            /* =====================================================
-               ===== OPTIONS / POLICY  =====
-            ===================================================== */
-            if (
-                (nodeType === "options" && node.options?.length) ||
-                (nodeType === "policy" && node.policy?.length)
-            ) {
-                const list = node.options || node.policy;
-
-                const optionsContainer = document.createElement("div");
-                optionsContainer.className = "inline-options";
-
-                list.forEach(o => {
-                    const btn = document.createElement("button");
-                    btn.textContent = o.label;
-                    btn.onclick = () => {
-                        el.input.disabled = true;
-                        el.send.disabled = true;
-                        send(o.value ?? o.label);
-                    };
-                    optionsContainer.appendChild(btn);
-                });
-
-                bubbleElement?.appendChild(optionsContainer);
-
-                el.input.disabled = true;
-                el.send.disabled = true;
-                return; // NO auto-next
-            }
-
-            /* =====================================================
-               ===== INPUT TYPES =====
-            ===================================================== */
-            if (TEXT_INPUT_TYPES.includes(nodeType)) {
-                el.input.disabled = false;
-                el.send.disabled = false;
-                el.input.focus();
-                return;
-            }
-            /* =====================================================
-               ===== AUTO NEXT (nodos informativos, link, etc.) =====
-            ===================================================== */
-            try {
-                const r = await fetch(
-                    `${apiBase}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`,
-                    { method: "POST" }
-                );
-
-                const nextNode = await r.json();
-                return process(nextNode, depth + 1);
-
-            } catch (err) {
-                message("bot", "Ocurrió un error al continuar el flujo.", true);
-            }
-        } finally {
-            processing = false;
+        } catch (err) {
+            message("bot", "Ocurrió un error al continuar el flujo.", true);
         }
     }
-
     async function start() {
         try {
             typing(true);
