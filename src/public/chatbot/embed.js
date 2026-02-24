@@ -39,7 +39,6 @@
     let isOpen = false;
     let currentValidation = null;
     let typingElement = null;
-    let processing = false;
 
     /* =========================
        DOM
@@ -324,12 +323,26 @@
 
         if (currentValidation?.rules) {
             for (const r of currentValidation.rules) {
-                if (r.type === "email" && !email(text)) return message("bot", r.message, true);
-                if (r.type === "phone" && !phone(text)) return message("bot", r.message, true);
-                if (r.type === "phone_mx" && !phoneMX(text)) return message("bot", r.message, true);
-                if (r.type === "phone_country" && !phoneIntl(text)) return message("bot", r.message, true);
-                if (r.type === "whatsapp" && !whatsapp(text)) return message("bot", r.message, true);
-                if (r.type === "link" && !url(text)) return message("bot", r.message, true);
+
+                let valid = true;
+
+                if (r.type === "email") valid = email(text);
+                if (r.type === "phone") valid = phone(text);
+                if (r.type === "phone_mx") valid = phoneMX(text);
+                if (r.type === "phone_country") valid = phoneIntl(text);
+                if (r.type === "whatsapp") valid = whatsapp(text);
+                if (r.type === "link") valid = url(text);
+
+                if (!valid) {
+                    message("bot", r.message, true);
+
+                    // 🔑 REACTIVAR INPUT
+                    el.input.disabled = false;
+                    el.send.disabled = false;
+                    el.input.focus();
+
+                    return;
+                }
             }
         }
 
@@ -341,13 +354,25 @@
         el.input.disabled = el.send.disabled = true;
         typing(true);
 
-        const r = await fetch(
-            `${apiBase}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`,
-            { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ input: text }) }
-        );
+        try {
+            const r = await fetch(
+                `${apiBase}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ input: text })
+                }
+            );
 
-        typing(false);
-        process(await r.json());
+            typing(false);
+            process(await r.json());
+
+        } catch {
+            typing(false);
+            message("bot", "Error al enviar el mensaje", true);
+            el.input.disabled = false;
+            el.send.disabled = false;
+        }
     }
 
     /* =========================
