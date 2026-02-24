@@ -11,16 +11,6 @@ const validateNodeInput = require("../utils/chat/chatbotValidationEngine");
 
 const ALLOWED_MODES = ["preview", "production"];
 
-const INPUT_NODES = [
-  "question",
-  "email",
-  "phone",
-  "number",
-  "text_input",
-  "options",
-  "policy"
-];
-
 /* --------------------------------------------------
    START CONVERSATION
 -------------------------------------------------- */
