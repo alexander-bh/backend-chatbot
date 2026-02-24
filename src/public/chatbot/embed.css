@@ -20,6 +20,7 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     background: transparent;
     overflow: hidden;
+    pointer-events: none;
 }
 
 /* ===============================
@@ -186,7 +187,7 @@ body {
     background: #fff;
     border-radius: 20px;
     visibility: hidden;
-    pointer-events: none;
+    pointer-events: auto;
     display: flex;
     flex-direction: column;
     overflow: hidden;
