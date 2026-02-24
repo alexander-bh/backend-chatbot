@@ -117,10 +117,18 @@
                     href = `tel:${action.value}`;
                     break;
 
-                case "whatsapp":
+                case "whatsapp": {
                     const phone = action.value.replace(/\D/g, "");
-                    href = `https://wa.me/${phone}`;
+
+                    // 🇲🇽 fuerza prefijo si no viene
+                    const fullPhone = phone.startsWith("52") ? phone : `52${phone}`;
+
+                    href = `https://wa.me/${fullPhone}`;
+
+                    a.target = "_blank";
+                    a.rel = "noopener noreferrer";
                     break;
+                }
 
                 default:
                     return;
