@@ -306,12 +306,8 @@
 
         const nodeType = node.type;
 
-        /* ================= RESET UI STATE ================= */
-
-        // eliminar opciones anteriores
         document.querySelectorAll(".inline-options").forEach(el => el.remove());
 
-        // limpiar estado
         el.input.value = "";
         el.input.disabled = true;
         el.send.disabled = true;
@@ -319,13 +315,14 @@
 
         currentValidation = null;
 
-        /* ================= VALIDATION ================= */
-
         if (node.validation?.rules?.length) {
             currentValidation = node.validation;
         }
 
-        /* ================= NODE TYPE DETECTION ================= */
+        /* 🔥 MOSTRAR MENSAJE DEL BOT */
+        if (node.content) {
+            message("bot", node.content, node.is_error || false);
+        }
 
         const TEXT_INPUT_TYPES = [
             "question",
@@ -340,28 +337,20 @@
         const isPolicyNode = nodeType === "policy";
         const isLinkNode = nodeType === "link";
 
-        /* ================= OPTIONS ================= */
-
         if (isOptionsNode && Array.isArray(node.options)) {
             renderOptions(node.options);
             return;
         }
-
-        /* ================= POLICY ================= */
 
         if (isPolicyNode && Array.isArray(node.policy)) {
             renderPolicy(node.policy);
             return;
         }
 
-        /* ================= LINK ================= */
-
         if (isLinkNode && Array.isArray(node.link_actions)) {
             renderLinkActions(node.link_actions);
             return;
         }
-
-        /* ================= INPUT NODES ================= */
 
         if (isInputNode) {
             el.input.disabled = false;
@@ -370,14 +359,11 @@
             return;
         }
 
-        /* ================= AUTO ADVANCE ================= */
-
-        // nodos informativos (text, media, etc)
         setTimeout(() => {
             nextStep();
         }, node.typing_time || 500);
     }
-
+    
     async function start() {
         try {
             typing(true);
