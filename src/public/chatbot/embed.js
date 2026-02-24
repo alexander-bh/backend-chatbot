@@ -242,6 +242,9 @@
             bubbleElement = bubble;
         }
 
+        console.log("NODE TYPE:", nodeType);
+        console.log("VALIDATION:", node.validation);
+
         /* ===== OPTIONS / POLICY ===== */
         if (
             (nodeType === "options" && node.options?.length) ||
@@ -335,7 +338,7 @@
     async function send(v = null) {
         const text = v ?? el.input.value.trim();
         if (!text || !SESSION_ID) return;
-
+        console.log("Enviando:", text);
         if (currentValidation?.rules) {
             for (const r of currentValidation.rules) {
 
