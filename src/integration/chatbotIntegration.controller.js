@@ -133,8 +133,7 @@ exports.getInstallScript = async (req, res) => {
       "background:transparent",
       "pointer-events:auto"
     ].join(";");
-
-  iframe.sandbox = "allow-scripts allow-same-origin allow-forms allow-modals";
+  iframe.sandbox = "allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox";
   iframe.setAttribute("allow", "clipboard-write");
 
   document.body.appendChild(iframe);
