@@ -215,12 +215,19 @@
 
         if (node.content) message("bot", node.content);
 
+        // OPTIONS NODE
         if (node.options?.length) {
             options(node.options);
             el.input.disabled = el.send.disabled = true;
             return;
         }
 
+        // POLICY NODE
+        if (node.policy?.length) {
+            options(node.policy);
+            el.input.disabled = el.send.disabled = true;
+            return;
+        }
         if (!node.completed && !INPUT_TYPES.includes(node.type)) {
             const r = await fetch(`${apiBase}/api/public-chatbot/chatbot-conversation/${node.session_id}/next`, { method: "POST" });
             return process(await r.json(), depth + 1);
