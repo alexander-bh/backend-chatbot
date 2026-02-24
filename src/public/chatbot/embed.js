@@ -243,11 +243,15 @@
         }
 
         /* ===== OPTIONS / POLICY ===== */
+        /* ===== OPTIONS / POLICY ===== */
         if (
             (nodeType === "options" && node.options?.length) ||
             (nodeType === "policy" && node.policy?.length)
         ) {
-            const list = node.options || node.policy;
+            const list =
+                nodeType === "policy"
+                    ? node.policy
+                    : node.options;
 
             const optionsContainer = document.createElement("div");
             optionsContainer.className = "inline-options";
@@ -264,8 +268,10 @@
             });
 
             bubbleElement?.appendChild(optionsContainer);
+
             el.input.disabled = true;
             el.send.disabled = true;
+            console.log(nodeType, list);
             return;
         }
 
