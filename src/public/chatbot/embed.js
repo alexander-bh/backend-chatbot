@@ -398,18 +398,27 @@
     async function restartConversation() {
         if (!publicId) return;
 
-        // Reset estados
+        // Reset estado
         SESSION_ID = null;
         started = false;
 
         // Limpiar mensajes
-        elements.messages.innerHTML = "";
+        el.messages.innerHTML = "";
 
-        // Deshabilitar input mientras reinicia
-        elements.messageInput.disabled = true;
-        elements.sendBtn.disabled = true;
+        // Reset input
+        el.input.value = "";
+        el.input.disabled = true;
+        el.send.disabled = true;
 
-        // Iniciar nueva conversación
+        // Reset typing
+        if (typingElement) {
+            typingElement.remove();
+            typingElement = null;
+        }
+
+        status("Reiniciando…");
+
+        // Iniciar nueva sesión
         started = true;
         await start();
     }
