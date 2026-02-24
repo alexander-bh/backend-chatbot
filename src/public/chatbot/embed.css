@@ -553,6 +553,14 @@ main {
     text-align: left;
 }
 
+.bubble-link {
+  display: inline-block;
+  margin-top: 6px;
+  color: var(--chat-primary);
+  font-weight: 500;
+  text-decoration: underline;
+}
+
 /* Opciones rápidas */
 .bubble.options {
     display: flex;

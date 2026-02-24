@@ -90,7 +90,7 @@
     /* =========================
        UI
     ========================= */
-    function message(from, text, error = false) {
+    function message(from, text, error = false, linkActions = []) {
         const m = document.createElement("div");
         m.className = `msg ${from}${error ? " error" : ""}`;
 
@@ -106,7 +106,27 @@
 
         const b = document.createElement("div");
         b.className = "bubble";
-        b.textContent = text;
+
+        // Texto base
+        const p = document.createElement("div");
+        p.textContent = text;
+        b.appendChild(p);
+
+        // 🔗 Links
+        if (Array.isArray(linkActions)) {
+            linkActions.forEach(link => {
+                if (link.type !== "link") return;
+
+                const a = document.createElement("a");
+                a.href = link.value;
+                a.textContent = link.title || link.value;
+                a.className = "bubble-link";
+                a.target = link.new_tab ? "_blank" : "_self";
+                a.rel = "noopener noreferrer";
+
+                b.appendChild(a);
+            });
+        }
 
         const t = document.createElement("div");
         t.className = "message-time";
@@ -300,7 +320,11 @@
         let bubbleElement = null;
 
         if (node.content) {
-            bubbleElement = renderBotMessage(node.content);
+            if (node.link_actions?.length) {
+                message("bot", node.content, false, node.link_actions);
+            } else {
+                bubbleElement = renderBotMessage(node.content);
+            }
         }
 
         /* =========================
