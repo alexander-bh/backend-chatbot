@@ -270,7 +270,10 @@
         }
 
         /* ===== NODOS QUE ESPERAN INTERACCIÓN ===== */
-        const isInputNode = TEXT_INPUT_TYPES.includes(nodeType);
+        const isInputNode =
+            TEXT_INPUT_TYPES.includes(nodeType) ||
+            !!node.validation?.rules?.length;
+
         const isSelectableNode =
             (nodeType === "options" && node.options?.length) ||
             (nodeType === "policy" && node.policy?.length);
@@ -278,7 +281,11 @@
         if (isInputNode || isSelectableNode) {
             el.input.disabled = !isInputNode;
             el.send.disabled = !isInputNode;
-            if (isInputNode) el.input.focus();
+
+            if (isInputNode) {
+                el.input.focus();
+            }
+
             return;
         }
 
