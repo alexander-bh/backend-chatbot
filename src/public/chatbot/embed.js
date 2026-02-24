@@ -91,57 +91,60 @@
        UI
     ========================= */
 
-   function renderLinkActions(actions, bubble) {
-    if (!Array.isArray(actions) || !bubble) return;
+    function renderLinkActions(actions, bubble) {
+        if (!Array.isArray(actions) || !bubble) return;
 
-    const container = document.createElement("div");
-    container.className = "link-actions";
+        const container = document.createElement("div");
+        container.className = "link-actions";
 
-    actions.forEach(action => {
-        const a = document.createElement("a");
-        a.className = `link-action link-${action.type}`;
-        a.textContent = action.title || action.value;
+        actions.forEach(action => {
+            const a = document.createElement("a");
+            a.className = `link-action link-${action.type}`;
+            a.textContent = action.title || action.value;
 
-        switch (action.type) {
-            case "link":
-                a.href = action.value;
-                a.target = action.new_tab ? "_blank" : "_self";
-                break;
+            switch (action.type) {
+                case "link":
+                    a.href = action.value;
+                    a.target = action.new_tab ? "_blank" : "_self";
+                    break;
 
-            case "email": {
-                const email = action.value.trim();
-                const subject = encodeURIComponent("Contacto desde el chatbot");
-                const body = encodeURIComponent("Hola, quiero más información.");
+                case "email": {
+                    const email = action.value.trim();
+                    const subject = encodeURIComponent("Contacto desde el chatbot");
+                    const body = encodeURIComponent("Hola, quiero más información.");
 
-                a.href = `mailto:${email}?subject=${subject}&body=${body}`;
-                a.target = "_self";
-                break;
+                    a.href = "#";
+                    a.onclick = e => {
+                        e.preventDefault();
+                        window.location.href =
+                            `mailto:${email}?subject=${subject}&body=${body}`;
+                    };
+                    break;
+                }
+                case "phone":
+                    a.href = `tel:${action.value}`;
+                    a.target = "_self";
+                    break;
+
+                case "whatsapp": {
+                    const phone = action.value.replace(/\D/g, "");
+                    const fullPhone = phone.startsWith("52") ? phone : `52${phone}`;
+
+                    a.href = `https://wa.me/${fullPhone}`;
+                    a.target = "_blank"; // 🔥 obligatorio
+                    a.rel = "noopener noreferrer";
+                    break;
+                }
+
+                default:
+                    return;
             }
 
-            case "phone":
-                a.href = `tel:${action.value}`;
-                a.target = "_self";
-                break;
+            container.appendChild(a);
+        });
 
-            case "whatsapp": {
-                const phone = action.value.replace(/\D/g, "");
-                const fullPhone = phone.startsWith("52") ? phone : `52${phone}`;
-
-                a.href = `https://wa.me/${fullPhone}`;
-                a.target = "_blank"; // 🔥 obligatorio
-                a.rel = "noopener noreferrer";
-                break;
-            }
-
-            default:
-                return;
-        }
-
-        container.appendChild(a);
-    });
-
-    bubble.appendChild(container);
-}
+        bubble.appendChild(container);
+    }
 
     function message(from, text, error = false) {
         const m = document.createElement("div");
