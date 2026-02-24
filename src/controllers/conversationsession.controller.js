@@ -158,12 +158,16 @@ exports.nextStep = async (req, res) => {
       input !== undefined
     ) {
       const errors = validateNodeInput(currentNode, input);
-
       if (errors.length > 0) {
         return res.json({
-          ...renderNode(currentNode, session._id),
-          content: errors[0],
-          is_error: true
+          session_id: session._id,
+          node_id: currentNode._id,
+          type: currentNode.node_type,
+          validation_error: true,
+          message: errors[0],
+          input_type: currentNode.node_type,
+          validation: currentNode.validation,
+          completed: false
         });
       }
 

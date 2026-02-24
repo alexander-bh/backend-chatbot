@@ -37,7 +37,6 @@
     let SESSION_ID = null;
     let started = false;
     let isOpen = false;
-    let currentValidation = null;
     let typingElement = null;
 
     /* =========================
@@ -63,13 +62,6 @@
     /* =========================
        HELPERS
     ========================= */
-    const email = v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
-    const phone = v => /^[0-9]{7,15}$/.test(v);
-    const phoneMX = v => /^\+52\d{10}$/.test(v);
-    const phoneIntl = v => /^\+\d{8,15}$/.test(v);
-    const whatsapp = v => /^\+?\d{8,15}$/.test(v);
-    const url = v => { try { new URL(v); return true; } catch { return false; } };
-
     const rgb = hex => {
         if (!/^#[\da-f]{6}$/i.test(hex)) return "37,99,235";
         return `${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5), 16)}`;
@@ -199,17 +191,20 @@
 
         const nodeType = node.type;
 
+        if (node.validation_error) {
+            message("bot", node.message, true);
+            el.input.disabled = false;
+            el.send.disabled = false;
+            el.input.focus();
+            return;
+        }
+
         /* ===== Typing animation ===== */
         if (node.typing_time) {
             typing(true);
             await new Promise(r => setTimeout(r, node.typing_time * 1000));
             typing(false);
         }
-
-        /* ===== Guardar validación ===== */
-        currentValidation = node.validation?.rules?.length
-            ? node.validation
-            : null;
 
         let bubbleElement = null;
 
@@ -339,30 +334,7 @@
         const text = v ?? el.input.value.trim();
         if (!text || !SESSION_ID) return;
         console.log("Enviando:", text);
-        if (currentValidation?.rules) {
-            for (const r of currentValidation.rules) {
 
-                let valid = true;
-
-                if (r.type === "email") valid = email(text);
-                if (r.type === "phone") valid = phone(text);
-                if (r.type === "phone_mx") valid = phoneMX(text);
-                if (r.type === "phone_country") valid = phoneIntl(text);
-                if (r.type === "whatsapp") valid = whatsapp(text);
-                if (r.type === "link") valid = url(text);
-
-                if (!valid) {
-                    message("bot", r.message, true);
-
-                    // 🔑 REACTIVAR INPUT
-                    el.input.disabled = false;
-                    el.send.disabled = false;
-                    el.input.focus();
-
-                    return;
-                }
-            }
-        }
 
         if (v === null) {
             message("user", text);

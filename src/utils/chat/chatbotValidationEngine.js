@@ -1,42 +1,48 @@
-module.exports = function validateNodeInput(node, input) {
+    module.exports = function validateNodeInput(node, input) {
 
-  const errors = [];
+        if (!node.validation?.enabled || !node.validation?.rules?.length) {
+            return [];
+        }
 
-  if (input === undefined || input === null || input === "") {
-    errors.push("Este campo es obligatorio");
-    return errors;
-  }
+        const value = String(input ?? "").trim();
+        const errors = [];
 
-  const value = String(input).trim();
+        for (const rule of node.validation.rules) {
 
-  switch (node.node_type) {
+            switch (rule.type) {
 
-    case "email":
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-        errors.push("Ingresa un email válido");
-      }
-      break;
+                case "required":
+                    if (!value.length) errors.push(rule.message);
+                    break;
 
-    case "phone":
-      if (!/^[0-9+\-\s]{7,15}$/.test(value)) {
-        errors.push("Ingresa un teléfono válido");
-      }
-      break;
+                case "email":
+                    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))
+                        errors.push(rule.message);
+                    break;
 
-    case "number":
-      if (isNaN(value)) {
-        errors.push("Debe ser un número válido");
-      }
-      break;
+                case "phone":
+                    if (!/^[0-9]{7,15}$/.test(value))
+                        errors.push(rule.message);
+                    break;
 
-    case "options":
-      if (isNaN(value) && !node.options?.some(o =>
-        String(o.label).toLowerCase() === value.toLowerCase()
-      )) {
-        errors.push("Selecciona una opción válida");
-      }
-      break;
-  }
+                case "number":
+                    if (isNaN(value)) errors.push(rule.message);
+                    break;
 
-  return errors;
-};
+                case "min_length":
+                    if (value.length < rule.value)
+                        errors.push(rule.message);
+                    break;
+
+                case "max_length":
+                    if (value.length > rule.value)
+                        errors.push(rule.message);
+                    break;
+
+            }
+
+            if (errors.length) break;
+        }
+
+        return errors;
+    };
