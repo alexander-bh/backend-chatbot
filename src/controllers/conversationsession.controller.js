@@ -114,7 +114,6 @@ exports.startConversation = async (req, res) => {
 -------------------------------------------------- */
 exports.nextStep = async (req, res) => {
   try {
-
     const { id: sessionId } = req.params;
     const { input } = req.body;
 
@@ -125,14 +124,14 @@ exports.nextStep = async (req, res) => {
     const session = await ConversationSession.findById(sessionId);
     if (!session) {
       return res.status(404).json({ message: "Sesión no encontrada" });
-      
     }
 
     if (session.is_completed) {
       return res.json({ completed: true });
     }
 
-    /* LOAD FLOW GRAPH */
+    /* ================= LOAD FLOW GRAPH ================= */
+
     const nodes = await FlowNode.find({
       flow_id: session.flow_id,
       account_id: session.account_id
@@ -145,12 +144,21 @@ exports.nextStep = async (req, res) => {
       throw new Error("Nodo actual no encontrado");
     }
 
-    /* INPUT PROCESSING */
+    /* ================= INPUT PROCESSING ================= */
+
+    const INPUT_NODES = [
+      "question",
+      "email",
+      "phone",
+      "number",
+      "text_input",
+      "options",
+      "policy"
+    ];
 
     const requiresInput = INPUT_NODES.includes(currentNode.node_type);
 
     if (requiresInput) {
-
       const errors = validateNodeInput(currentNode, input);
 
       if (errors.length > 0) {
@@ -173,31 +181,28 @@ exports.nextStep = async (req, res) => {
       await session.save();
     }
 
-    /* RESOLVE NEXT NODE */
+    /* ================= NEXT NODE RESOLUTION ================= */
+
     const resolveNextNode = (node) => {
-
-      /* ================= OPTIONS / POLICY ================= */
-
       if (
         (node.node_type === "options" || node.node_type === "policy") &&
         input !== undefined
       ) {
-
         const sourceArray =
           node.node_type === "options"
             ? node.options
             : node.policy;
 
         if (Array.isArray(sourceArray) && sourceArray.length > 0) {
-
-          const orderedOptions = sourceArray
+          const ordered = sourceArray
             .slice()
             .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
-          const match = orderedOptions.find((opt, index) =>
+          const match = ordered.find((opt, index) =>
             String(index) === String(input) ||
             String(opt.value) === String(input) ||
-            String(opt.label || "").toLowerCase() === String(input).toLowerCase()
+            String(opt.label || "").toLowerCase() ===
+              String(input).toLowerCase()
           );
 
           if (match?.next_node_id) {
@@ -205,8 +210,6 @@ exports.nextStep = async (req, res) => {
           }
         }
       }
-
-      /* ================= DEFAULT NEXT ================= */
 
       if (node.next_node_id) {
         return nodesMap.get(String(node.next_node_id));
@@ -217,10 +220,9 @@ exports.nextStep = async (req, res) => {
 
     let nextNode = resolveNextNode(currentNode);
 
-    /* END FLOW */
+    /* ================= END IF NO NEXT ================= */
 
     if (!nextNode) {
-
       session.is_completed = true;
       await session.save();
 
@@ -231,24 +233,26 @@ exports.nextStep = async (req, res) => {
       return res.json({ completed: true });
     }
 
-    /* AUTO EXECUTION LOOP */
+    /* ================= AUTO EXECUTION LOOP ================= */
 
     let safetyCounter = 0;
 
     while (nextNode) {
-
       if (safetyCounter++ > 50) {
         throw new Error("Loop infinito detectado");
       }
 
       session.current_node_id = nextNode._id;
 
+      /* ===== NOTIFICATIONS ===== */
+
       if (nextNode.meta?.notify?.enabled && session.mode === "production") {
         await executeNodeNotification(nextNode, session);
       }
 
-      if (nextNode.end_conversation) {
+      /* ===== END CONVERSATION NODE ===== */
 
+      if (nextNode.end_conversation) {
         session.is_completed = true;
         await session.save();
 
@@ -258,14 +262,24 @@ exports.nextStep = async (req, res) => {
 
         return res.json(renderNode(nextNode, session._id));
       }
+
+      /* ===== IF NODE REQUIRES INPUT ===== */
 
       if (INPUT_NODES.includes(nextNode.node_type)) {
         await session.save();
         return res.json(renderNode(nextNode, session._id));
       }
 
-      if (!nextNode.next_node_id && !nextNode.options?.length) {
+      /* ===== DETECT TERMINAL NON-INTERACTIVE NODE ===== */
 
+      const isInteractive =
+        INPUT_NODES.includes(nextNode.node_type);
+
+      const hasBranches =
+        nextNode.options?.length ||
+        nextNode.policy?.length;
+
+      if (!nextNode.next_node_id && !hasBranches && !isInteractive) {
         session.is_completed = true;
         await session.save();
 
@@ -275,6 +289,8 @@ exports.nextStep = async (req, res) => {
 
         return res.json(renderNode(nextNode, session._id));
       }
+
+      /* ===== CONTINUE LOOP ===== */
 
       await session.save();
       currentNode = nextNode;
