@@ -109,9 +109,16 @@
                     href = action.value;
                     break;
 
-                case "email":
-                    href = `mailto:${action.value}`;
+                case "email": {
+                    const email = action.value.trim();
+
+                    const subject = encodeURIComponent("Contacto desde el chatbot");
+                    const body = encodeURIComponent("Hola, quiero más información.");
+
+                    a.href = `mailto:${email}?subject=${subject}&body=${body}`;
+                    a.target = "_self";
                     break;
+                }
 
                 case "phone":
                     href = `tel:${action.value}`;
