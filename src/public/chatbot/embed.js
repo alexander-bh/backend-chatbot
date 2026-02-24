@@ -331,6 +331,7 @@
     }
 
     async function send(v = null) {
+        console.log(v)
         const text = v ?? el.input.value.trim();
         if (!text || !SESSION_ID) return;
         console.log("Enviando:", text);
