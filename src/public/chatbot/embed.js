@@ -2,400 +2,397 @@
     /* =========================
        CONFIG
     ========================= */
-    document.addEventListener("DOMContentLoaded", () => {
-        const script = document.currentScript;
-        if (!script?.dataset?.config) return;
+    const script = document.currentScript;
+    if (!script?.dataset?.config) return;
 
-        const config = JSON.parse(script.dataset.config);
+    const config = JSON.parse(script.dataset.config);
 
-        const {
-            apiBase,
-            publicId,
-            name,
-            avatar,
-            primaryColor,
-            secondaryColor,
-            inputPlaceholder,
-            welcomeMessage,
-            welcomeDelay = 2,
-            showWelcomeOnMobile,
-            position
-        } = config;
+    const {
+        apiBase,
+        publicId,
+        name,
+        avatar,
+        primaryColor,
+        secondaryColor,
+        inputPlaceholder,
+        welcomeMessage,
+        welcomeDelay = 2,
+        showWelcomeOnMobile,
+        position
+    } = config;
 
-        const TEXT_INPUT_TYPES = [
-            "question",
-            "email",
-            "phone",
-            "number",
-            "text_input"
-        ];
+    const TEXT_INPUT_TYPES = [
+        "question",
+        "email",
+        "phone",
+        "number",
+        "text_input"
+    ];
 
-        const SELECTABLE_TYPES = [
-            "options",
-            "policy"
-        ];
+    const SELECTABLE_TYPES = [
+        "options",
+        "policy"
+    ];
 
-        let SESSION_ID = null;
-        let started = false;
-        let isOpen = false;
-        let typingElement = null;
+    let SESSION_ID = null;
+    let started = false;
+    let isOpen = false;
+    let typingElement = null;
 
-        /* =========================
-           DOM
-        ========================= */
-        const el = {
-            messages: document.getElementById("messages"),
-            input: document.getElementById("messageInput"),
-            send: document.getElementById("sendBtn"),
-            widget: document.getElementById("chatWidget"),
-            toggle: document.getElementById("chatToggle"),
-            close: document.getElementById("chatClose"),
-            name: document.getElementById("chatName"),
-            avatarFab: document.getElementById("chatAvatarFab"),
-            avatarHeader: document.getElementById("chatAvatarHeader"),
-            status: document.getElementById("chatStatus"),
-            welcome: document.getElementById("chatWelcome"),
-            restart: document.getElementById("chatRestart")
-        };
+    /* =========================
+       DOM
+    ========================= */
+    const el = {
+        messages: document.getElementById("messages"),
+        input: document.getElementById("messageInput"),
+        send: document.getElementById("sendBtn"),
+        widget: document.getElementById("chatWidget"),
+        toggle: document.getElementById("chatToggle"),
+        close: document.getElementById("chatClose"),
+        name: document.getElementById("chatName"),
+        avatarFab: document.getElementById("chatAvatarFab"),
+        avatarHeader: document.getElementById("chatAvatarHeader"),
+        status: document.getElementById("chatStatus"),
+        welcome: document.getElementById("chatWelcome"),
+        restart: document.getElementById("chatRestart")
+    };
 
-        if (Object.values(el).some(v => !v)) return;
+    if (Object.values(el).some(v => !v)) return;
 
-        /* =========================
-           HELPERS
-        ========================= */
-        const rgb = hex => {
-            if (!/^#[\da-f]{6}$/i.test(hex)) return "37,99,235";
-            return `${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5), 16)}`;
-        };
+    /* =========================
+       HELPERS
+    ========================= */
+    const rgb = hex => {
+        if (!/^#[\da-f]{6}$/i.test(hex)) return "37,99,235";
+        return `${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5), 16)}`;
+    };
 
-        const time = () =>
-            new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+    const time = () =>
+        new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
 
-        const mobile = () => matchMedia("(max-width:480px)").matches;
+    const mobile = () => matchMedia("(max-width:480px)").matches;
 
-        /* =========================
-           THEME
-        ========================= */
-        document.documentElement.style.setProperty("--chat-primary", primaryColor);
-        document.documentElement.style.setProperty("--chat-secondary", secondaryColor);
-        document.documentElement.style.setProperty("--chat-primary-rgb", rgb(primaryColor));
-        document.documentElement.style.setProperty("--chat-secondary-rgb", rgb(secondaryColor));
+    /* =========================
+       THEME
+    ========================= */
+    document.documentElement.style.setProperty("--chat-primary", primaryColor);
+    document.documentElement.style.setProperty("--chat-secondary", secondaryColor);
+    document.documentElement.style.setProperty("--chat-primary-rgb", rgb(primaryColor));
+    document.documentElement.style.setProperty("--chat-secondary-rgb", rgb(secondaryColor));
 
-        el.name.textContent = name;
-        el.avatarFab.src = el.avatarHeader.src = avatar;
-        el.input.placeholder = inputPlaceholder;
+    el.name.textContent = name;
+    el.avatarFab.src = el.avatarHeader.src = avatar;
+    el.input.placeholder = inputPlaceholder;
 
-        el.input.disabled = el.send.disabled = true;
+    el.input.disabled = el.send.disabled = true;
 
 
-        /* =========================
-           UI
-        ========================= */
-        function message(from, text, error = false) {
+    /* =========================
+       UI
+    ========================= */
+    function message(from, text, error = false) {
+        const m = document.createElement("div");
+        m.className = `msg ${from}${error ? " error" : ""}`;
+
+        if (from === "bot") {
+            const a = document.createElement("img");
+            a.src = avatar;
+            a.className = "msg-avatar";
+            m.appendChild(a);
+        }
+
+        const c = document.createElement("div");
+        c.className = "msg-content";
+
+        const b = document.createElement("div");
+        b.className = "bubble";
+        b.textContent = text;
+
+        const t = document.createElement("div");
+        t.className = "message-time";
+        t.textContent = time();
+
+        c.append(b, t);
+        m.appendChild(c);
+        el.messages.appendChild(m);
+        el.messages.scrollTop = el.messages.scrollHeight;
+    }
+
+    function typing(show) {
+        if (show && !typingElement) {
+            typingElement = document.createElement("div");
+            typingElement.className = "msg bot typing";
+            typingElement.innerHTML = `<div class="bubble"><span class="typing-dots"><span></span><span></span><span></span></span></div>`;
+            el.messages.appendChild(typingElement);
+        }
+        if (!show && typingElement) {
+            typingElement.remove();
+            typingElement = null;
+        }
+    }
+
+    function status(s) {
+        el.status.textContent = s;
+        document.documentElement.style.setProperty(
+            "--chat-pulse-rgb",
+            s === "En línea" ? rgb(primaryColor) : rgb(secondaryColor)
+        );
+    }
+
+    function applyPosition(position) {
+        const chatButton = el.toggle;
+        const chatWindow = el.widget;
+        const welcome = el.welcome;
+
+        if (!chatButton || !chatWindow) return;
+
+        ["top", "bottom", "left", "right"].forEach(prop => {
+            chatButton.style[prop] = "";
+            chatWindow.style[prop] = "";
+            if (welcome) welcome.style[prop] = "";
+        });
+
+        chatButton.style.transform = "";
+        chatWindow.style.transform = "";
+
+        switch (position) {
+            case "bottom-right":
+                chatButton.style.bottom = "20px";
+                chatButton.style.right = "20px";
+
+                chatWindow.style.bottom = "90px";
+                chatWindow.style.right = "20px";
+                break;
+
+            case "bottom-left":
+                chatButton.style.bottom = "20px";
+                chatButton.style.left = "20px";
+
+                chatWindow.style.bottom = "90px";
+                chatWindow.style.left = "20px";
+                break;
+
+            case "middle-right":
+                chatButton.style.top = "50%";
+                chatButton.style.right = "20px";
+                chatButton.style.transform = "translateY(-50%)";
+
+                chatWindow.style.top = "50%";
+                chatWindow.style.right = "90px";
+                chatWindow.style.transform = "translateY(-50%)";
+                break;
+        }
+    }
+    /* =========================
+       FLOW
+    ========================= */
+    async function process(node, depth = 0) {
+        if (!node || depth > 20) return;
+
+        console.log("NODE COMPLETO:", node);
+
+        const nodeType = node.type;
+
+        if (node.validation_error) {
+            message("bot", node.message, true);
+            el.input.disabled = false;
+            el.send.disabled = false;
+            el.input.focus();
+            return;
+        }
+
+        /* ===== Typing animation ===== */
+        if (node.typing_time) {
+            typing(true);
+            await new Promise(r => setTimeout(r, node.typing_time * 1000));
+            typing(false);
+        }
+
+        let bubbleElement = null;
+
+        /* ===== Crear mensaje bot ===== */
+        if (node.content) {
             const m = document.createElement("div");
-            m.className = `msg ${from}${error ? " error" : ""}`;
+            m.className = "msg bot";
 
-            if (from === "bot") {
-                const a = document.createElement("img");
-                a.src = avatar;
-                a.className = "msg-avatar";
-                m.appendChild(a);
-            }
+            const avatarImg = document.createElement("img");
+            avatarImg.src = avatar;
+            avatarImg.className = "msg-avatar";
 
-            const c = document.createElement("div");
-            c.className = "msg-content";
+            const contentWrapper = document.createElement("div");
+            contentWrapper.className = "msg-content";
 
-            const b = document.createElement("div");
-            b.className = "bubble";
-            b.textContent = text;
+            const bubble = document.createElement("div");
+            bubble.className = "bubble";
+            bubble.innerHTML = node.content;
 
-            const t = document.createElement("div");
-            t.className = "message-time";
-            t.textContent = time();
+            const timeEl = document.createElement("div");
+            timeEl.className = "message-time";
+            timeEl.textContent = time();
 
-            c.append(b, t);
-            m.appendChild(c);
+            contentWrapper.append(bubble, timeEl);
+            m.append(avatarImg, contentWrapper);
             el.messages.appendChild(m);
+
             el.messages.scrollTop = el.messages.scrollHeight;
+
+            bubbleElement = bubble;
         }
 
-        function typing(show) {
-            if (show && !typingElement) {
-                typingElement = document.createElement("div");
-                typingElement.className = "msg bot typing";
-                typingElement.innerHTML = `<div class="bubble"><span class="typing-dots"><span></span><span></span><span></span></span></div>`;
-                el.messages.appendChild(typingElement);
-            }
-            if (!show && typingElement) {
-                typingElement.remove();
-                typingElement = null;
-            }
-        }
+        /* ===== OPTIONS / POLICY ===== */
+        if (
+            (nodeType === "options" && node.options?.length) ||
+            (nodeType === "policy" && node.policy?.length)
+        ) {
+            const list =
+                nodeType === "policy"
+                    ? node.policy
+                    : node.options;
 
-        function status(s) {
-            el.status.textContent = s;
-            document.documentElement.style.setProperty(
-                "--chat-pulse-rgb",
-                s === "En línea" ? rgb(primaryColor) : rgb(secondaryColor)
-            );
-        }
+            const optionsContainer = document.createElement("div");
+            optionsContainer.className = "inline-options";
 
-        function applyPosition(position) {
-            const chatButton = el.toggle;
-            const chatWindow = el.widget;
-            const welcome = el.welcome;
-
-            if (!chatButton || !chatWindow) return;
-
-            ["top", "bottom", "left", "right"].forEach(prop => {
-                chatButton.style[prop] = "";
-                chatWindow.style[prop] = "";
-                if (welcome) welcome.style[prop] = "";
+            list.forEach(o => {
+                const btn = document.createElement("button");
+                btn.textContent = o.label;
+                btn.onclick = () => {
+                    el.input.disabled = true;
+                    el.send.disabled = true;
+                    send(o.value ?? o.label);
+                };
+                optionsContainer.appendChild(btn);
             });
 
-            chatButton.style.transform = "";
-            chatWindow.style.transform = "";
+            bubbleElement?.appendChild(optionsContainer);
 
-            switch (position) {
-                case "bottom-right":
-                    chatButton.style.bottom = "20px";
-                    chatButton.style.right = "20px";
-
-                    chatWindow.style.bottom = "90px";
-                    chatWindow.style.right = "20px";
-                    break;
-
-                case "bottom-left":
-                    chatButton.style.bottom = "20px";
-                    chatButton.style.left = "20px";
-
-                    chatWindow.style.bottom = "90px";
-                    chatWindow.style.left = "20px";
-                    break;
-
-                case "middle-right":
-                    chatButton.style.top = "50%";
-                    chatButton.style.right = "20px";
-                    chatButton.style.transform = "translateY(-50%)";
-
-                    chatWindow.style.top = "50%";
-                    chatWindow.style.right = "90px";
-                    chatWindow.style.transform = "translateY(-50%)";
-                    break;
-            }
-        }
-        /* =========================
-           FLOW
-        ========================= */
-        async function process(node, depth = 0) {
-            if (!node || depth > 20) return;
-
-            console.log("NODE COMPLETO:", node);
-
-            const nodeType = node.type;
-
-            if (node.validation_error) {
-                message("bot", node.message, true);
-                el.input.disabled = false;
-                el.send.disabled = false;
-                el.input.focus();
-                return;
-            }
-
-            /* ===== Typing animation ===== */
-            if (node.typing_time) {
-                typing(true);
-                await new Promise(r => setTimeout(r, node.typing_time * 1000));
-                typing(false);
-            }
-
-            let bubbleElement = null;
-
-            /* ===== Crear mensaje bot ===== */
-            if (node.content) {
-                const m = document.createElement("div");
-                m.className = "msg bot";
-
-                const avatarImg = document.createElement("img");
-                avatarImg.src = avatar;
-                avatarImg.className = "msg-avatar";
-
-                const contentWrapper = document.createElement("div");
-                contentWrapper.className = "msg-content";
-
-                const bubble = document.createElement("div");
-                bubble.className = "bubble";
-                bubble.innerHTML = node.content;
-
-                const timeEl = document.createElement("div");
-                timeEl.className = "message-time";
-                timeEl.textContent = time();
-
-                contentWrapper.append(bubble, timeEl);
-                m.append(avatarImg, contentWrapper);
-                el.messages.appendChild(m);
-
-                el.messages.scrollTop = el.messages.scrollHeight;
-
-                bubbleElement = bubble;
-            }
-
-            /* ===== OPTIONS / POLICY ===== */
-            if (
-                (nodeType === "options" && node.options?.length) ||
-                (nodeType === "policy" && node.policy?.length)
-            ) {
-                const list =
-                    nodeType === "policy"
-                        ? node.policy
-                        : node.options;
-
-                const optionsContainer = document.createElement("div");
-                optionsContainer.className = "inline-options";
-
-                list.forEach(o => {
-                    const btn = document.createElement("button");
-                    btn.textContent = o.label;
-                    btn.onclick = () => {
-                        el.input.disabled = true;
-                        el.send.disabled = true;
-                        send(o.value ?? o.label);
-                    };
-                    optionsContainer.appendChild(btn);
-                });
-
-                bubbleElement?.appendChild(optionsContainer);
-
-                el.input.disabled = true;
-                el.send.disabled = true;
-                return;
-            }
-
-            /* ===== NODOS QUE ESPERAN INTERACCIÓN ===== */
-            const isInputNode =
-                TEXT_INPUT_TYPES.includes(nodeType) ||
-                !!node.validation?.rules?.length;
-
-            const isSelectableNode =
-                nodeType === "options" || nodeType === "policy";
-
-            // 🔒 options / policy → siempre esperan botón
-            if (isSelectableNode) {
-                el.input.disabled = true;
-                el.send.disabled = true;
-                return;
-            }
-
-            // ⌨️ nodos de texto → habilitan input
-            if (isInputNode) {
-                el.input.disabled = false;
-                el.send.disabled = false;
-                el.input.focus();
-                return;
-            }
-
-            /* ===== SOLO AUTO NEXT SI ES NODO INFORMATIVO ===== */
-            try {
-                const r = await fetch(
-                    `${apiBase}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`,
-                    { method: "POST" }
-                );
-
-                const nextNode = await r.json();
-
-                if (nextNode?.completed) return;
-
-                return process(nextNode, depth + 1);
-
-            } catch (err) {
-                message("bot", "Ocurrió un error al continuar el flujo.", true);
-            }
+            el.input.disabled = true;
+            el.send.disabled = true;
+            return;
         }
 
-        async function start() {
-            try {
-                typing(true);
-                status("Conectando...");
-                const r = await fetch(`${apiBase}/api/public-chatbot/chatbot-conversation/${publicId}/start`, { method: "POST" });
-                const d = await r.json();
-                SESSION_ID = d.session_id;
-                typing(false);
-                status("En línea");
-                process(d);
-            } catch {
-                typing(false);
-                status("Error");
-                message("bot", "No pude conectarme al servidor", true);
-            }
+        /* ===== NODOS QUE ESPERAN INTERACCIÓN ===== */
+        const isInputNode =
+            TEXT_INPUT_TYPES.includes(nodeType) ||
+            !!node.validation?.rules?.length;
+
+        const isSelectableNode =
+            nodeType === "options" || nodeType === "policy";
+
+        // 🔒 options / policy → siempre esperan botón
+        if (isSelectableNode) {
+            el.input.disabled = true;
+            el.send.disabled = true;
+            return;
         }
 
-        async function send(v = null) {
-            const text = v ?? el.input.value.trim();
-            if (!text || !SESSION_ID) return;
-            console.log("Enviando:", text);
+        // ⌨️ nodos de texto → habilitan input
+        if (isInputNode) {
+            el.input.disabled = false;
+            el.send.disabled = false;
+            el.input.focus();
+            return;
+        }
 
+        /* ===== SOLO AUTO NEXT SI ES NODO INFORMATIVO ===== */
+        try {
+            const r = await fetch(
+                `${apiBase}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`,
+                { method: "POST" }
+            );
 
-            if (v === null) {
-                message("user", text);
-                el.input.value = "";
-            }
+            const nextNode = await r.json();
 
-            el.input.disabled = el.send.disabled = true;
+            if (nextNode?.completed) return;
+
+            return process(nextNode, depth + 1);
+
+        } catch (err) {
+            message("bot", "Ocurrió un error al continuar el flujo.", true);
+        }
+    }
+
+    async function start() {
+        try {
             typing(true);
+            status("Conectando...");
+            const r = await fetch(`${apiBase}/api/public-chatbot/chatbot-conversation/${publicId}/start`, { method: "POST" });
+            const d = await r.json();
+            SESSION_ID = d.session_id;
+            typing(false);
+            status("En línea");
+            process(d);
+        } catch {
+            typing(false);
+            status("Error");
+            message("bot", "No pude conectarme al servidor", true);
+        }
+    }
 
-            try {
-                const r = await fetch(
-                    `${apiBase}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`,
-                    {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ input: text })
-                    }
-                );
+    async function send(v = null) {
+        const text = v ?? el.input.value.trim();
+        if (!text || !SESSION_ID) return;
+        console.log("Enviando:", text);
 
-                typing(false);
-                process(await r.json());
 
-            } catch {
-                typing(false);
-                message("bot", "Error al enviar el mensaje", true);
-                el.input.disabled = false;
-                el.send.disabled = false;
-            }
+        if (v === null) {
+            message("user", text);
+            el.input.value = "";
         }
 
-        /* =========================
-           EVENTS
-        ========================= */
-        el.send.onclick = () => send();
-        el.input.onkeydown = e => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), send());
+        el.input.disabled = el.send.disabled = true;
+        typing(true);
 
-        const welcomeKey = `chat_welcome_seen_${publicId}`;
-
-        el.toggle.onclick = () => {
-            isOpen = !isOpen;
-            el.widget.classList.toggle("open", isOpen);
-            if (isOpen && !started) { started = true; start(); }
-            localStorage.setItem(welcomeKey, "1");
-        };
-
-        el.close.onclick = el.toggle.onclick;
-        el.restart.onclick = () => location.reload();
-
-
-        if (position) {
-            applyPosition(position);
-        }
-
-        if (!localStorage.getItem(welcomeKey) && welcomeMessage) {
-            setTimeout(() => {
-                if (!isOpen && (!mobile() || showWelcomeOnMobile)) {
-                    el.welcome.querySelector(".welcome-text").textContent = welcomeMessage;
-                    el.welcome.style.display = "block";
-                    localStorage.setItem(welcomeKey, "1");
+        try {
+            const r = await fetch(
+                `${apiBase}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ input: text })
                 }
-            }, welcomeDelay * 1000);
-        }
+            );
 
-    });
+            typing(false);
+            process(await r.json());
+
+        } catch {
+            typing(false);
+            message("bot", "Error al enviar el mensaje", true);
+            el.input.disabled = false;
+            el.send.disabled = false;
+        }
+    }
+
+    /* =========================
+       EVENTS
+    ========================= */
+    el.send.onclick = () => send();
+    el.input.onkeydown = e => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), send());
+
+    const welcomeKey = `chat_welcome_seen_${publicId}`;
+
+    el.toggle.onclick = () => {
+        isOpen = !isOpen;
+        el.widget.classList.toggle("open", isOpen);
+        if (isOpen && !started) { started = true; start(); }
+        localStorage.setItem(welcomeKey, "1");
+    };
+
+    el.close.onclick = el.toggle.onclick;
+    el.restart.onclick = () => location.reload();
+
+
+    if (position) {
+        applyPosition(position);
+    }
+
+    if (!localStorage.getItem(welcomeKey) && welcomeMessage) {
+        setTimeout(() => {
+            if (!isOpen && (!mobile() || showWelcomeOnMobile)) {
+                el.welcome.querySelector(".welcome-text").textContent = welcomeMessage;
+                el.welcome.style.display = "block";
+                localStorage.setItem(welcomeKey, "1");
+            }
+        }, welcomeDelay * 1000);
+    }
 })();
