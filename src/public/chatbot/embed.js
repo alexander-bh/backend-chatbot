@@ -21,7 +21,15 @@
         position
     } = config;
 
-    const INPUT_TYPES = ["email", "phone", "number"];
+    const INPUT_TYPES = [
+        "question",
+        "email",
+        "phone",
+        "number",
+        "text_input",
+        "options",
+        "policy"
+    ];
 
     let SESSION_ID = null;
     let started = false;
@@ -124,7 +132,10 @@
         list.forEach((o, i) => {
             const btn = document.createElement("button");
             btn.textContent = o.label;
-            btn.onclick = () => { send(i); m.remove(); };
+            btn.onclick = () => {
+                send(o.value ?? o.label);
+                m.remove();
+            };
             b.appendChild(btn);
         });
 
@@ -304,6 +315,7 @@
 
     el.close.onclick = el.toggle.onclick;
     el.restart.onclick = () => location.reload();
+
 
     if (position) {
         applyPosition(position);

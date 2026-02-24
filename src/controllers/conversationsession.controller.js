@@ -174,29 +174,44 @@ exports.nextStep = async (req, res) => {
     /* ================= NEXT NODE RESOLUTION ================= */
 
     const resolveNextNode = (node) => {
+
       if (
         (node.node_type === "options" || node.node_type === "policy") &&
         input !== undefined
       ) {
+
         const sourceArray =
           node.node_type === "options"
             ? node.options
             : node.policy;
 
-        if (Array.isArray(sourceArray) && sourceArray.length > 0) {
-          const ordered = sourceArray
-            .slice()
-            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        const ordered = sourceArray
+          .slice()
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
-          const match = ordered.find((opt, index) =>
-            String(index) === String(input) ||
-            String(opt.value) === String(input) ||
-            String(opt.label || "").toLowerCase() ===
-              String(input).toLowerCase()
+        const match = ordered.find((opt, index) =>
+          String(index) === String(input) ||
+          String(opt.value) === String(input) ||
+          String(opt.label || "").toLowerCase() ===
+          String(input).toLowerCase()
+        );
+
+        if (!match) return null;
+
+        // 🔥 PRIORIDAD 1: next_node_id directo
+        if (match.next_node_id) {
+          return nodesMap.get(String(match.next_node_id));
+        }
+
+        // 🔥 PRIORIDAD 2: next_branch_id
+        if (match.next_branch_id) {
+          const branchStart = nodes.find(n =>
+            n.branch_id === match.next_branch_id &&
+            n.order === 0
           );
 
-          if (match?.next_node_id) {
-            return nodesMap.get(String(match.next_node_id));
+          if (branchStart) {
+            return branchStart;
           }
         }
       }
@@ -207,7 +222,6 @@ exports.nextStep = async (req, res) => {
 
       return null;
     };
-
     let nextNode = resolveNextNode(currentNode);
 
     /* ================= END IF NO NEXT ================= */
