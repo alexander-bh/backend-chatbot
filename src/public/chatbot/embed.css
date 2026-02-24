@@ -554,11 +554,46 @@ main {
 }
 
 .bubble-link {
-  display: inline-block;
-  margin-top: 6px;
-  color: var(--chat-primary);
-  font-weight: 500;
-  text-decoration: underline;
+    display: inline-block;
+    margin-top: 6px;
+    color: var(--chat-primary);
+    font-weight: 500;
+    text-decoration: underline;
+}
+
+.link-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.link-action {
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: rgba(var(--chat-primary-rgb), 0.1);
+    color: var(--chat-primary);
+    font-weight: 500;
+    text-decoration: none;
+    text-align: center;
+}
+
+.link-action:hover {
+    background: rgba(var(--chat-primary-rgb), 0.2);
+}
+
+/* Opcional: iconos por tipo */
+.link-whatsapp {
+    background: #25d36620;
+    color: #128c7e;
+}
+
+.link-phone {
+    background: #3b82f620;
+}
+
+.link-email {
+    background: #6366f120;
 }
 
 /* Opciones rápidas */

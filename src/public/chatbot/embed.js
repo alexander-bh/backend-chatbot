@@ -90,7 +90,57 @@
     /* =========================
        UI
     ========================= */
-    function message(from, text, error = false, linkActions = []) {
+
+    function renderLinkActions(actions, bubble) {
+        if (!Array.isArray(actions) || !bubble) return;
+
+        const container = document.createElement("div");
+        container.className = "link-actions";
+
+        actions.forEach(action => {
+            const a = document.createElement("a");
+            a.className = `link-action link-${action.type}`;
+            a.textContent = action.title || action.value;
+
+            let href = "#";
+
+            switch (action.type) {
+                case "link":
+                    href = action.value;
+                    break;
+
+                case "email":
+                    href = `mailto:${action.value}`;
+                    break;
+
+                case "phone":
+                    href = `tel:${action.value}`;
+                    break;
+
+                case "whatsapp":
+                    const phone = action.value.replace(/\D/g, "");
+                    href = `https://wa.me/${phone}`;
+                    break;
+
+                default:
+                    return;
+            }
+
+            a.href = href;
+
+            // new tab
+            if (action.new_tab) {
+                a.target = "_blank";
+                a.rel = "noopener noreferrer";
+            }
+
+            container.appendChild(a);
+        });
+
+        bubble.appendChild(container);
+    }
+
+    function message(from, text, error = false) {
         const m = document.createElement("div");
         m.className = `msg ${from}${error ? " error" : ""}`;
 
@@ -106,27 +156,7 @@
 
         const b = document.createElement("div");
         b.className = "bubble";
-
-        // Texto base
-        const p = document.createElement("div");
-        p.textContent = text;
-        b.appendChild(p);
-
-        // 🔗 Links
-        if (Array.isArray(linkActions)) {
-            linkActions.forEach(link => {
-                if (link.type !== "link") return;
-
-                const a = document.createElement("a");
-                a.href = link.value;
-                a.textContent = link.title || link.value;
-                a.className = "bubble-link";
-                a.target = link.new_tab ? "_blank" : "_self";
-                a.rel = "noopener noreferrer";
-
-                b.appendChild(a);
-            });
-        }
+        b.textContent = text;
 
         const t = document.createElement("div");
         t.className = "message-time";
@@ -230,6 +260,7 @@
 
         return bubble;
     }
+
     function renderInlineOptions(node, bubbleElement) {
         const list = node.type === "policy" ? node.policy : node.options;
 
@@ -315,16 +346,30 @@
         }
 
         /* =========================
+           LINK NODE (acciones)
+        ========================= */
+        if (nodeType === "link") {
+            let bubbleElement = null;
+
+            if (node.content) {
+                bubbleElement = renderBotMessage(node.content);
+            }
+
+            if (node.link_actions?.length && bubbleElement) {
+                renderLinkActions(node.link_actions, bubbleElement);
+            }
+
+            disableInput();
+            return;
+        }
+
+        /* =========================
            RENDER MENSAJE BOT
         ========================= */
         let bubbleElement = null;
 
         if (node.content) {
-            if (node.link_actions?.length) {
-                message("bot", node.content, false, node.link_actions);
-            } else {
-                bubbleElement = renderBotMessage(node.content);
-            }
+            bubbleElement = renderBotMessage(node.content);
         }
 
         /* =========================
@@ -336,7 +381,7 @@
         ) {
             renderInlineOptions(node, bubbleElement);
             disableInput();
-            return; // 👈 aquí SÍ es correcto
+            return;
         }
 
         /* =========================
