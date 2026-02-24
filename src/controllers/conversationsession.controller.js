@@ -133,7 +133,7 @@ exports.nextStep = async (req, res) => {
     if (!currentNode) {
       throw new Error("Nodo actual no encontrado");
     }
-    /* ================= INPUT PROCESSING ================= */
+
     /* ================= INPUT PROCESSING ================= */
 
     const TEXT_INPUT_NODES = [
@@ -144,7 +144,7 @@ exports.nextStep = async (req, res) => {
       "text_input"
     ];
 
-    // 🔒 NO auto avanzar si es input node y no hay input
+    // 🔒 No auto avanzar si es nodo input y no hay input
     if (
       TEXT_INPUT_NODES.includes(currentNode.node_type) &&
       input === undefined
@@ -180,7 +180,6 @@ exports.nextStep = async (req, res) => {
     const resolveNextNode = (node) => {
 
       /* ===== OPTIONS / POLICY ===== */
-
       if (
         (node.node_type === "options" || node.node_type === "policy") &&
         input !== undefined
@@ -197,7 +196,7 @@ exports.nextStep = async (req, res) => {
 
         if (!match) return null;
 
-        // 🔥 GUARDAR BRANCH SI EXISTE
+        // Guardar branch si existe
         if (match.next_branch_id) {
           session.current_branch_id = match.next_branch_id;
         } else {
@@ -212,18 +211,17 @@ exports.nextStep = async (req, res) => {
       }
 
       /* ===== NORMAL NEXT ===== */
-
       if (node.next_node_id) {
 
         const candidate = nodesMap.get(String(node.next_node_id));
         if (!candidate) return null;
 
-        // 🔥 VALIDAR BRANCH ACTIVO
+        // Validar branch solo si el candidato pertenece a uno
         if (candidate.branch_id) {
           if (candidate.branch_id === session.current_branch_id) {
             return candidate;
           }
-          return null;
+          return null; // no coincide branch → no avanzar
         }
 
         return candidate;
@@ -234,27 +232,44 @@ exports.nextStep = async (req, res) => {
 
     let nextNode = resolveNextNode(currentNode);
 
-    if (!nextNode) {
-      session.is_completed = true;
-      await session.save();
+    /* ================= SAFE TERMINATION ================= */
 
-      if (session.mode === "production") {
-        await upsertContactFromSession(session);
+    if (!nextNode) {
+
+      // Solo terminar si el nodo actual es final
+      if (currentNode.end_conversation) {
+
+        session.is_completed = true;
+        session.current_branch_id = null;
+
+        await session.save();
+
+        if (session.mode === "production") {
+          await upsertContactFromSession(session);
+        }
+
+        return res.json({ completed: true });
       }
 
-      return res.json({ completed: true });
+      // Si no es final pero no encontró siguiente, mantener nodo actual
+      return res.json(renderNode(currentNode, session._id));
     }
+
+    /* ================= ADVANCE ================= */
 
     session.current_node_id = nextNode._id;
 
-    /* ===== NOTIFICATIONS ===== */
+    // Limpiar branch si el siguiente nodo no pertenece a ninguno
+    if (!nextNode.branch_id) {
+      session.current_branch_id = null;
+    }
 
+    /* ===== NOTIFICATIONS ===== */
     if (nextNode.meta?.notify?.enabled && session.mode === "production") {
       await executeNodeNotification(nextNode, session);
     }
 
-    /* ===== END CONVERSATION ===== */
-
+    /* ===== END CONVERSATION FLAG ===== */
     if (nextNode.end_conversation) {
       session.is_completed = true;
       session.current_branch_id = null;
