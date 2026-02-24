@@ -110,14 +110,13 @@
 
                 case "email": {
                     const email = action.value.trim();
-                    const subject = encodeURIComponent("Contacto desde el chatbot");
-                    const body = encodeURIComponent("Hola, quiero más información.");
 
                     a.href = "#";
                     a.onclick = e => {
                         e.preventDefault();
-                        window.location.href =
-                            `mailto:${email}?subject=${subject}&body=${body}`;
+
+                        navigator.clipboard.writeText(email);
+                        alert(`Copia este correo y escríbenos:\n${email}`);
                     };
                     break;
                 }
