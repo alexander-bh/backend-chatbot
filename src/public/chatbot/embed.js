@@ -191,167 +191,105 @@
                 break;
         }
     }
-
-    function renderOptions(options) {
-        const container = document.createElement("div");
-        container.className = "inline-options";
-
-        options.forEach(opt => {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "option-btn";
-            btn.textContent = opt.label;
-
-            btn.onclick = () => {
-                // bloquear múltiples clicks
-                container.querySelectorAll("button").forEach(b => b.disabled = true);
-
-                // mostrar como mensaje usuario
-                message("user", opt.label);
-
-                send(opt.value);
-            };
-
-            container.appendChild(btn);
-        });
-
-        el.messages.appendChild(container);
-        el.messages.scrollTop = el.messages.scrollHeight;
-    }
-
-    function renderPolicy(policy) {
-        const container = document.createElement("div");
-        container.className = "inline-options";
-
-        policy.forEach(opt => {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "option-btn policy-btn";
-            btn.textContent = opt.label;
-
-            btn.onclick = () => {
-                container.querySelectorAll("button").forEach(b => b.disabled = true);
-
-                message("user", opt.label);
-
-                send(opt.value);
-            };
-
-            container.appendChild(btn);
-        });
-
-        el.messages.appendChild(container);
-        el.messages.scrollTop = el.messages.scrollHeight;
-    }
-
-    function renderLinkActions(actions) {
-        const container = document.createElement("div");
-        container.className = "inline-options";
-
-        actions.forEach(action => {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "option-btn link-btn";
-            btn.textContent = action.label;
-
-            btn.onclick = () => {
-                if (action.url) {
-                    window.open(action.url, "_blank");
-                }
-
-                if (action.value) {
-                    message("user", action.label);
-                    send(action.value);
-                }
-            };
-
-            container.appendChild(btn);
-        });
-
-        el.messages.appendChild(container);
-        el.messages.scrollTop = el.messages.scrollHeight;
-    }
-
-    async function nextStep() {
-        if (!SESSION_ID) return;
-
-        typing(true);
-
-        try {
-            const r = await fetch(
-                `${apiBase}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`,
-                {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({})
-                }
-            );
-
-            typing(false);
-
-            const data = await r.json();
-            process(data);
-
-        } catch {
-            typing(false);
-            message("bot", "Error al continuar la conversación", true);
-        }
-    }
-
     /* =========================
        FLOW
     ========================= */
-    function process(node) {
-        if (!node) return;
+    async function process(node, depth = 0) {
+        if (!node || depth > 20) return;
 
         const nodeType = node.type;
 
-        document.querySelectorAll(".inline-options").forEach(el => el.remove());
-
-        el.input.value = "";
-        el.input.disabled = true;
-        el.send.disabled = true;
-        el.input.style.pointerEvents = "auto";
-
-        currentValidation = null;
-
-        if (node.validation?.rules?.length) {
-            currentValidation = node.validation;
+        /* ===== Typing animation ===== */
+        if (node.typing_time) {
+            typing(true);
+            await new Promise(r => setTimeout(r, node.typing_time * 1000));
+            typing(false);
         }
 
-        /* 🔥 MOSTRAR MENSAJE DEL BOT */
+        /* ===== Guardar validación ===== */
+        currentValidation = node.validation?.rules?.length
+            ? node.validation
+            : null;
+
+        let bubbleElement = null;
+
+        /* ===== Crear mensaje bot ===== */
         if (node.content) {
-            message("bot", node.content, node.is_error || false);
+            const m = document.createElement("div");
+            m.className = "msg bot";
+
+            const avatarImg = document.createElement("img");
+            avatarImg.src = avatar;
+            avatarImg.className = "msg-avatar";
+
+            const contentWrapper = document.createElement("div");
+            contentWrapper.className = "msg-content";
+
+            const bubble = document.createElement("div");
+            bubble.className = "bubble";
+            bubble.innerHTML = node.content;
+
+            const timeEl = document.createElement("div");
+            timeEl.className = "message-time";
+            timeEl.textContent = time();
+
+            contentWrapper.append(bubble, timeEl);
+            m.append(avatarImg, contentWrapper);
+            el.messages.appendChild(m);
+
+            el.messages.scrollTop = el.messages.scrollHeight;
+
+            bubbleElement = bubble;
         }
 
-        const TEXT_INPUT_TYPES = [
-            "question",
-            "email",
-            "phone",
-            "number",
-            "text_input"
-        ];
+        /* ===== OPTIONS / POLICY ===== */
+        if (
+            (nodeType === "options" && node.options?.length) ||
+            (nodeType === "policy" && node.policy?.length)
+        ) {
+            const list =
+                nodeType === "policy"
+                    ? node.policy
+                    : node.options;
 
-        const isInputNode = TEXT_INPUT_TYPES.includes(nodeType);
-        const isOptionsNode = nodeType === "options";
-        const isPolicyNode = nodeType === "policy";
-        const isLinkNode = nodeType === "link";
+            const optionsContainer = document.createElement("div");
+            optionsContainer.className = "inline-options";
 
-        if (isOptionsNode && Array.isArray(node.options)) {
-            renderOptions(node.options);
+            list.forEach(o => {
+                const btn = document.createElement("button");
+                btn.textContent = o.label;
+                btn.onclick = () => {
+                    el.input.disabled = true;
+                    el.send.disabled = true;
+                    send(o.value ?? o.label);
+                };
+                optionsContainer.appendChild(btn);
+            });
+
+            bubbleElement?.appendChild(optionsContainer);
+
+            el.input.disabled = true;
+            el.send.disabled = true;
+            console.log(nodeType, list);
             return;
         }
 
-        if (isPolicyNode && Array.isArray(node.policy)) {
-            renderPolicy(node.policy);
+        /* ===== NODOS QUE ESPERAN INTERACCIÓN ===== */
+        const isInputNode =
+            TEXT_INPUT_TYPES.includes(nodeType) ||
+            !!node.validation?.rules?.length;
+
+        const isSelectableNode =
+            nodeType === "options" || nodeType === "policy";
+
+        // 🔒 options / policy → siempre esperan botón
+        if (isSelectableNode) {
+            el.input.disabled = true;
+            el.send.disabled = true;
             return;
         }
 
-        if (isLinkNode && Array.isArray(node.link_actions)) {
-            renderLinkActions(node.link_actions);
-            return;
-        }
-
+        // ⌨️ nodos de texto → habilitan input
         if (isInputNode) {
             el.input.disabled = false;
             el.send.disabled = false;
@@ -359,11 +297,24 @@
             return;
         }
 
-        setTimeout(() => {
-            nextStep();
-        }, node.typing_time || 500);
+        /* ===== SOLO AUTO NEXT SI ES NODO INFORMATIVO ===== */
+        try {
+            const r = await fetch(
+                `${apiBase}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`,
+                { method: "POST" }
+            );
+
+            const nextNode = await r.json();
+
+            if (nextNode?.completed) return;
+
+            return process(nextNode, depth + 1);
+
+        } catch (err) {
+            message("bot", "Ocurrió un error al continuar el flujo.", true);
+        }
     }
-    
+
     async function start() {
         try {
             typing(true);
