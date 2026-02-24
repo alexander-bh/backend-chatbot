@@ -265,7 +265,7 @@
             el.input.type = "number";
         }
     }
-    
+
     /* =========================
        FLOW
     ========================= */
@@ -395,12 +395,35 @@
         }
     }
 
+    async function restartConversation() {
+        if (!publicId) return;
+
+        // Reset estados
+        SESSION_ID = null;
+        started = false;
+
+        // Limpiar mensajes
+        elements.messages.innerHTML = "";
+
+        // Deshabilitar input mientras reinicia
+        elements.messageInput.disabled = true;
+        elements.sendBtn.disabled = true;
+
+        // Iniciar nueva conversación
+        started = true;
+        await start();
+    }
+
     /* =========================
        EVENTS
     ========================= */
     el.send.onclick = () => send();
-    el.input.onkeydown = e => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), send());
-
+    el.input.addEventListener("keydown", e => {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            send();
+        }
+    });
     const welcomeKey = `chat_welcome_seen_${publicId}`;
 
     el.toggle.onclick = () => {
@@ -411,7 +434,7 @@
     };
 
     el.close.onclick = el.toggle.onclick;
-    el.restart.onclick = () => location.reload();
+    el.restart.onclick = () => restartConversation();
 
 
     if (position) {
