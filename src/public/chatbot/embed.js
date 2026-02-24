@@ -275,17 +275,20 @@
             !!node.validation?.rules?.length;
 
         const isSelectableNode =
-            (nodeType === "options" && node.options?.length) ||
-            (nodeType === "policy" && node.policy?.length);
+            nodeType === "options" || nodeType === "policy";
 
-        if (isInputNode || isSelectableNode) {
-            el.input.disabled = !isInputNode;
-            el.send.disabled = !isInputNode;
+        // 🔒 options / policy → siempre esperan botón
+        if (isSelectableNode) {
+            el.input.disabled = true;
+            el.send.disabled = true;
+            return;
+        }
 
-            if (isInputNode) {
-                el.input.focus();
-            }
-
+        // ⌨️ nodos de texto → habilitan input
+        if (isInputNode) {
+            el.input.disabled = false;
+            el.send.disabled = false;
+            el.input.focus();
             return;
         }
 
