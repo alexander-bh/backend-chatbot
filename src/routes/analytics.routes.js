@@ -28,4 +28,19 @@ router.get(
   analyticsController.getChatbotOverview
 );
 
+router.get(
+  "/chatbot/:id/getContactsDetail",
+  authMiddleware,
+  analyticsController.getContactsByOrigin
+);
+
+
+router.get(
+  "/chatbot/:id/getContactsDetail",
+  authMiddleware,
+  analyticsController.getContactsDetail
+);
+
+
+
 module.exports = router;
