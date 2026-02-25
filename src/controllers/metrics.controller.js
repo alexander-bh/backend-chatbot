@@ -77,6 +77,11 @@ exports.getChatbotMetrics = async (req, res) => {
   }
 };
 
+const mongoose = require("mongoose");
+const Contact = require("../models/Contact");
+const FlowNode = require("../models/FlowNode");
+const Flow = require("../models/Flow");
+
 exports.getNodeFunnel = async (req, res) => {
   try {
     const { chatbot_id } = req.params;
@@ -89,17 +94,18 @@ exports.getNodeFunnel = async (req, res) => {
     const chatbotObjectId = new mongoose.Types.ObjectId(chatbot_id);
 
     /* =============================
-       1️⃣ OBTENER CHATBOT + FLOW
+       1️⃣ OBTENER FLOW DEL CHATBOT
     ============================= */
 
-    const chatbot = await Chatbot.findOne({
-      _id: chatbotObjectId,
-      account_id: accountId
+    const flow = await Flow.findOne({
+      chatbot_id: chatbotObjectId,
+      account_id: accountId,
+      status: "published"
     }).lean();
 
-    if (!chatbot?.flow_id) {
+    if (!flow) {
       return res.status(400).json({
-        message: "Chatbot sin flow asociado"
+        message: "El chatbot no tiene un flow publicado"
       });
     }
 
@@ -117,7 +123,6 @@ exports.getNodeFunnel = async (req, res) => {
 
       { $unwind: "$conversation" },
 
-      // 👉 una vez por sesión y nodo
       {
         $group: {
           _id: {
@@ -127,7 +132,6 @@ exports.getNodeFunnel = async (req, res) => {
         }
       },
 
-      // 👉 total por nodo
       {
         $group: {
           _id: "$_id.node_id",
@@ -141,6 +145,7 @@ exports.getNodeFunnel = async (req, res) => {
     if (!funnelRaw.length) {
       return res.json({
         chatbot_id,
+        flow_id: flow._id,
         total_nodes: 0,
         funnel: []
       });
@@ -154,7 +159,7 @@ exports.getNodeFunnel = async (req, res) => {
 
     const nodes = await FlowNode.find({
       _id: { $in: nodeIds },
-      flow_id: chatbot.flow_id
+      flow_id: flow._id
     }).lean();
 
     const nodeMap = new Map(
@@ -177,7 +182,6 @@ exports.getNodeFunnel = async (req, res) => {
       };
     });
 
-    // (opcional) ordenar por posición real del flujo
     enriched.sort(
       (a, b) => (a.position ?? 999) - (b.position ?? 999)
     );
@@ -188,7 +192,8 @@ exports.getNodeFunnel = async (req, res) => {
 
     res.json({
       chatbot_id,
-      flow_id: chatbot.flow_id,
+      flow_id: flow._id,
+      flow_name: flow.name,
       total_nodes: enriched.length,
       funnel: enriched
     });
