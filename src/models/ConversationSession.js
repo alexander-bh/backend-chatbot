@@ -35,6 +35,28 @@ const ConversationSessionSchema = new mongoose.Schema(
       type: Object,
       default: {}
     },
+
+    // 🔥 NUEVO → historial completo
+    history: [
+      {
+        node_id: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "FlowNode"
+        },
+
+        question: String,   // mensaje del bot
+        answer: String,     // respuesta del usuario
+
+        node_type: String,
+        variable_key: String,
+
+        timestamp: {
+          type: Date,
+          default: Date.now
+        }
+      }
+    ],
+
     mode: {
       type: String,
       enum: ["preview", "production"],
@@ -48,6 +70,10 @@ const ConversationSessionSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+ConversationSessionSchema.index({ flow_id: 1, account_id: 1, mode: 1 });
+ConversationSessionSchema.index({ "history.node_id": 1 });
+ConversationSessionSchema.index({ is_completed: 1 });
 
 module.exports = mongoose.model(
   "ConversationSession",

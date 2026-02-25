@@ -18,6 +18,8 @@ app.use(require("./middlewares/mongo.middleware.js"));
 // ───────── RUTAS PÚBLICAS ─────────
 app.use("/api/auth", require("./routes/auth.routes.js"));
 app.use("/api/public-chatbot", require("./routes/public-chatbot.routes.js"));
+app.use("/api/contacts", require("./routes/contact.routes"));
+app.use("/api/analytics", require("./routes/analytics.routes.js"));
 
 // ───────── RUTAS PRIVADAS ─────────
 app.use("/api/accounts", require("./routes/account.routes.js"));
