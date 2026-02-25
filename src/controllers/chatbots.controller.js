@@ -73,17 +73,129 @@ exports.createChatbot = async (req, res) => {
     }], { session });
 
     // ─────────── CREAR NODO INICIAL ───────────
-    const [startNode] = await FlowNode.create([{
-      account_id: req.user.account_id,
-      flow_id: flow._id,
-      node_type: "text",
-      content: welcomeText,
-      order: 0,
-      typing_time: 2,
-      parent_node_id: null,
-      next_node_id: null,
-      is_draft: true
-    }], { session });
+    // ─────────── CREAR NODOS POR DEFECTO ───────────
+
+    // Crear ObjectIds manualmente para poder enlazarlos
+    const nodeIds = {
+      start: new mongoose.Types.ObjectId(),
+      name: new mongoose.Types.ObjectId(),
+      lastname: new mongoose.Types.ObjectId(),
+      phone: new mongoose.Types.ObjectId(),
+      email: new mongoose.Types.ObjectId(),
+      end: new mongoose.Types.ObjectId()
+    };
+
+    const defaultNodes = [
+      {
+        _id: nodeIds.start,
+        account_id: req.user.account_id,
+        flow_id: flow._id,
+        order: 0,
+        node_type: "text",
+        content: "Hola,",
+        typing_time: 2,
+        next_node_id: nodeIds.name,
+        end_conversation: false,
+        is_draft: true
+      },
+      {
+        _id: nodeIds.name,
+        account_id: req.user.account_id,
+        flow_id: flow._id,
+        order: 1,
+        node_type: "text_input",
+        content: "¿Cuál es tu nombre?",
+        variable_key: "name",
+        typing_time: 2,
+        validation: {
+          enabled: true,
+          rules: [
+            { type: "required", message: "El nombre es obligatorio" }
+          ]
+        },
+        next_node_id: nodeIds.lastname,
+        end_conversation: false,
+        is_draft: true
+      },
+      {
+        _id: nodeIds.lastname,
+        account_id: req.user.account_id,
+        flow_id: flow._id,
+        order: 2,
+        node_type: "text_input",
+        content: "¿Cuál es tu apellido?",
+        variable_key: "lastname",
+        typing_time: 2,
+        validation: {
+          enabled: true,
+          rules: [
+            { type: "required", message: "El apellido es obligatorio" }
+          ]
+        },
+        next_node_id: nodeIds.phone,
+        end_conversation: false,
+        is_draft: true
+      },
+      {
+        _id: nodeIds.phone,
+        account_id: req.user.account_id,
+        flow_id: flow._id,
+        order: 3,
+        node_type: "phone",
+        content: "¿Cuál es su número de teléfono?",
+        variable_key: "phone",
+        typing_time: 2,
+        validation: {
+          enabled: true,
+          rules: [
+            { type: "required", message: "Debes ingresar un teléfono." },
+            { type: "phone", message: "El teléfono no es válido." }
+          ]
+        },
+        next_node_id: nodeIds.email,
+        end_conversation: false,
+        is_draft: true
+      },
+      {
+        _id: nodeIds.email,
+        account_id: req.user.account_id,
+        flow_id: flow._id,
+        order: 4,
+        node_type: "email",
+        content: "¿Cuál es tu correo electrónico?",
+        variable_key: "email",
+        typing_time: 2,
+        validation: {
+          enabled: true,
+          rules: [
+            { type: "required", message: "Debes ingresar un email." },
+            { type: "email", message: "El email no es válido." }
+          ]
+        },
+        next_node_id: nodeIds.end,
+        end_conversation: false,
+        is_draft: true
+      },
+      {
+        _id: nodeIds.end,
+        account_id: req.user.account_id,
+        flow_id: flow._id,
+        order: 5,
+        node_type: "text",
+        content: "Gracias, ya puedes cerrar el chatbot.",
+        typing_time: 0,
+        next_node_id: null,
+        end_conversation: true,
+        is_draft: true
+      }
+    ];
+
+    // Insertar todos juntos
+    await FlowNode.insertMany(defaultNodes, { session });
+
+    // Asignar nodo inicial al flow
+    flow.start_node_id = nodeIds.start;
+    await flow.save({ session });
 
     flow.start_node_id = startNode._id;
     await flow.save({ session });
