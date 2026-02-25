@@ -2,6 +2,7 @@
 const mongoose = require("mongoose");
 const ConversationSession = require("../models/ConversationSession");
 const FlowNode = require("../models/FlowNode");
+const Contact = require("../models/Contact");
 
 exports.getFlowDropOff = async (req, res) => {
   try {
