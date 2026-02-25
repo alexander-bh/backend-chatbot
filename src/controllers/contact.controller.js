@@ -1,5 +1,5 @@
 const Contact = require("../models/Contact");
-
+const formatDate = require("../utils/formatDate");
 
 /* =========================
    CREATE CONTACT
@@ -51,7 +51,6 @@ exports.createContact = async (req, res) => {
 ========================= */
 exports.getContactsByChatbot = async (req, res) => {
   try {
-
     const { chatbot_id } = req.params;
     const { status } = req.query;
 
@@ -63,10 +62,15 @@ exports.getContactsByChatbot = async (req, res) => {
 
     const contacts = await Contact
       .find(filter)
-      .sort({ created_at: -1 })
+      .sort({ createdAt: -1 }) // 👈 createdAt
       .lean();
 
-    res.json(contacts);
+    const formatted = contacts.map(c => ({
+      ...c,
+      created_at_formatted: formatDate(c.createdAt)
+    }));
+
+    res.json(formatted);
 
   } catch (error) {
     console.error("GET CONTACTS ERROR:", error);

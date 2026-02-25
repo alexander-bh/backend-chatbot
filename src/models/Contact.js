@@ -83,6 +83,6 @@ const ContactSchema = new mongoose.Schema({
 /* =========================
    INDEXES EXTRA
 ========================= */
-ContactSchema.index({ account_id: 1, chatbot_id: 1, created_at: -1 });
+ContactSchema.index({ account_id: 1, chatbot_id: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Contact", ContactSchema);
