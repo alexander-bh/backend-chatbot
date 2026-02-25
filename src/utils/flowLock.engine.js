@@ -23,8 +23,12 @@ exports.acquireFlowLock = async ({
   session
 }) => {
 
+  validateIds({ flow_id, user_id, account_id });
+
   const now = new Date();
-  const expires = new Date(now.getTime() + 15 * 60000);
+  const expires = new Date(now.getTime() + LOCK_MINUTES * 60000);
+
+  const userObjectId = new mongoose.Types.ObjectId(user_id);
 
   const flow = await Flow.findOneAndUpdate(
     {
@@ -33,13 +37,13 @@ exports.acquireFlowLock = async ({
       $or: [
         { lock: null },
         { "lock.lock_expires_at": { $lt: now } },
-        { "lock.locked_by": user_id }
+        { "lock.locked_by": userObjectId }
       ]
     },
     {
       $set: {
         lock: {
-          locked_by: user_id,
+          locked_by: userObjectId,
           locked_at: now,
           lock_expires_at: expires
         }
