@@ -10,4 +10,22 @@ router.get(
   analyticsController.getFlowDropOff
 );
 
+router.get(
+  "/chatbot/:id/contacts-by-date",
+  authMiddleware,
+  analyticsController.getContactsByDate
+);
+
+router.get(
+  "/chatbot/:id/contacts-by-hour",
+  authMiddleware,
+  analyticsController.getContactsByHour
+);
+
+router.get(
+  "/chatbot/:id/overview",
+  authMiddleware,
+  analyticsController.getChatbotOverview
+);
+
 module.exports = router;

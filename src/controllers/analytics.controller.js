@@ -162,3 +162,276 @@ exports.getFlowDropOff = async (req, res) => {
     });
   }
 };
+
+
+exports.getContactsByDate = async (req, res) => {
+  try {
+    const { id: chatbotId } = req.params;
+    const { from, to } = req.query;
+
+    const accountId = req.user.account_id;
+
+    if (!mongoose.Types.ObjectId.isValid(chatbotId)) {
+      return res.status(400).json({ message: "chatbotId inválido" });
+    }
+
+    const match = {
+      chatbot_id: new mongoose.Types.ObjectId(chatbotId),
+      account_id: new mongoose.Types.ObjectId(accountId)
+    };
+
+    if (from || to) {
+      match.createdAt = {};
+      if (from) match.createdAt.$gte = new Date(from);
+      if (to) match.createdAt.$lte = new Date(to);
+    }
+
+    const data = await Contact.aggregate([
+      { $match: match },
+
+      {
+        $group: {
+          _id: {
+            year: { $year: "$createdAt" },
+            month: { $month: "$createdAt" },
+            day: { $dayOfMonth: "$createdAt" }
+          },
+          total: { $sum: 1 }
+        }
+      },
+
+      {
+        $project: {
+          date: {
+            $dateFromParts: {
+              year: "$_id.year",
+              month: "$_id.month",
+              day: "$_id.day"
+            }
+          },
+          total: 1,
+          _id: 0
+        }
+      },
+
+      { $sort: { date: 1 } }
+    ]);
+
+    res.json(data);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error obteniendo contactos por fecha" });
+  }
+};
+
+exports.getContactsByHour = async (req, res) => {
+  try {
+    const { id: chatbotId } = req.params;
+    const accountId = req.user.account_id;
+
+    const data = await Contact.aggregate([
+      {
+        $match: {
+          chatbot_id: new mongoose.Types.ObjectId(chatbotId),
+          account_id: new mongoose.Types.ObjectId(accountId)
+        }
+      },
+
+      {
+        $group: {
+          _id: { $hour: "$createdAt" },
+          total: { $sum: 1 }
+        }
+      },
+
+      {
+        $project: {
+          hour: "$_id",
+          total: 1,
+          _id: 0
+        }
+      },
+
+      { $sort: { hour: 1 } }
+    ]);
+
+    res.json(data);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error obteniendo contactos por hora" });
+  }
+};
+
+exports.getChatbotOverview = async (req, res) => {
+  try {
+    const { id: chatbotId } = req.params;
+    const { from, to } = req.query;
+    const accountId = req.user.account_id;
+
+    if (!mongoose.Types.ObjectId.isValid(chatbotId)) {
+      return res.status(400).json({ message: "chatbotId inválido" });
+    }
+
+    const fromDate = from ? new Date(from) : null;
+    const toDate = to ? new Date(to) : null;
+
+    const matchContacts = {
+      chatbot_id: new mongoose.Types.ObjectId(chatbotId),
+      account_id: new mongoose.Types.ObjectId(accountId)
+    };
+
+    if (fromDate || toDate) {
+      matchContacts.createdAt = {};
+      if (fromDate) matchContacts.createdAt.$gte = fromDate;
+      if (toDate) matchContacts.createdAt.$lte = toDate;
+    }
+
+    /* =============================
+       1️⃣ CONTACTOS ACTUALES
+    ============================= */
+
+    const contactsData = await Contact.aggregate([
+      { $match: matchContacts },
+
+      {
+        $facet: {
+
+          summary: [
+            { $count: "total_contacts" }
+          ],
+
+          by_date: [
+            {
+              $group: {
+                _id: {
+                  year: { $year: "$createdAt" },
+                  month: { $month: "$createdAt" },
+                  day: { $dayOfMonth: "$createdAt" }
+                },
+                total: { $sum: 1 }
+              }
+            },
+            {
+              $project: {
+                date: {
+                  $dateFromParts: {
+                    year: "$_id.year",
+                    month: "$_id.month",
+                    day: "$_id.day"
+                  }
+                },
+                total: 1,
+                _id: 0
+              }
+            },
+            { $sort: { date: 1 } }
+          ],
+
+          by_hour: [
+            {
+              $group: {
+                _id: { $hour: "$createdAt" },
+                total: { $sum: 1 }
+              }
+            },
+            {
+              $project: {
+                hour: "$_id",
+                total: 1,
+                _id: 0
+              }
+            },
+            { $sort: { hour: 1 } }
+          ]
+        }
+      }
+    ]);
+
+    const currentTotal =
+      contactsData[0].summary[0]?.total_contacts || 0;
+
+    /* =============================
+       2️⃣ PERIODO ANTERIOR
+    ============================= */
+
+    let previousTotal = 0;
+
+    if (fromDate && toDate) {
+      const diff = toDate - fromDate;
+      const prevFrom = new Date(fromDate - diff);
+      const prevTo = new Date(toDate - diff);
+
+      previousTotal = await Contact.countDocuments({
+        chatbot_id: chatbotId,
+        account_id: accountId,
+        createdAt: { $gte: prevFrom, $lte: prevTo }
+      });
+    }
+
+    const growthRate =
+      previousTotal === 0
+        ? 0
+        : Number(
+            (((currentTotal - previousTotal) / previousTotal) * 100).toFixed(2)
+          );
+
+    /* =============================
+       3️⃣ CONVERSION RATE
+       sesiones completadas → contacto
+    ============================= */
+
+    const totalSessions = await ConversationSession.countDocuments({
+      chatbot_id: chatbotId,
+      account_id: accountId,
+      mode: "production",
+      ...(fromDate && toDate && {
+        createdAt: { $gte: fromDate, $lte: toDate }
+      })
+    });
+
+    const conversionRate =
+      totalSessions === 0
+        ? 0
+        : Number(((currentTotal / totalSessions) * 100).toFixed(2));
+
+    /* =============================
+       RESPONSE
+    ============================= */
+
+    res.json({
+      summary: {
+        total_contacts: currentTotal,
+        previous_period_contacts: previousTotal,
+        growth_rate: growthRate,
+        conversion_rate: conversionRate
+      },
+      by_date: contactsData[0].by_date,
+      by_hour: fillMissingHours(contactsData[0].by_hour)
+    });
+
+  } catch (error) {
+    console.error("getChatbotOverview:", error);
+    res.status(500).json({
+      message: "Error obteniendo overview"
+    });
+  }
+};
+
+
+/* =============================
+   Helper para completar horas
+============================= */
+
+function fillMissingHours(data) {
+  const hours = Array.from({ length: 24 }, (_, i) => i);
+
+  return hours.map(hour => {
+    const found = data.find(d => d.hour === hour);
+    return {
+      hour,
+      total: found ? found.total : 0
+    };
+  });
+}
