@@ -94,6 +94,8 @@ exports.createChatbot = async (req, res) => {
         node_type: "text",
         content: "Hola,",
         typing_time: 2,
+        options: [],
+        policy: [],
         next_node_id: nodeIds.name,
         end_conversation: false,
         is_draft: true
@@ -113,6 +115,8 @@ exports.createChatbot = async (req, res) => {
             { type: "required", message: "El nombre es obligatorio" }
           ]
         },
+        options: [],
+        policy: [],
         next_node_id: nodeIds.lastname,
         end_conversation: false,
         is_draft: true
@@ -132,6 +136,8 @@ exports.createChatbot = async (req, res) => {
             { type: "required", message: "El apellido es obligatorio" }
           ]
         },
+        options: [],
+        policy: [],
         next_node_id: nodeIds.phone,
         end_conversation: false,
         is_draft: true
@@ -152,6 +158,8 @@ exports.createChatbot = async (req, res) => {
             { type: "phone", message: "El teléfono no es válido." }
           ]
         },
+        options: [],
+        policy: [],
         next_node_id: nodeIds.email,
         end_conversation: false,
         is_draft: true
@@ -172,6 +180,8 @@ exports.createChatbot = async (req, res) => {
             { type: "email", message: "El email no es válido." }
           ]
         },
+        options: [],
+        policy: [],
         next_node_id: nodeIds.end,
         end_conversation: false,
         is_draft: true
@@ -184,6 +194,8 @@ exports.createChatbot = async (req, res) => {
         node_type: "text",
         content: "Gracias, ya puedes cerrar el chatbot.",
         typing_time: 0,
+        options: [],
+        policy: [],
         next_node_id: null,
         end_conversation: true,
         is_draft: true
