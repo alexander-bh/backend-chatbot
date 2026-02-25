@@ -46,7 +46,9 @@ const ValidationSchema = new Schema(
             "email",
             "phone",
             "integer",
-            "decimal"
+            "decimal",
+            "phone_mx",
+            "phone_country"
           ],
           required: true
         },
