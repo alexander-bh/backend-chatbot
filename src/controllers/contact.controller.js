@@ -52,27 +52,31 @@ exports.createContact = async (req, res) => {
 exports.getContactsByChatbot = async (req, res) => {
   try {
     const { chatbot_id } = req.params;
-    const accountId = req.user.account_id;
-    const { from, to } = req.query;
+    const { status } = req.query;
 
-    const query = {
-      chatbot_id: new mongoose.Types.ObjectId(chatbot_id),
-      account_id: new mongoose.Types.ObjectId(accountId)
-    };
+    const filter = { chatbot_id };
 
-    if (from && to) {
-      query.createdAt = {
-        $gte: new Date(from),
-        $lte: new Date(to)
-      };
+    if (status) {
+      filter.status = status;
     }
 
-    const contacts = await Contact.find(query).sort({ createdAt: -1 });
+    const contacts = await Contact
+      .find(filter)
+      .sort({ createdAt: -1 }) // 👈 createdAt
+      .lean();
 
-    res.json(contacts);
+    const formatted = contacts.map(c => ({
+      ...c,
+      created_at_formatted: formatDate(c.createdAt)
+    }));
+
+    res.json(formatted);
+
   } catch (error) {
-    console.error("❌ getContactsByChatbot:", error);
-    res.status(500).json({ error: "Error obteniendo contactos" });
+    console.error("GET CONTACTS ERROR:", error);
+    res.status(500).json({
+      message: "Error al obtener contactos"
+    });
   }
 };
 
