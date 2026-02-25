@@ -17,7 +17,7 @@ const ALLOWED_MODES = ["preview", "production"];
 exports.startConversation = async (req, res) => {
   try {
 
-    const { chatbot_id, flow_id, mode = "production" } = req.body;
+    const { chatbot_id, flow_id, mode = "production", origin_url } = req.body;
 
     if (!ALLOWED_MODES.includes(mode)) {
       return res.status(400).json({ message: "Mode inválido" });
@@ -82,6 +82,7 @@ exports.startConversation = async (req, res) => {
       flow_id: flow._id,
       current_node_id: startNode._id,
       variables: {},
+      origin_url, // 🔥 aquí
       mode,
       is_completed: false,
       history: [

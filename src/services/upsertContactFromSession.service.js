@@ -45,6 +45,7 @@ module.exports = async function upsertContactFromSession(session) {
         chatbot_id: session.chatbot_id,
         session_id: session._id,
         variables: session.variables,
+        origin_url: session.origin_url,
         conversation,
         completed: session.is_completed
       },
