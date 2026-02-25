@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const Contact = require("../models/Contact");
 const FlowNode = require("../models/FlowNode");
-const Chatbot = require("../models/Chatbot");
+const Flow = require("../models/Flow");
 
 /* =========================
    MÉTRICAS GENERALES
@@ -77,11 +77,9 @@ exports.getChatbotMetrics = async (req, res) => {
   }
 };
 
-const mongoose = require("mongoose");
-const Contact = require("../models/Contact");
-const FlowNode = require("../models/FlowNode");
-const Flow = require("../models/Flow");
-
+/* =========================
+   FUNNEL POR NODO
+========================= */
 exports.getNodeFunnel = async (req, res) => {
   try {
     const { chatbot_id } = req.params;
