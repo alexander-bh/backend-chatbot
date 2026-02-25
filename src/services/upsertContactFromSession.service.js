@@ -1,31 +1,61 @@
-//upsertContactFromSession.service
+// upsertContactFromSession.service.js
+
 const Contact = require("../models/Contact");
+const FlowNode = require("../models/FlowNode");
 
-module.exports = async (session) => {
-  const { name, email, phone } = session.variables;
+module.exports = async function upsertContactFromSession(session) {
+  try {
 
-  const query = {
-    chatbot_id: session.chatbot_id
-  };
+    /* ================= LOAD FLOW NODES ================= */
 
-  if (email) query.email = email;
-  else if (phone) query.phone = phone;
-  else return;
+    const nodes = await FlowNode.find({
+      flow_id: session.flow_id,
+      account_id: session.account_id
+    }).lean();
 
-  await Contact.findOneAndUpdate(
-    query,
-    {
-      $set: {
+    const nodeMap = new Map(nodes.map(n => [String(n._id), n]));
+
+    /* ================= BUILD CONVERSATION ================= */
+
+    const conversation = [];
+
+    for (const step of session.history || []) {
+
+      const node = nodeMap.get(String(step.node_id));
+      if (!node) continue;
+
+      conversation.push({
+        node_id: step.node_id,
+        type: node.node_type,
+        question: step.question || node.content,
+        answer: step.answer || null,
+        variable: node.variable_key || null,
+        timestamp: step.timestamp || new Date()
+      });
+    }
+
+    /* ================= UPSERT CONTACT ================= */
+
+    await Contact.findOneAndUpdate(
+      {
+        session_id: session._id
+      },
+      {
         account_id: session.account_id,
         chatbot_id: session.chatbot_id,
-        name,
-        email,
-        phone
+        session_id: session._id,
+        variables: session.variables,
+        conversation,
+        completed: session.is_completed
+      },
+      {
+        upsert: true,
+        new: true,
+        setDefaultsOnInsert: true
       }
-    },
-    {
-      upsert: true,
-      new: true
-    }
-  );
+    );
+
+  } catch (error) {
+    console.error("upsertContactFromSession error:", error);
+  }
 };

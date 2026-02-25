@@ -83,7 +83,14 @@ exports.startConversation = async (req, res) => {
       current_node_id: startNode._id,
       variables: {},
       mode,
-      is_completed: false
+      is_completed: false,
+      history: [
+        {
+          node_id: startNode._id,
+          question: startNode.content,
+          node_type: startNode.node_type
+        }
+      ]
     });
 
     return res.json(renderNode(startNode, session._id));
@@ -134,8 +141,6 @@ exports.nextStep = async (req, res) => {
       throw new Error("Nodo actual no encontrado");
     }
 
-    /* ================= INPUT PROCESSING ================= */
-
     const TEXT_INPUT_NODES = [
       "question",
       "email",
@@ -144,7 +149,8 @@ exports.nextStep = async (req, res) => {
       "text_input"
     ];
 
-    // 🔒 No auto avanzar si es nodo input y no hay input
+    /* ================= FIRST RENDER (NO INPUT) ================= */
+
     if (
       TEXT_INPUT_NODES.includes(currentNode.node_type) &&
       input === undefined
@@ -152,7 +158,8 @@ exports.nextStep = async (req, res) => {
       return res.json(renderNode(currentNode, session._id));
     }
 
-    // ✍️ Procesar input si existe
+    /* ================= SAVE INPUT + HISTORY ================= */
+
     if (
       TEXT_INPUT_NODES.includes(currentNode.node_type) &&
       input !== undefined
@@ -171,10 +178,22 @@ exports.nextStep = async (req, res) => {
         });
       }
 
+      // Guardar variable
       if (session.mode === "production" && currentNode.variable_key) {
         session.variables[currentNode.variable_key] = String(input);
         session.markModified("variables");
       }
+
+      // 🔥 GUARDAR HISTORIAL
+      session.history.push({
+        node_id: currentNode._id,
+        question: currentNode.content,
+        answer: String(input),
+        node_type: currentNode.node_type,
+        variable_key: currentNode.variable_key
+      });
+
+      session.markModified("history");
 
       await session.save();
     }
@@ -183,7 +202,6 @@ exports.nextStep = async (req, res) => {
 
     const resolveNextNode = (node) => {
 
-      /* ===== OPTIONS / POLICY ===== */
       if (
         (node.node_type === "options" || node.node_type === "policy") &&
         input !== undefined
@@ -200,12 +218,7 @@ exports.nextStep = async (req, res) => {
 
         if (!match) return null;
 
-        // Guardar branch si existe
-        if (match.next_branch_id) {
-          session.current_branch_id = match.next_branch_id;
-        } else {
-          session.current_branch_id = null;
-        }
+        session.current_branch_id = match.next_branch_id || null;
 
         if (match.next_node_id) {
           return nodesMap.get(String(match.next_node_id));
@@ -214,18 +227,16 @@ exports.nextStep = async (req, res) => {
         return null;
       }
 
-      /* ===== NORMAL NEXT ===== */
       if (node.next_node_id) {
 
         const candidate = nodesMap.get(String(node.next_node_id));
         if (!candidate) return null;
 
-        // Validar branch solo si el candidato pertenece a uno
         if (candidate.branch_id) {
           if (candidate.branch_id === session.current_branch_id) {
             return candidate;
           }
-          return null; // no coincide branch → no avanzar
+          return null;
         }
 
         return candidate;
@@ -240,7 +251,6 @@ exports.nextStep = async (req, res) => {
 
     if (!nextNode) {
 
-      // Solo terminar si el nodo actual es final
       if (currentNode.end_conversation) {
 
         session.is_completed = true;
@@ -255,7 +265,6 @@ exports.nextStep = async (req, res) => {
         return res.json({ completed: true });
       }
 
-      // Si no es final pero no encontró siguiente, mantener nodo actual
       return res.json(renderNode(currentNode, session._id));
     }
 
@@ -263,20 +272,41 @@ exports.nextStep = async (req, res) => {
 
     session.current_node_id = nextNode._id;
 
-    // Limpiar branch si el siguiente nodo no pertenece a ninguno
     if (!nextNode.branch_id) {
       session.current_branch_id = null;
     }
 
-    /* ===== NOTIFICATIONS ===== */
+    /* ================= SAVE NON-INPUT NODE HISTORY ================= */
+
+    if (!TEXT_INPUT_NODES.includes(nextNode.node_type)) {
+      const lastHistory = session.history[session.history.length - 1];
+
+      if (!lastHistory || String(lastHistory.node_id) !== String(nextNode._id)) {
+        session.history.push({
+          node_id: nextNode._id,
+          question: nextNode.content,
+          node_type: nextNode.node_type
+        });
+      }
+
+      session.markModified("history");
+    }
+
+    /* ================= NOTIFICATIONS ================= */
+
     if (nextNode.meta?.notify?.enabled && session.mode === "production") {
       await executeNodeNotification(nextNode, session);
     }
 
-    /* ===== END CONVERSATION FLAG ===== */
+    /* ================= END FLAG ================= */
+
     if (nextNode.end_conversation) {
       session.is_completed = true;
       session.current_branch_id = null;
+
+      if (session.mode === "production") {
+        await upsertContactFromSession(session);
+      }
     }
 
     await session.save();
