@@ -76,6 +76,7 @@ exports.registerFirst = async (req, res, next) => {
       throw new Error("El email ya está registrado");
     }
 
+    // ─────────── ACCOUNT ───────────
     const [account] = await Account.create([{
       name: account_name,
       slug,
@@ -89,6 +90,7 @@ exports.registerFirst = async (req, res, next) => {
       phone_alt: finalPhoneAlt
     };
 
+    // ─────────── USER ───────────
     const [user] = await User.create([{
       account_id: account._id,
       name,
@@ -98,6 +100,7 @@ exports.registerFirst = async (req, res, next) => {
       onboarding: finalOnboarding
     }], { session });
 
+    // ─────────── CHATBOT ───────────
     const chatbot = new Chatbot({
       account_id: account._id,
       name: `Bot de ${name}`,
@@ -113,19 +116,21 @@ exports.registerFirst = async (req, res, next) => {
       is_enabled: true,
       input_placeholder: "Escribe tu mensaje…",
       show_branding: true
-    })
+    });
 
     await chatbot.save({ session });
 
+    // ─────────── FLOW ───────────
     const [flow] = await Flow.create([{
       account_id: account._id,
       chatbot_id: chatbot._id,
-      name: `Flujo del chatbot ${name.trim()}` ,
+      name: `Flujo del chatbot ${name.trim()}`,
       status: "draft",
       version: 1,
-      lock: null // 👈 CLAVE PARA QUE NO SE ROMPA EL LOCK
+      lock: null
     }], { session });
 
+    // ─────────── NODES ───────────
     const nodeIds = {
       start: new mongoose.Types.ObjectId(),
       name: new mongoose.Types.ObjectId(),
@@ -138,7 +143,7 @@ exports.registerFirst = async (req, res, next) => {
     const defaultNodes = [
       {
         _id: nodeIds.start,
-        account_id: req.user.account_id,
+        account_id: account._id, // ✅ CORREGIDO
         flow_id: flow._id,
         order: 0,
         node_type: "text",
@@ -150,7 +155,7 @@ exports.registerFirst = async (req, res, next) => {
       },
       {
         _id: nodeIds.name,
-        account_id: req.user.account_id,
+        account_id: account._id,
         flow_id: flow._id,
         order: 1,
         node_type: "text_input",
@@ -159,9 +164,7 @@ exports.registerFirst = async (req, res, next) => {
         typing_time: 2,
         validation: {
           enabled: true,
-          rules: [
-            { type: "required", message: "El nombre es obligatorio" }
-          ]
+          rules: [{ type: "required", message: "El nombre es obligatorio" }]
         },
         next_node_id: nodeIds.lastname,
         end_conversation: false,
@@ -169,7 +172,7 @@ exports.registerFirst = async (req, res, next) => {
       },
       {
         _id: nodeIds.lastname,
-        account_id: req.user.account_id,
+        account_id: account._id,
         flow_id: flow._id,
         order: 2,
         node_type: "text_input",
@@ -178,9 +181,7 @@ exports.registerFirst = async (req, res, next) => {
         typing_time: 2,
         validation: {
           enabled: true,
-          rules: [
-            { type: "required", message: "El apellido es obligatorio" }
-          ]
+          rules: [{ type: "required", message: "El apellido es obligatorio" }]
         },
         next_node_id: nodeIds.phone,
         end_conversation: false,
@@ -188,7 +189,7 @@ exports.registerFirst = async (req, res, next) => {
       },
       {
         _id: nodeIds.phone,
-        account_id: req.user.account_id,
+        account_id: account._id,
         flow_id: flow._id,
         order: 3,
         node_type: "phone",
@@ -208,7 +209,7 @@ exports.registerFirst = async (req, res, next) => {
       },
       {
         _id: nodeIds.email,
-        account_id: req.user.account_id,
+        account_id: account._id,
         flow_id: flow._id,
         order: 4,
         node_type: "email",
@@ -228,7 +229,7 @@ exports.registerFirst = async (req, res, next) => {
       },
       {
         _id: nodeIds.end,
-        account_id: req.user.account_id,
+        account_id: account._id,
         flow_id: flow._id,
         order: 5,
         node_type: "text",
@@ -240,13 +241,12 @@ exports.registerFirst = async (req, res, next) => {
       }
     ];
 
-    // Insertar todos juntos
     await FlowNode.insertMany(defaultNodes, { session });
 
-    // Asignar nodo inicial al flow
     flow.start_node_id = nodeIds.start;
     await flow.save({ session });
 
+    // ─────────── TOKEN ───────────
     const token = generateToken({
       id: user._id,
       role: user.role,
@@ -274,7 +274,7 @@ exports.registerFirst = async (req, res, next) => {
 
   } catch (error) {
     await session.abortTransaction();
-    next(error); // 👈 CLAVE
+    next(error);
   } finally {
     session.endSession();
   }
