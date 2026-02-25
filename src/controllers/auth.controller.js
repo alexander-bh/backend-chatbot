@@ -113,21 +113,20 @@ exports.registerFirst = async (req, res, next) => {
       is_enabled: true,
       input_placeholder: "Escribe tu mensaje…",
       show_branding: true
-    });
+    })
 
     await chatbot.save({ session });
 
-    // 🔥 AQUI ESTA LA CORRECCIÓN IMPORTANTE
     const [flow] = await Flow.create([{
       account_id: account._id,
       chatbot_id: chatbot._id,
-      name: "Flujo principal",
+      name: `Flujo del chatbot ${name.trim()}` ,
       status: "draft",
       version: 1,
       lock: null // 👈 CLAVE PARA QUE NO SE ROMPA EL LOCK
     }], { session });
 
- const nodeIds = {
+    const nodeIds = {
       start: new mongoose.Types.ObjectId(),
       name: new mongoose.Types.ObjectId(),
       lastname: new mongoose.Types.ObjectId(),
@@ -240,7 +239,7 @@ exports.registerFirst = async (req, res, next) => {
         is_draft: true
       }
     ];
-    
+
     // Insertar todos juntos
     await FlowNode.insertMany(defaultNodes, { session });
 
@@ -275,11 +274,12 @@ exports.registerFirst = async (req, res, next) => {
 
   } catch (error) {
     await session.abortTransaction();
-    next(error);
+    next(error); // 👈 CLAVE
   } finally {
     session.endSession();
   }
 };
+
 
 // Registro de usuario (por subdominio)
 exports.register = async (req, res) => {
