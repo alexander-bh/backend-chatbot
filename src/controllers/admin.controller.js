@@ -242,25 +242,19 @@ exports.createChatbotForUser = async (req, res) => {
     const { account_id, name } = req.body;
 
     // ───────── VALIDACIONES ─────────
-
-    if (!account_id || !mongoose.Types.ObjectId.isValid(account_id)) {
-      throw new Error("account_id inválido o requerido");
+    if (!account_id) {
+      throw new Error("account_id es requerido");
     }
 
     if (!name || typeof name !== "string" || !name.trim()) {
       throw new Error("Nombre del chatbot inválido");
     }
 
-    // 🔐 Validar que el admin pertenece a esa cuenta
-    if (!req.user || String(req.user.account_id) !== String(account_id)) {
-      throw new Error("No tienes permiso para crear chatbot en esta cuenta");
-    }
-
     // ───────── BUSCAR USUARIO CLIENT DE LA CUENTA ─────────
     const ownerUser = await User.findOne({
       account_id,
       role: "CLIENT"
-    }).session(session);
+    });
 
     if (!ownerUser) {
       throw new Error("No existe un usuario CLIENT para esta cuenta");
@@ -284,7 +278,7 @@ exports.createChatbotForUser = async (req, res) => {
 
     await chatbot.save({ session });
 
-    // ───────── CREAR FLOW INICIAL ─────────
+    // ───────── FLOW INICIAL ─────────
     const [flow] = await Flow.create([{
       account_id,
       chatbot_id: chatbot._id,
@@ -296,8 +290,7 @@ exports.createChatbotForUser = async (req, res) => {
       published_at: null
     }], { session });
 
-    // ───────── CREAR NODOS INICIALES ─────────
-
+    // ───────── NODO INICIAL ─────────
     const nodeIds = {
       start: new mongoose.Types.ObjectId(),
       name: new mongoose.Types.ObjectId(),
@@ -420,9 +413,10 @@ exports.createChatbotForUser = async (req, res) => {
 
     await session.commitTransaction();
 
+
     res.status(201).json({
-      message: "Chatbot creado correctamente",
-      chatbot_id: chatbot._id,
+      message: "Chatbot creado y asignado correctamente",
+      chatbot,
       owner: {
         id: ownerUser._id,
         name: ownerUser.name,
@@ -432,7 +426,6 @@ exports.createChatbotForUser = async (req, res) => {
 
   } catch (error) {
     await session.abortTransaction();
-    console.error("CREATE CHATBOT ERROR:", error);
     res.status(400).json({ message: error.message });
   } finally {
     session.endSession();
