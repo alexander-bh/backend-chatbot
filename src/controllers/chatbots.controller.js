@@ -197,12 +197,13 @@ exports.createChatbot = async (req, res) => {
     flow.start_node_id = nodeIds.start;
     await flow.save({ session });
 
-    flow.start_node_id = startNode._id;
-    await flow.save({ session });
-
     await session.commitTransaction();
 
-    res.status(201).json({ chatbot, flow, start_node: startNode });
+    res.status(201).json({
+      chatbot,
+      flow,
+      start_node_id: nodeIds.start
+    });
 
   } catch (error) {
     await session.abortTransaction();
