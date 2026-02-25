@@ -78,28 +78,90 @@ exports.getChatbotMetrics = async (req, res) => {
 exports.getNodeFunnel = async (req, res) => {
   try {
     const { chatbot_id } = req.params;
+    const accountId = req.user.account_id;
+
+    if (!mongoose.Types.ObjectId.isValid(chatbot_id)) {
+      return res.status(400).json({ message: "chatbot_id inválido" });
+    }
 
     const chatbotObjectId = new mongoose.Types.ObjectId(chatbot_id);
 
+    /* =============================
+       1️⃣ FUNNEL POR NODO (ÚNICO)
+    ============================= */
+
     const funnel = await Contact.aggregate([
-      { $match: { chatbot_id: chatbotObjectId } },
-
-      { $unwind: "$conversation" },
-
       {
-        $group: {
-          _id: "$conversation.node_id",
-          count: { $sum: 1 }
+        $match: {
+          chatbot_id: chatbotObjectId,
+          account_id: new mongoose.Types.ObjectId(accountId)
         }
       },
 
-      { $sort: { count: -1 } }
+      { $unwind: "$conversation" },
+
+      // 👉 1 vez por sesión y nodo
+      {
+        $group: {
+          _id: {
+            node_id: "$conversation.node_id",
+            session_id: "$session_id"
+          }
+        }
+      },
+
+      // 👉 total por nodo
+      {
+        $group: {
+          _id: "$_id.node_id",
+          total: { $sum: 1 }
+        }
+      },
+
+      { $sort: { total: -1 } }
     ]);
 
-    res.json(funnel);
+    /* =============================
+       2️⃣ INFO DE LOS NODOS
+    ============================= */
+
+    const nodeIds = funnel.map(f => f._id);
+
+    const nodes = await FlowNode.find({
+      _id: { $in: nodeIds },
+      account_id: accountId
+    }).lean();
+
+    const nodeMap = new Map(
+      nodes.map(n => [String(n._id), n])
+    );
+
+    /* =============================
+       3️⃣ ENRIQUECER RESPUESTA
+    ============================= */
+
+    const enriched = funnel.map(f => {
+      const node = nodeMap.get(String(f._id));
+
+      return {
+        node_id: f._id,
+        total: f.total,
+        node_type: node?.node_type || null,
+        question: node?.content || null,
+        position: node?.position ?? null
+      };
+    });
+
+    res.json({
+      chatbot_id,
+      total_nodes: enriched.length,
+      funnel: enriched
+    });
 
   } catch (err) {
     console.error("FUNNEL ERROR:", err);
-    res.status(500).json({ message: "Error obteniendo funnel" });
+    res.status(500).json({
+      message: "Error obteniendo funnel"
+    });
   }
 };
