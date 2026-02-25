@@ -43,8 +43,14 @@ exports.validateFlow = function (nodes, branches = [], start_node_id) {
   allNodes.forEach(node => {
 
     const hasOptionNext =
-      Array.isArray(node.options) &&
-      node.options.some(o => o.next_node_id);
+      (
+        Array.isArray(node.options) &&
+        node.options.some(o => o.next_node_id)
+      ) ||
+      (
+        Array.isArray(node.policy) &&
+        node.policy.some(p => p.next_node_id)
+      );
 
     const hasNext = !!node.next_node_id || hasOptionNext;
 
@@ -57,7 +63,7 @@ exports.validateFlow = function (nodes, branches = [], start_node_id) {
 
     // 🔥 VALIDAR next_node_id
     if (node.next_node_id &&
-        !nodeMap.has(String(node.next_node_id))) {
+      !nodeMap.has(String(node.next_node_id))) {
       throw new Error(`next_node_id inválido en ${node._id}`);
     }
 
@@ -65,7 +71,7 @@ exports.validateFlow = function (nodes, branches = [], start_node_id) {
     if (Array.isArray(node.options)) {
       node.options.forEach(opt => {
         if (opt.next_node_id &&
-            !nodeMap.has(String(opt.next_node_id))) {
+          !nodeMap.has(String(opt.next_node_id))) {
           throw new Error(
             `option.next_node_id inválido en ${node._id}`
           );
