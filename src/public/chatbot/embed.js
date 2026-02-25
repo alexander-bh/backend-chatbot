@@ -303,10 +303,7 @@
     }
 
     function expectsTextInput(node) {
-        return (
-            TEXT_INPUT_TYPES.includes(node.type) ||
-            !!node.validation?.rules?.length
-        );
+        return TEXT_INPUT_TYPES.includes(node.type);
     }
 
     function enableInput() {
