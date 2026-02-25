@@ -116,7 +116,6 @@ exports.getNodeFunnel = async (req, res) => {
         $match: {
           chatbot_id: chatbotObjectId,
           account_id: new mongoose.Types.ObjectId(accountId),
-          flow_id: flow._id
         }
       },
 
