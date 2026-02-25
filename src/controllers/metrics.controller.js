@@ -3,77 +3,55 @@ const Contact = require("../models/Contact");
 const FlowNode = require("../models/FlowNode");
 const Flow = require("../models/Flow");
 
-/* =========================
-   MÉTRICAS GENERALES
-========================= */
+/**
+ * MÉTRICAS GENERALES DEL CHATBOT
+ */
 exports.getChatbotMetrics = async (req, res) => {
   try {
     const { chatbot_id } = req.params;
+    const accountId = req.user.account_id;
 
     const chatbotObjectId = new mongoose.Types.ObjectId(chatbot_id);
+    const accountObjectId = new mongoose.Types.ObjectId(accountId);
 
     const metrics = await Contact.aggregate([
-      { $match: { chatbot_id: chatbotObjectId } },
-
+      {
+        $match: {
+          chatbot_id: chatbotObjectId,
+          account_id: accountObjectId
+        }
+      },
       {
         $facet: {
+          total: [{ $count: "count" }],
 
-          /* Totales */
-          totals: [
-            {
-              $group: {
-                _id: null,
-                total_contacts: { $sum: 1 },
-                completed: {
-                  $sum: { $cond: ["$completed", 1, 0] }
-                }
-              }
-            }
+          completed: [
+            { $match: { completed: true } },
+            { $count: "count" }
           ],
 
-          /* Status breakdown */
-          status_breakdown: [
-            {
-              $group: {
-                _id: "$status",
-                count: { $sum: 1 }
-              }
-            }
-          ],
-
-          /* Leads hoy */
           today: [
             {
               $match: {
-                created_at: {
+                createdAt: {
                   $gte: new Date(new Date().setHours(0, 0, 0, 0))
                 }
               }
             },
-            { $count: "today_count" }
+            { $count: "count" }
           ]
         }
       }
     ]);
 
-    const result = metrics[0];
-
-    const totalContacts = result.totals[0]?.total_contacts || 0;
-    const completed = result.totals[0]?.completed || 0;
-
     res.json({
-      total_contacts: totalContacts,
-      completed,
-      conversion_rate: totalContacts
-        ? ((completed / totalContacts) * 100).toFixed(2)
-        : 0,
-      status_breakdown: result.status_breakdown,
-      today: result.today[0]?.today_count || 0
+      total: metrics[0].total[0]?.count || 0,
+      completed: metrics[0].completed[0]?.count || 0,
+      today: metrics[0].today[0]?.count || 0
     });
-
-  } catch (err) {
-    console.error("METRICS ERROR:", err);
-    res.status(500).json({ message: "Error obteniendo métricas" });
+  } catch (error) {
+    console.error("❌ getChatbotMetrics:", error);
+    res.status(500).json({ error: "Error obteniendo métricas" });
   }
 };
 
@@ -170,7 +148,7 @@ exports.getNodeFunnel = async (req, res) => {
 
     const enriched = funnelRaw.map(f => {
       const node = nodeMap.get(String(f._id));
-
+      
       return {
         node_id: f._id,
         total: f.total,
@@ -183,6 +161,11 @@ exports.getNodeFunnel = async (req, res) => {
     enriched.sort(
       (a, b) => (a.position ?? 999) - (b.position ?? 999)
     );
+
+
+    console.log("FLOW ID:", flow._id);
+    console.log("NODE IDS FROM CONTACTS:", nodeIds);
+    console.log("FLOW NODES FOUND:", nodes.map(n => n._id));
 
     /* =============================
        5️⃣ RESPONSE
