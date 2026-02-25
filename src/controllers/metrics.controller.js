@@ -102,7 +102,6 @@ exports.getNodeFunnel = async (req, res) => {
 
       { $unwind: "$conversation" },
 
-      // 👉 1 vez por sesión y nodo
       {
         $group: {
           _id: {
@@ -112,22 +111,23 @@ exports.getNodeFunnel = async (req, res) => {
         }
       },
 
-      // 👉 total por nodo
       {
         $group: {
           _id: "$_id.node_id",
           total: { $sum: 1 }
         }
-      },
-
-      { $sort: { total: -1 } }
+      }
     ]);
 
-    /* =============================
-       2️⃣ INFO DE LOS NODOS
-    ============================= */
+    // 👉 convertir node_id a ObjectId válido
+    const nodeIds = funnel
+      .map(f => f._id)
+      .filter(id => mongoose.Types.ObjectId.isValid(id))
+      .map(id => new mongoose.Types.ObjectId(id));
 
-    const nodeIds = funnel.map(f => f._id);
+    /* =============================
+       2️⃣ TRAER NODOS REALES
+    ============================= */
 
     const nodes = await FlowNode.find({
       _id: { $in: nodeIds },
@@ -139,7 +139,7 @@ exports.getNodeFunnel = async (req, res) => {
     );
 
     /* =============================
-       3️⃣ ENRIQUECER RESPUESTA
+       3️⃣ ENRIQUECER FUNNEL
     ============================= */
 
     const enriched = funnel.map(f => {
@@ -148,8 +148,8 @@ exports.getNodeFunnel = async (req, res) => {
       return {
         node_id: f._id,
         total: f.total,
-        node_type: node?.node_type || null,
-        question: node?.content || null,
+        node_type: node?.node_type ?? null,
+        question: node?.content ?? null,
         position: node?.position ?? null
       };
     });
