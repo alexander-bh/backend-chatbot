@@ -1,5 +1,7 @@
 const Contact = require("../models/Contact");
+const FlowNode = require("../models/FlowNode");
 const mongoose = require("mongoose");
+
 
 /* =========================
    MÉTRICAS GENERALES
