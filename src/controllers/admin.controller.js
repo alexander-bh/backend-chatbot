@@ -242,19 +242,25 @@ exports.createChatbotForUser = async (req, res) => {
     const { account_id, name } = req.body;
 
     // ───────── VALIDACIONES ─────────
-    if (!account_id) {
-      throw new Error("account_id es requerido");
+
+    if (!account_id || !mongoose.Types.ObjectId.isValid(account_id)) {
+      throw new Error("account_id inválido o requerido");
     }
 
     if (!name || typeof name !== "string" || !name.trim()) {
       throw new Error("Nombre del chatbot inválido");
     }
 
+    // 🔐 Validar que el admin pertenece a esa cuenta
+    if (!req.user || String(req.user.account_id) !== String(account_id)) {
+      throw new Error("No tienes permiso para crear chatbot en esta cuenta");
+    }
+
     // ───────── BUSCAR USUARIO CLIENT DE LA CUENTA ─────────
     const ownerUser = await User.findOne({
       account_id,
       role: "CLIENT"
-    });
+    }).session(session);
 
     if (!ownerUser) {
       throw new Error("No existe un usuario CLIENT para esta cuenta");
@@ -265,49 +271,158 @@ exports.createChatbotForUser = async (req, res) => {
     // ───────── CREAR CHATBOT ─────────
     const chatbot = new Chatbot({
       account_id,
-      owner_user_id: ownerUser._id, // 👈 ASIGNADO POR CUENTA
+      owner_user_id: ownerUser._id,
       public_id: crypto.randomUUID(),
       name: name.trim(),
       welcome_message: welcomeText,
       welcome_delay: 2,
       show_welcome_on_mobile: true,
-      status: "active",
-      is_enabled: true,
+      status: "draft",       // 👈 mejor iniciar como draft
+      is_enabled: false,     // 👈 no activo hasta configurar
       created_by_admin: req.user._id
     });
 
     await chatbot.save({ session });
 
-    // ───────── FLOW INICIAL ─────────
+    // ───────── CREAR FLOW INICIAL ─────────
     const [flow] = await Flow.create([{
       account_id,
       chatbot_id: chatbot._id,
-      name: "Flujo principal",
+      name: `Flujo del chatbot ${name.trim()}`,
       status: "draft",
-      version: 1
+      version: 1,
+      lock: null,           // 🔒 IMPORTANTE PARA TU SISTEMA
+      base_flow_id: null,
+      published_at: null
     }], { session });
 
-    // ───────── NODO INICIAL ─────────
-    const [startNode] = await FlowNode.create([{
-      account_id,
-      flow_id: flow._id,
-      node_type: "text",
-      content: welcomeText,
-      order: 0,
-      typing_time: 2,
-      parent_node_id: null,
-      next_node_id: null,
-      is_draft: true
-    }], { session });
+    // ───────── CREAR NODOS INICIALES ─────────
 
-    flow.start_node_id = startNode._id;
+    const nodeIds = {
+      start: new mongoose.Types.ObjectId(),
+      name: new mongoose.Types.ObjectId(),
+      lastname: new mongoose.Types.ObjectId(),
+      phone: new mongoose.Types.ObjectId(),
+      email: new mongoose.Types.ObjectId(),
+      end: new mongoose.Types.ObjectId()
+    };
+
+    const defaultNodes = [
+      {
+        _id: nodeIds.start,
+        account_id,
+        flow_id: flow._id,
+        order: 0,
+        node_type: "text",
+        content: "Hola,",
+        typing_time: 2,
+        next_node_id: nodeIds.name,
+        end_conversation: false,
+        is_draft: true
+      },
+      {
+        _id: nodeIds.name,
+        account_id,
+        flow_id: flow._id,
+        order: 1,
+        node_type: "text_input",
+        content: "¿Cuál es tu nombre?",
+        variable_key: "name",
+        typing_time: 2,
+        validation: {
+          enabled: true,
+          rules: [
+            { type: "required", message: "El nombre es obligatorio" }
+          ]
+        },
+        next_node_id: nodeIds.lastname,
+        end_conversation: false,
+        is_draft: true
+      },
+      {
+        _id: nodeIds.lastname,
+        account_id,
+        flow_id: flow._id,
+        order: 2,
+        node_type: "text_input",
+        content: "¿Cuál es tu apellido?",
+        variable_key: "lastname",
+        typing_time: 2,
+        validation: {
+          enabled: true,
+          rules: [
+            { type: "required", message: "El apellido es obligatorio" }
+          ]
+        },
+        next_node_id: nodeIds.phone,
+        end_conversation: false,
+        is_draft: true
+      },
+      {
+        _id: nodeIds.phone,
+        account_id,
+        flow_id: flow._id,
+        order: 3,
+        node_type: "phone",
+        content: "¿Cuál es su número de teléfono?",
+        variable_key: "phone",
+        typing_time: 2,
+        validation: {
+          enabled: true,
+          rules: [
+            { type: "required", message: "Debes ingresar un teléfono." },
+            { type: "phone", message: "El teléfono no es válido." }
+          ]
+        },
+        next_node_id: nodeIds.email,
+        end_conversation: false,
+        is_draft: true
+      },
+      {
+        _id: nodeIds.email,
+        account_id,
+        flow_id: flow._id,
+        order: 4,
+        node_type: "email",
+        content: "¿Cuál es tu correo electrónico?",
+        variable_key: "email",
+        typing_time: 2,
+        validation: {
+          enabled: true,
+          rules: [
+            { type: "required", message: "Debes ingresar un email." },
+            { type: "email", message: "El email no es válido." }
+          ]
+        },
+        next_node_id: nodeIds.end,
+        end_conversation: false,
+        is_draft: true
+      },
+      {
+        _id: nodeIds.end,
+        account_id,
+        flow_id: flow._id,
+        order: 5,
+        node_type: "text",
+        content: "Gracias, ya puedes cerrar el chatbot.",
+        typing_time: 0,
+        next_node_id: null,
+        end_conversation: true,
+        is_draft: true
+      }
+    ];
+
+    await FlowNode.insertMany(defaultNodes, { session });
+
+    // Asignar nodo inicial
+    flow.start_node_id = nodeIds.start;
     await flow.save({ session });
 
     await session.commitTransaction();
 
     res.status(201).json({
-      message: "Chatbot creado y asignado correctamente",
-      chatbot,
+      message: "Chatbot creado correctamente",
+      chatbot_id: chatbot._id,
       owner: {
         id: ownerUser._id,
         name: ownerUser.name,
@@ -317,6 +432,7 @@ exports.createChatbotForUser = async (req, res) => {
 
   } catch (error) {
     await session.abortTransaction();
+    console.error("CREATE CHATBOT ERROR:", error);
     res.status(400).json({ message: error.message });
   } finally {
     session.endSession();
