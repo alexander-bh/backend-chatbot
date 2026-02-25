@@ -271,38 +271,165 @@ exports.getContactsByHour = async (req, res) => {
     }
 };
 
-
-/**
- * OVERVIEW DEL CHATBOT
- */
 exports.getChatbotOverview = async (req, res) => {
-  try {
-    const { chatbot_id } = req.params;
-    const accountId = req.user.account_id;
+    try {
+        const { id: chatbotId } = req.params;
+        const { from, to } = req.query;
+        const accountId = req.user.account_id;
 
-    const chatbotObjectId = new mongoose.Types.ObjectId(chatbot_id);
-    const accountObjectId = new mongoose.Types.ObjectId(accountId);
+        if (!mongoose.Types.ObjectId.isValid(chatbotId)) {
+            return res.status(400).json({ message: "chatbotId inválido" });
+        }
 
-    const contacts = await Contact.find({
-      chatbot_id: chatbotObjectId,
-      account_id: accountObjectId
-    });
+        const fromDate = from ? new Date(from) : null;
+        const toDate = to ? new Date(to) : null;
 
-    const totalContacts = contacts.length;
-    const completedContacts = contacts.filter(c => c.completed).length;
+        const matchContacts = {
+            chatbot_id: new mongoose.Types.ObjectId(chatbotId),
+            account_id: new mongoose.Types.ObjectId(accountId)
+        };
 
-    res.json({
-      totalContacts,
-      completedContacts,
-      completionRate: totalContacts
-        ? Math.round((completedContacts / totalContacts) * 100)
-        : 0
-    });
-  } catch (error) {
-    console.error("❌ getChatbotOverview:", error);
-    res.status(500).json({ error: "Error en overview" });
-  }
+        if (fromDate || toDate) {
+            matchContacts.createdAt = {};
+            if (fromDate) matchContacts.createdAt.$gte = fromDate;
+            if (toDate) matchContacts.createdAt.$lte = toDate;
+        }
+
+        /* =============================
+           1️⃣ CONTACTOS ACTUALES
+        ============================= */
+
+        const contactsData = await Contact.aggregate([
+            { $match: matchContacts },
+            {
+                $facet: {
+                    summary: [
+                        { $count: "total_contacts" }
+                    ],
+                    by_date: [
+                        {
+                            $group: {
+                                _id: {
+                                    year: { $year: "$createdAt" },
+                                    month: { $month: "$createdAt" },
+                                    day: { $dayOfMonth: "$createdAt" }
+                                },
+                                total: { $sum: 1 }
+                            }
+                        },
+                        {
+                            $project: {
+                                date: {
+                                    $dateFromParts: {
+                                        year: "$_id.year",
+                                        month: "$_id.month",
+                                        day: "$_id.day"
+                                    }
+                                },
+                                total: 1,
+                                _id: 0
+                            }
+                        },
+                        { $sort: { date: 1 } }
+                    ],
+                    by_hour: [
+                        {
+                            $group: {
+                                _id: { $hour: "$createdAt" },
+                                total: { $sum: 1 }
+                            }
+                        },
+                        {
+                            $project: {
+                                hour: "$_id",
+                                total: 1,
+                                _id: 0
+                            }
+                        },
+                        { $sort: { hour: 1 } }
+                    ]
+                }
+            }
+        ]);
+
+        const currentTotal =
+            contactsData[0].summary[0]?.total_contacts || 0;
+
+        /* =============================
+           2️⃣ PERIODO ANTERIOR
+        ============================= */
+
+        let previousTotal = 0;
+
+        if (fromDate && toDate) {
+            const diff = toDate - fromDate;
+            const prevFrom = new Date(fromDate - diff);
+            const prevTo = new Date(toDate - diff);
+
+            previousTotal = await Contact.countDocuments({
+                chatbot_id: chatbotId,
+                account_id: accountId,
+                createdAt: { $gte: prevFrom, $lte: prevTo }
+            });
+        }
+
+        const growthRate =
+            previousTotal === 0
+                ? 0
+                : Number(
+                    (((currentTotal - previousTotal) / previousTotal) * 100).toFixed(2)
+                );
+
+        /* =============================
+           3️⃣ CONVERSION RATE
+        ============================= */
+
+        const totalSessions = await ConversationSession.countDocuments({
+            chatbot_id: chatbotId,
+            account_id: accountId,
+            mode: "production",
+            ...(fromDate && toDate && {
+                createdAt: { $gte: fromDate, $lte: toDate }
+            })
+        });
+
+        const conversionRate =
+            totalSessions === 0
+                ? 0
+                : Number(((currentTotal / totalSessions) * 100).toFixed(2));
+
+        /* =============================
+           🔥 FORMATEO DE FECHAS AQUÍ
+        ============================= */
+
+        const formattedByDate = contactsData[0].by_date.map(item => ({
+            ...item,
+            date: formatDateAMPM(item.date)
+        }));
+
+        /* =============================
+           RESPONSE
+        ============================= */
+
+        res.json({
+            summary: {
+                total_contacts: currentTotal,
+                previous_period_contacts: previousTotal,
+                growth_rate: growthRate,
+                conversion_rate: conversionRate
+            },
+            by_date: formattedByDate,
+            by_hour: fillMissingHours(contactsData[0].by_hour)
+        });
+
+    } catch (error) {
+        console.error("getChatbotOverview:", error);
+        res.status(500).json({
+            message: "Error obteniendo overview"
+        });
+    }
 };
+
 /* =============================
    Helper para completar horas
 ============================= */
