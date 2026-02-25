@@ -301,14 +301,11 @@ exports.getChatbotOverview = async (req, res) => {
 
         const contactsData = await Contact.aggregate([
             { $match: matchContacts },
-
             {
                 $facet: {
-
                     summary: [
                         { $count: "total_contacts" }
                     ],
-
                     by_date: [
                         {
                             $group: {
@@ -335,7 +332,6 @@ exports.getChatbotOverview = async (req, res) => {
                         },
                         { $sort: { date: 1 } }
                     ],
-
                     by_hour: [
                         {
                             $group: {
@@ -386,7 +382,6 @@ exports.getChatbotOverview = async (req, res) => {
 
         /* =============================
            3️⃣ CONVERSION RATE
-           sesiones completadas → contacto
         ============================= */
 
         const totalSessions = await ConversationSession.countDocuments({
@@ -404,6 +399,15 @@ exports.getChatbotOverview = async (req, res) => {
                 : Number(((currentTotal / totalSessions) * 100).toFixed(2));
 
         /* =============================
+           🔥 FORMATEO DE FECHAS AQUÍ
+        ============================= */
+
+        const formattedByDate = contactsData[0].by_date.map(item => ({
+            ...item,
+            date: formatDateAMPM(item.date)
+        }));
+
+        /* =============================
            RESPONSE
         ============================= */
 
@@ -414,7 +418,7 @@ exports.getChatbotOverview = async (req, res) => {
                 growth_rate: growthRate,
                 conversion_rate: conversionRate
             },
-            by_date: contactsData[0].by_date,
+            by_date: formattedByDate,
             by_hour: fillMissingHours(contactsData[0].by_hour)
         });
 
@@ -425,7 +429,6 @@ exports.getChatbotOverview = async (req, res) => {
         });
     }
 };
-
 
 /* =============================
    Helper para completar horas
