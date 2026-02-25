@@ -67,13 +67,13 @@ exports.createChatbot = async (req, res) => {
     const [flow] = await Flow.create([{
       account_id: req.user.account_id,
       chatbot_id: chatbot._id,
-      name: "Flujo principal",
+      name: `Flujo del chatbot ${name.trim()}` ,
       status: "draft",
-      version: 1
+      version: 1,
+      lock: null   // 👈 AGREGA ESTO
     }], { session });
 
     // ─────────── CREAR NODO INICIAL ───────────
-    // ─────────── CREAR NODOS POR DEFECTO ───────────
 
     // Crear ObjectIds manualmente para poder enlazarlos
     const nodeIds = {
