@@ -78,9 +78,7 @@ const ContactSchema = new mongoose.Schema({
     default: false
   }
 
-}, {
-  timestamps: { createdAt: "created_at", updatedAt: "updated_at" }
-});
+}, { timestamps: true });
 
 /* =========================
    INDEXES EXTRA
