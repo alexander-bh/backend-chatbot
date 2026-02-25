@@ -66,6 +66,11 @@ const ContactSchema = new mongoose.Schema({
     default: {}
   },
 
+  origin_url: {
+  type: String,
+  index: true
+},
+
   status: {
     type: String,
     enum: ["new", "contacted", "qualified", "lost"],

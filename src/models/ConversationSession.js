@@ -36,6 +36,12 @@ const ConversationSessionSchema = new mongoose.Schema(
       default: {}
     },
 
+    origin_url: {
+      type: String,
+      default: null,
+      index: true
+    },
+
     // 🔥 NUEVO → historial completo
     history: [
       {

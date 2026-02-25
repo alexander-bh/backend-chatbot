@@ -431,22 +431,36 @@
         }
     }
 
-    async function start() {
-        try {
-            typing(true);
-            status("Conectando...");
-            const r = await fetch(`${apiBase}/api/public-chatbot/chatbot-conversation/${publicId}/start`, { method: "POST" });
-            const d = await r.json();
-            SESSION_ID = d.session_id;
-            typing(false);
-            status("En línea");
-            process(d);
-        } catch {
-            typing(false);
-            status("Error");
-            message("bot", "No pude conectarme al servidor", true);
-        }
+   async function start() {
+    try {
+        typing(true);
+        status("Conectando...");
+
+        const r = await fetch(
+            `${apiBase}/api/public-chatbot/chatbot-conversation/${publicId}/start`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    origin_url: window.location.href,
+                })
+            }
+        );
+
+        const d = await r.json();
+        SESSION_ID = d.session_id;
+
+        typing(false);
+        status("En línea");
+
+        process(d);
+
+    } catch {
+        typing(false);
+        status("Error");
+        message("bot", "No pude conectarme al servidor", true);
     }
+}
 
     async function send(v = null) {
         const text = v ?? el.input.value.trim();
