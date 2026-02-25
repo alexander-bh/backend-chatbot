@@ -67,7 +67,7 @@ exports.createChatbot = async (req, res) => {
     const [flow] = await Flow.create([{
       account_id: req.user.account_id,
       chatbot_id: chatbot._id,
-      name: `Flujo del chatbot ${name.trim()}` ,
+      name: `Flujo del chatbot ${name.trim()}`,
       status: "draft",
       version: 1,
       lock: null   // 👈 AGREGA ESTO
@@ -493,12 +493,12 @@ exports.deleteChatbot = async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 exports.duplicateChatbotFull = async (req, res) => {
   const session = await mongoose.startSession();
-  session.startTransaction();
 
   try {
+    session.startTransaction();
+
     if (!req.user?.account_id) {
-      await session.abortTransaction();
-      return res.status(401).json({ message: "Usuario no autenticado" });
+      throw new Error("Usuario no autenticado");
     }
 
     // ─────────── CHATBOT ORIGEN ───────────
@@ -508,8 +508,7 @@ exports.duplicateChatbotFull = async (req, res) => {
     }).session(session);
 
     if (!original) {
-      await session.abortTransaction();
-      return res.status(404).json({ message: "Chatbot no encontrado" });
+      throw new Error("Chatbot no encontrado");
     }
 
     // ─────────── NUEVO CHATBOT ───────────
@@ -520,7 +519,7 @@ exports.duplicateChatbotFull = async (req, res) => {
       session
     );
 
-    const newChatbot = new Chatbot({
+    const newChatbot = await Chatbot.create([{
       account_id: req.user.account_id,
       public_id: crypto.randomUUID(),
       name: newName,
@@ -533,13 +532,13 @@ exports.duplicateChatbotFull = async (req, res) => {
       input_placeholder: original.input_placeholder,
       position: original.position,
       show_branding: original.show_branding,
-      status: "draft", // ✅ Mejor empezar como draft
+      status: "draft",
       is_enabled: false,
       avatar: original.avatar || process.env.DEFAULT_CHATBOT_AVATAR,
-      uploaded_avatars: [] // ✅ No copiar avatars subidos (evita duplicación)
-    });
+      uploaded_avatars: []
+    }], { session });
 
-    await newChatbot.save({ session });
+    const createdChatbot = newChatbot[0];
 
     // ─────────── COPIAR FLOWS ───────────
     const originalFlows = await Flow.find({
@@ -552,12 +551,14 @@ exports.duplicateChatbotFull = async (req, res) => {
     for (const flow of originalFlows) {
       const [createdFlow] = await Flow.create([{
         account_id: req.user.account_id,
-        chatbot_id: newChatbot._id,
+        chatbot_id: createdChatbot._id,
         name: flow.name,
+        status: "draft",
         version: 1,
-        is_active: false,
-        is_draft: true,
-        start_node_id: null
+        start_node_id: null,
+        lock: null, // 🔒 IMPORTANTE
+        base_flow_id: null,
+        published_at: null
       }], { session });
 
       flowIdMap.set(String(flow._id), createdFlow);
@@ -570,16 +571,19 @@ exports.duplicateChatbotFull = async (req, res) => {
     }).session(session);
 
     const nodeIdMap = new Map();
+    const newNodesBulk = [];
 
-    // PASO 1: Crear nodos base
+    // PASO 1: Crear nodos base (sin relaciones)
     for (const node of originalNodes) {
-      const [createdNode] = await FlowNode.create([{
+      const newFlow = flowIdMap.get(String(node.flow_id));
+
+      const newNode = {
         account_id: req.user.account_id,
-        flow_id: flowIdMap.get(String(node.flow_id))._id,
+        flow_id: newFlow._id,
         node_type: node.node_type,
         content: node.content,
         order: node.order ?? 0,
-        parent_node_id: null, // Se actualiza en PASO 2
+        parent_node_id: null,
         typing_time: node.typing_time ?? 2,
         variable_key: node.variable_key ?? null,
         validation: node.validation ?? null,
@@ -587,32 +591,46 @@ exports.duplicateChatbotFull = async (req, res) => {
         link_action: node.link_action ?? null,
         options: [],
         is_draft: true
-      }], { session });
+      };
 
-      nodeIdMap.set(String(node._id), createdNode._id);
+      newNodesBulk.push(newNode);
     }
 
-    // PASO 2: Reconstruir relaciones (parent_node_id y options)
-    for (const node of originalNodes) {
-      const newNodeId = nodeIdMap.get(String(node._id));
-      const newNode = await FlowNode.findById(newNodeId).session(session);
+    const createdNodes = await FlowNode.insertMany(newNodesBulk, { session });
 
-      // Actualizar parent_node_id
-      if (node.parent_node_id) {
-        newNode.parent_node_id = nodeIdMap.get(String(node.parent_node_id)) || null;
+    // Mapear IDs
+    originalNodes.forEach((oldNode, index) => {
+      nodeIdMap.set(String(oldNode._id), createdNodes[index]._id);
+    });
+
+    // PASO 2: Reconstruir relaciones
+    for (let i = 0; i < originalNodes.length; i++) {
+      const originalNode = originalNodes[i];
+      const createdNode = createdNodes[i];
+
+      let needsUpdate = false;
+
+      // parent_node_id
+      if (originalNode.parent_node_id) {
+        createdNode.parent_node_id =
+          nodeIdMap.get(String(originalNode.parent_node_id)) || null;
+        needsUpdate = true;
       }
 
-      // Reconstruir options
-      if (node.options?.length) {
-        newNode.options = node.options.map(opt => ({
+      // options
+      if (originalNode.options?.length) {
+        createdNode.options = originalNode.options.map(opt => ({
           label: opt.label,
           next_node_id: opt.next_node_id
             ? nodeIdMap.get(String(opt.next_node_id))
             : null
         }));
+        needsUpdate = true;
       }
 
-      await newNode.save({ session });
+      if (needsUpdate) {
+        await createdNode.save({ session });
+      }
     }
 
     // ─────────── ASIGNAR START NODES ───────────
@@ -620,7 +638,9 @@ exports.duplicateChatbotFull = async (req, res) => {
       if (!flow.start_node_id) continue;
 
       const newFlow = flowIdMap.get(String(flow._id));
-      newFlow.start_node_id = nodeIdMap.get(String(flow.start_node_id)) || null;
+      newFlow.start_node_id =
+        nodeIdMap.get(String(flow.start_node_id)) || null;
+
       await newFlow.save({ session });
     }
 
@@ -628,7 +648,7 @@ exports.duplicateChatbotFull = async (req, res) => {
 
     res.status(201).json({
       message: "Chatbot duplicado correctamente",
-      chatbot_id: newChatbot._id
+      chatbot_id: createdChatbot._id
     });
 
   } catch (error) {
