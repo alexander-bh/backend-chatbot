@@ -346,8 +346,6 @@
     async function process(node, depth = 0) {
         if (!node || depth > 20) return;
 
-        //console.log("NODE COMPLETO:", node);
-
         const nodeType = node.type;
 
         /* =========================
@@ -471,8 +469,7 @@
     async function send(v = null) {
         const text = v ?? el.input.value.trim();
         if (!text || !SESSION_ID) return;
-        //console.log("Enviando:", text);
-        
+
         if (v === null) {
             message("user", text);
             el.input.value = "";
