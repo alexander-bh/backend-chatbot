@@ -1,16 +1,15 @@
-//controllers/publicChatbot.controller
+// controllers/publicChatbot.controller.js
 const mongoose = require("mongoose");
 const ConversationSession = require("../models/ConversationSession");
 const Flow = require("../models/Flow");
 const FlowNode = require("../models/FlowNode");
 const Chatbot = require("../models/Chatbot");
 const renderNode = require("../utils/renderNode");
-const engine = require("./conversationsession.controller");
 
-// controllers/conversation.controller.js
 exports.startConversation = async (req, res) => {
   try {
     const { public_id } = req.params;
+    const { origin_url } = req.body; // 🔥 AQUÍ ESTABA EL ERROR
 
     const chatbot = await Chatbot.findOne({
       public_id,
@@ -38,6 +37,7 @@ exports.startConversation = async (req, res) => {
       flow_id: flow._id,
       account_id: chatbot.account_id
     });
+
     if (!startNode) {
       return res.status(500).json({
         message: "Nodo inicial inválido"
@@ -50,8 +50,16 @@ exports.startConversation = async (req, res) => {
       flow_id: flow._id,
       current_node_id: startNode._id,
       variables: {},
+      origin_url: origin_url || null,
       mode: "production",
-      is_completed: false
+      is_completed: false,
+      history: [
+        {
+          node_id: startNode._id,
+          question: startNode.content,
+          node_type: startNode.node_type
+        }
+      ]
     });
 
     return res.json(renderNode(startNode, session._id));
