@@ -29,7 +29,7 @@ router.get(
 );
 
 router.get(
-  "/chatbot/:id/getContactsDetail",
+  "/chatbot/:id/getContactsByOrigin",
   authMiddleware,
   analyticsController.getContactsByOrigin
 );
