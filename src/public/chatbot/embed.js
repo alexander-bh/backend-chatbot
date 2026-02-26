@@ -2,8 +2,11 @@
     /* =========================
        CONFIG
     ========================= */
-    const script = document.currentScript;
-    if (!script?.dataset?.config) return;
+    const script = document.querySelector('script[data-config]');
+    if (!script?.dataset?.config) {
+        console.error("CONFIG NO ENCONTRADO");
+        return;
+    }
 
     const config = JSON.parse(script.dataset.config);
 
