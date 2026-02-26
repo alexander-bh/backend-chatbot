@@ -53,26 +53,23 @@ exports.getContactsByChatbot = async (req, res) => {
   try {
     const { chatbot_id } = req.params;
     const { status } = req.query;
+    const accountId = req.user.account_id;
 
-    // 🔹 Filtro base
-    const baseFilter = { chatbot_id };
+    /* ===============================
+       1️⃣ CONTACTOS DEL CHATBOT
+    =============================== */
 
-    // 🔹 Filtro para listado (puede incluir status)
-    const listFilter = { ...baseFilter };
+    const filter = {
+      chatbot_id,
+      account_id: accountId
+    };
 
     if (status) {
-      listFilter.status = status;
+      filter.status = status;
     }
 
-    // 🔹 1️⃣ Total general (sin filtro de status)
-    const total_contacts_general = await Contact.countDocuments(baseFilter);
-
-    // 🔹 2️⃣ Total filtrado (si hay status)
-    const total_filtered = await Contact.countDocuments(listFilter);
-
-    // 🔹 3️⃣ Obtener contactos
     const contacts = await Contact
-      .find(listFilter)
+      .find(filter)
       .sort({ createdAt: -1 })
       .lean();
 
@@ -81,10 +78,21 @@ exports.getContactsByChatbot = async (req, res) => {
       created_at_formatted: formatDate(c.createdAt)
     }));
 
+    /* ===============================
+       2️⃣ TOTAL GENERAL (TODOS LOS CHATBOTS)
+    =============================== */
+
+    const total_contacts_general = await Contact.countDocuments({
+      account_id: accountId
+    });
+
+    /* ===============================
+       RESPONSE
+    =============================== */
+
     res.json({
+      total_contacts_chatbot: contacts.length,
       total_contacts_general,
-      total_filtered,
-      total_returned: formatted.length,
       contacts: formatted
     });
 
