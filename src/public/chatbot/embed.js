@@ -440,6 +440,8 @@
             typing(true);
             status("Conectando...");
 
+            console.log("PUBLIC ID DESDE CONFIG:", publicId);
+            console.log("ORIGIN DOMAIN:", originDomain);
             const r = await fetch(
                 `${apiBase}/api/public-chatbot/chatbot-conversation/${publicId}/start`,
                 {
