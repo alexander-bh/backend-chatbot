@@ -213,6 +213,7 @@ exports.renderEmbed = async (req, res) => {
     const safeConfig = {
       apiBase: getBaseUrl(),
       publicId: public_id,
+      originDomain: domain,
       name: chatbot.name,
       avatar: chatbot.avatar || "",
       primaryColor: chatbot.primary_color || "#2563eb",

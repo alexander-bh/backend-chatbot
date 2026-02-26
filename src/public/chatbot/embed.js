@@ -10,6 +10,7 @@
     const {
         apiBase,
         publicId,
+        originDomain,
         name,
         avatar,
         primaryColor,
@@ -442,7 +443,7 @@
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                        origin_url: window.location.href,
+                        origin_url: originDomain
                     })
                 }
             );
