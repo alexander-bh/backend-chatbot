@@ -6,7 +6,7 @@ const app = express();
 // ───────── MIDDLEWARES NORMALES ─────────
 app.use(cors());
 app.use(express.json());
-
+app.set("trust proxy", 1);  
 // health
 app.get("/ping", (req, res) => {
   res.json({ ok: true });
