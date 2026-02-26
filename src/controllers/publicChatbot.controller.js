@@ -1,10 +1,5 @@
 // controllers/publicChatbot.controller.js
-const mongoose = require("mongoose");
-const ConversationSession = require("../models/ConversationSession");
-const Flow = require("../models/Flow");
-const FlowNode = require("../models/FlowNode");
 const Chatbot = require("../models/Chatbot");
-const renderNode = require("../utils/renderNode");
 const engine = require("./conversationsession.controller");
 
 exports.startConversation = async (req, res) => {
@@ -21,52 +16,22 @@ exports.startConversation = async (req, res) => {
       return res.status(404).json({ message: "Chatbot no disponible" });
     }
 
-    const flow = await Flow.findOne({
-      chatbot_id: chatbot._id,
-      account_id: chatbot.account_id,
-      status: "published"
-    }).sort({ version: -1 });
+    // 🔥 delegar al motor REAL
+    const fakeReq = {
+      body: {
+        chatbot_id: chatbot._id,
+        mode: "production",
+        origin_url
+      },
+      user: {
+        account_id: chatbot.account_id
+      }
+    };
 
-    if (!flow || !flow.start_node_id) {
-      return res.status(404).json({
-        message: "Chatbot sin flujo publicado"
-      });
-    }
-
-    const startNode = await FlowNode.findOne({
-      _id: flow.start_node_id,
-      flow_id: flow._id,
-      account_id: chatbot.account_id
-    });
-
-    if (!startNode) {
-      return res.status(500).json({
-        message: "Nodo inicial inválido"
-      });
-    }
-
-    const session = await ConversationSession.create({
-      account_id: chatbot.account_id,
-      chatbot_id: chatbot._id,
-      flow_id: flow._id,
-      current_node_id: startNode._id,
-      variables: {},
-      origin_url: origin_url || null,
-      mode: "production",
-      is_completed: false,
-      history: [
-        {
-          node_id: startNode._id,
-          question: startNode.content,
-          node_type: startNode.node_type
-        }
-      ]
-    });
-
-    return res.json(renderNode(startNode, session._id));
+    return engine.startConversation(fakeReq, res);
 
   } catch (error) {
-    console.error("startConversation error:", error);
+    console.error("public startConversation:", error);
     return res.status(500).json({
       message: "Error al iniciar conversación"
     });
@@ -77,19 +42,6 @@ exports.nextPublicStep = async (req, res) => {
   try {
     const { session_id } = req.params;
     const { input } = req.body;
-
-    if (!mongoose.Types.ObjectId.isValid(session_id)) {
-      return res.status(400).json({ message: "session_id inválido" });
-    }
-
-    const session = await ConversationSession.findById(session_id);
-    if (!session || session.is_completed) {
-      return res.json({ completed: true });
-    }
-
-    if (session.mode !== "production") {
-      return res.status(403).json({ message: "Sesión inválida" });
-    }
 
     const fakeReq = {
       params: { id: session_id },
