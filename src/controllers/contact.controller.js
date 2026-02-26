@@ -54,15 +54,26 @@ exports.getContactsByChatbot = async (req, res) => {
     const { chatbot_id } = req.params;
     const { status } = req.query;
 
-    const filter = { chatbot_id };
+    // 🔹 Filtro base
+    const baseFilter = { chatbot_id };
+
+    // 🔹 Filtro para listado (puede incluir status)
+    const listFilter = { ...baseFilter };
 
     if (status) {
-      filter.status = status;
+      listFilter.status = status;
     }
 
+    // 🔹 1️⃣ Total general (sin filtro de status)
+    const total_contacts_general = await Contact.countDocuments(baseFilter);
+
+    // 🔹 2️⃣ Total filtrado (si hay status)
+    const total_filtered = await Contact.countDocuments(listFilter);
+
+    // 🔹 3️⃣ Obtener contactos
     const contacts = await Contact
-      .find(filter)
-      .sort({ createdAt: -1 }) // 👈 createdAt
+      .find(listFilter)
+      .sort({ createdAt: -1 })
       .lean();
 
     const formatted = contacts.map(c => ({
@@ -70,7 +81,12 @@ exports.getContactsByChatbot = async (req, res) => {
       created_at_formatted: formatDate(c.createdAt)
     }));
 
-    res.json(formatted);
+    res.json({
+      total_contacts_general,
+      total_filtered,
+      total_returned: formatted.length,
+      contacts: formatted
+    });
 
   } catch (error) {
     console.error("GET CONTACTS ERROR:", error);
@@ -79,7 +95,6 @@ exports.getContactsByChatbot = async (req, res) => {
     });
   }
 };
-
 
 /* =========================
    UPDATE CONTACT STATUS
