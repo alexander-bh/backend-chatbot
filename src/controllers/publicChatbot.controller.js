@@ -5,11 +5,12 @@ const Flow = require("../models/Flow");
 const FlowNode = require("../models/FlowNode");
 const Chatbot = require("../models/Chatbot");
 const renderNode = require("../utils/renderNode");
+const engine = require("./conversationsession.controller");
 
 exports.startConversation = async (req, res) => {
   try {
     const { public_id } = req.params;
-    const { origin_url } = req.body; // 🔥 AQUÍ ESTABA EL ERROR
+    const { origin_url } = req.body;
 
     const chatbot = await Chatbot.findOne({
       public_id,
