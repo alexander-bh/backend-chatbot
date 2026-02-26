@@ -7,6 +7,8 @@ exports.startConversation = async (req, res) => {
     const { public_id } = req.params;
     const { origin_url } = req.body;
 
+    console.log("REQ BODY PUBLIC:", req.body);
+
     const chatbot = await Chatbot.findOne({
       public_id,
       status: "active"
