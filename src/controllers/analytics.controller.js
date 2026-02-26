@@ -430,68 +430,68 @@ exports.getChatbotOverview = async (req, res) => {
 };
 
 exports.getContactsByOrigin = async (req, res) => {
-  try {
-    const { id: chatbotId } = req.params;
-    const accountId = req.user.account_id;
+    try {
+        const { id: chatbotId } = req.params;
+        const accountId = req.user.account_id;
 
-    const data = await Contact.aggregate([
-      {
-        $match: {
-          chatbot_id: new mongoose.Types.ObjectId(chatbotId),
-          account_id: new mongoose.Types.ObjectId(accountId),
-          origin_url: { $ne: null }
-        }
-      },
-      {
-        $group: {
-          _id: "$origin_url",
-          total: { $sum: 1 }
-        }
-      },
-      { $sort: { total: -1 } }
-    ]);
+        const data = await Contact.aggregate([
+            {
+                $match: {
+                    chatbot_id: new mongoose.Types.ObjectId(chatbotId),
+                    account_id: new mongoose.Types.ObjectId(accountId),
+                    origin_url: { $ne: null }
+                }
+            },
+            {
+                $group: {
+                    _id: "$origin_url",
+                    total: { $sum: 1 }
+                }
+            },
+            { $sort: { total: -1 } }
+        ]);
 
-    res.json(data.map(d => ({
-      url: d._id,
-      total: d.total
-    })));
+        res.json(data.map(d => ({
+            url: d._id,
+            total: d.total
+        })));
 
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      message: "Error obteniendo contactos por URL"
-    });
-  }
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            message: "Error obteniendo contactos por URL"
+        });
+    }
 };
 
 exports.getContactsDetail = async (req, res) => {
-  try {
-    const { id: chatbotId } = req.params;
-    const accountId = req.user.account_id;
+    try {
+        const { id: chatbotId } = req.params;
+        const accountId = req.user.account_id;
 
-    const contacts = await Contact.find({
-      chatbot_id: chatbotId,
-      account_id: accountId
-    })
-    .sort({ createdAt: -1 })
-    .lean();
+        const contacts = await Contact.find({
+            chatbot_id: chatbotId,
+            account_id: accountId
+        })
+            .sort({ createdAt: -1 })
+            .lean();
 
-    const formatted = contacts.map(c => ({
-      id: c._id,
-      received: c.createdAt,
-      name: c.variables?.name || c.name,
-      email: c.variables?.email || c.email,
-      status: c.status
-    }));
+        const formatted = contacts.map(c => ({
+            id: c._id,
+            received: formatDateAMPM(c.createdAt),
+            name: c.variables?.name || c.name,
+            email: c.variables?.email || c.email,
+            status: c.status
+        }));
 
-    res.json(formatted);
+        res.json(formatted);
 
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      message: "Error obteniendo contactos"
-    });
-  }
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            message: "Error obteniendo contactos"
+        });
+    }
 };
 
 /* =============================
