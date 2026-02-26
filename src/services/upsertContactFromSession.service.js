@@ -13,6 +13,8 @@ module.exports = async function upsertContactFromSession(session) {
       account_id: session.account_id
     }).lean();
 
+    console.log("SESSION ORIGIN URL:", session.origin_url);
+
     const nodeMap = new Map(nodes.map(n => [String(n._id), n]));
 
     /* ================= BUILD CONVERSATION ================= */
