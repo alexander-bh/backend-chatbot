@@ -35,4 +35,7 @@ router.post("/impersonate/:id", adminController.impersonateUser);
 // auditorías
 router.get("/audit", adminController.getAuditLogs);
 
+// auditorías
+router.post("/register", adminController.createUserByAdmin);
+
 module.exports = router;

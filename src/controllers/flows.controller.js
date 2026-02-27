@@ -73,7 +73,6 @@ exports.getFlowsByChatbot = async (req, res) => {
 };
 
 // Obtener nodos por flow
-// controllers/flows.controller.js
 exports.getNodesByFlow = async (req, res) => {
   try {
     const { flowId } = req.params;
