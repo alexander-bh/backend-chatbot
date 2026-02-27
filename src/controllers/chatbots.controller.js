@@ -8,14 +8,17 @@ const {
   getBaseName,
   generateCopyName
 } = require("../utils/chatbotName.helper");
+const { cloneTemplateToFlow } = require("../services/flowNode.service");
 
 // ═══════════════════════════════════════════════════════════
 // CREAR CHATBOT
 // ═══════════════════════════════════════════════════════════
 exports.createChatbot = async (req, res) => {
   const session = await mongoose.startSession();
+
   try {
     session.startTransaction();
+
     const {
       name,
       welcome_message,
@@ -23,192 +26,70 @@ exports.createChatbot = async (req, res) => {
       show_welcome_on_mobile
     } = req.body;
 
-    // ─────────── VALIDACIONES ───────────
+    /* ───────── VALIDACIONES ───────── */
+
     if (!req.user?.account_id) {
-      await session.abortTransaction();
-      return res.status(401).json({ message: "Usuario no autenticado" });
+      throw new Error("Usuario no autenticado");
     }
 
     if (!name || typeof name !== "string" || !name.trim()) {
-      await session.abortTransaction();
-      return res.status(400).json({ message: "Nombre inválido" });
+      throw new Error("Nombre inválido");
     }
 
     if (name.length > 60) {
-      await session.abortTransaction();
-      return res.status(400).json({ message: "El nombre es demasiado largo" });
+      throw new Error("El nombre es demasiado largo");
     }
 
-    if (welcome_delay !== undefined && (welcome_delay < 0 || welcome_delay > 10)) {
-      await session.abortTransaction();
-      return res.status(400).json({ message: "welcome_delay inválido" });
+    if (
+      welcome_delay !== undefined &&
+      (welcome_delay < 0 || welcome_delay > 10)
+    ) {
+      throw new Error("welcome_delay inválido");
     }
 
-    // ─────────── CREAR CHATBOT ───────────
-    const welcomeText =
-      typeof welcome_message === "string" && welcome_message.trim()
-        ? welcome_message
-        : "Hola 👋 ¿en qué puedo ayudarte?";
+    /* ───────── CREAR CHATBOT ───────── */
 
-    const chatbot = new Chatbot({
+    const chatbot = await Chatbot.create([{
       account_id: req.user.account_id,
       public_id: crypto.randomUUID(),
       name: name.trim(),
-      welcome_message: welcomeText,
+      welcome_message:
+        typeof welcome_message === "string" && welcome_message.trim()
+          ? welcome_message
+          : "Hola 👋 ¿en qué puedo ayudarte?",
       welcome_delay: welcome_delay ?? 2,
       show_welcome_on_mobile: show_welcome_on_mobile ?? true,
       status: "active",
       is_enabled: true
-    });
-
-    await chatbot.save({ session });
-
-    // ─────────── CREAR FLOW INICIAL ───────────
-    const [flow] = await Flow.create([{
-      account_id: req.user.account_id,
-      chatbot_id: chatbot._id,
-      name: `Flujo del chatbot ${name.trim()}`,
-      status: "draft",
-      version: 1,
-      lock: null   // 👈 AGREGA ESTO
     }], { session });
 
-    // ─────────── CREAR NODO INICIAL ───────────
+    const chatbotDoc = chatbot[0];
 
-    // Crear ObjectIds manualmente para poder enlazarlos
-    const nodeIds = {
-      start: new mongoose.Types.ObjectId(),
-      name: new mongoose.Types.ObjectId(),
-      lastname: new mongoose.Types.ObjectId(),
-      phone: new mongoose.Types.ObjectId(),
-      email: new mongoose.Types.ObjectId(),
-      end: new mongoose.Types.ObjectId()
-    };
+    /* ───────── CLONAR FLOW TEMPLATE ───────── */
 
-    const defaultNodes = [
-      {
-        _id: nodeIds.start,
-        account_id: req.user.account_id,
-        flow_id: flow._id,
-        order: 0,
-        node_type: "text",
-        content: "Hola,",
-        typing_time: 2,
-        next_node_id: nodeIds.name,
-        end_conversation: false,
-        is_draft: true
-      },
-      {
-        _id: nodeIds.name,
-        account_id: req.user.account_id,
-        flow_id: flow._id,
-        order: 1,
-        node_type: "text_input",
-        content: "¿Cuál es tu nombre?",
-        variable_key: "name",
-        typing_time: 2,
-        validation: {
-          enabled: true,
-          rules: [
-            { type: "required", message: "El nombre es obligatorio" }
-          ]
-        },
-        next_node_id: nodeIds.lastname,
-        end_conversation: false,
-        is_draft: true
-      },
-      {
-        _id: nodeIds.lastname,
-        account_id: req.user.account_id,
-        flow_id: flow._id,
-        order: 2,
-        node_type: "text_input",
-        content: "¿Cuál es tu apellido?",
-        variable_key: "lastname",
-        typing_time: 2,
-        validation: {
-          enabled: true,
-          rules: [
-            { type: "required", message: "El apellido es obligatorio" }
-          ]
-        },
-        next_node_id: nodeIds.phone,
-        end_conversation: false,
-        is_draft: true
-      },
-      {
-        _id: nodeIds.phone,
-        account_id: req.user.account_id,
-        flow_id: flow._id,
-        order: 3,
-        node_type: "phone",
-        content: "¿Cuál es su número de teléfono?",
-        variable_key: "phone",
-        typing_time: 2,
-        validation: {
-          enabled: true,
-          rules: [
-            { type: "required", message: "Debes ingresar un teléfono." },
-            { type: "phone", message: "El teléfono no es válido." }
-          ]
-        },
-        next_node_id: nodeIds.email,
-        end_conversation: false,
-        is_draft: true
-      },
-      {
-        _id: nodeIds.email,
-        account_id: req.user.account_id,
-        flow_id: flow._id,
-        order: 4,
-        node_type: "email",
-        content: "¿Cuál es tu correo electrónico?",
-        variable_key: "email",
-        typing_time: 2,
-        validation: {
-          enabled: true,
-          rules: [
-            { type: "required", message: "Debes ingresar un email." },
-            { type: "email", message: "El email no es válido." }
-          ]
-        },
-        next_node_id: nodeIds.end,
-        end_conversation: false,
-        is_draft: true
-      },
-      {
-        _id: nodeIds.end,
-        account_id: req.user.account_id,
-        flow_id: flow._id,
-        order: 5,
-        node_type: "text",
-        content: "Gracias, ya puedes cerrar el chatbot.",
-        typing_time: 0,
-        next_node_id: null,
-        end_conversation: true,
-        is_draft: true
-      }
-    ];
-
-    // Insertar todos juntos
-    await FlowNode.insertMany(defaultNodes, { session });
-
-    // Asignar nodo inicial al flow
-    flow.start_node_id = nodeIds.start;
-    await flow.save({ session });
+    const flow = await cloneTemplateToFlow(
+      chatbotDoc._id,
+      req.user._id,
+      session,
+      name.trim()
+    );
 
     await session.commitTransaction();
 
-    res.status(201).json({
-      chatbot,
+    return res.status(201).json({
+      chatbot: chatbotDoc,
       flow,
-      start_node_id: nodeIds.start
+      start_node_id: flow.start_node_id
     });
 
   } catch (error) {
     await session.abortTransaction();
     console.error("CREATE CHATBOT ERROR:", error);
-    res.status(500).json({ message: error.message });
+
+    return res.status(500).json({
+      message: error.message
+    });
+
   } finally {
     session.endSession();
   }

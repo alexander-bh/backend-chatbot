@@ -12,6 +12,7 @@ const { generateToken } = require("../utils/jwt");
 const { sendResetPasswordEmail } = require("../services/email.service");
 const auditService = require("../services/audit.service");
 const { sendPasswordChangedAlert } = require("../services/password-alert.service");
+const { cloneTemplateToFlow } = require("../services/flowNode.service");
 
 const generateOTP = () =>
   Math.floor(100000 + Math.random() * 900000).toString();
@@ -41,6 +42,8 @@ exports.registerFirst = async (req, res, next) => {
       onboarding
     } = req.body;
 
+    /* ───────── VALIDACIONES ───────── */
+
     if (
       !account_name ||
       !name ||
@@ -56,17 +59,6 @@ exports.registerFirst = async (req, res, next) => {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    const baseSlug = slugify(account_name);
-    const slug = `${baseSlug}-${crypto.randomUUID().slice(0, 6)}`;
-
-    const finalPhoneAlt =
-      onboarding.phone_alt && onboarding.phone_alt.trim() !== ""
-        ? onboarding.phone_alt
-        : onboarding.phone;
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const welcomeText = `Hola 👋 soy el bot de ${name}, ¿en qué puedo ayudarte?`;
 
     const userExists = await User.findOne({
       email: normalizedEmail
@@ -76,7 +68,10 @@ exports.registerFirst = async (req, res, next) => {
       throw new Error("El email ya está registrado");
     }
 
-    // ─────────── ACCOUNT ───────────
+    /* ───────── ACCOUNT ───────── */
+
+    const slug = `${slugify(account_name)}-${crypto.randomUUID().slice(0, 6)}`;
+
     const [account] = await Account.create([{
       name: account_name,
       slug,
@@ -84,24 +79,34 @@ exports.registerFirst = async (req, res, next) => {
       status: "active"
     }], { session });
 
-    const finalOnboarding = {
-      ...onboarding,
-      phone: onboarding.phone,
-      phone_alt: finalPhoneAlt
-    };
+    /* ───────── USER ───────── */
 
-    // ─────────── USER ───────────
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const finalPhoneAlt =
+      onboarding.phone_alt && onboarding.phone_alt.trim() !== ""
+        ? onboarding.phone_alt
+        : onboarding.phone;
+
     const [user] = await User.create([{
       account_id: account._id,
       name,
       email: normalizedEmail,
       password: hashedPassword,
       role: "CLIENT",
-      onboarding: finalOnboarding
+      onboarding: {
+        ...onboarding,
+        phone: onboarding.phone,
+        phone_alt: finalPhoneAlt
+      }
     }], { session });
 
-    // ─────────── CHATBOT ───────────
-    const chatbot = new Chatbot({
+    /* ───────── CHATBOT ───────── */
+
+    const welcomeText =
+      `Hola 👋 soy el bot de ${name}, ¿en qué puedo ayudarte?`;
+
+    const chatbot = await Chatbot.create([{
       account_id: account._id,
       name: `Bot de ${name}`,
       public_id: crypto.randomUUID(),
@@ -116,137 +121,21 @@ exports.registerFirst = async (req, res, next) => {
       is_enabled: true,
       input_placeholder: "Escribe tu mensaje…",
       show_branding: true
-    });
-
-    await chatbot.save({ session });
-
-    // ─────────── FLOW ───────────
-    const [flow] = await Flow.create([{
-      account_id: account._id,
-      chatbot_id: chatbot._id,
-      name: `Flujo del chatbot ${name.trim()}`,
-      status: "draft",
-      version: 1,
-      lock: null
     }], { session });
 
-    // ─────────── NODES ───────────
-    const nodeIds = {
-      start: new mongoose.Types.ObjectId(),
-      name: new mongoose.Types.ObjectId(),
-      lastname: new mongoose.Types.ObjectId(),
-      phone: new mongoose.Types.ObjectId(),
-      email: new mongoose.Types.ObjectId(),
-      end: new mongoose.Types.ObjectId()
-    };
+    const chatbotDoc = chatbot[0];
 
-    const defaultNodes = [
-      {
-        _id: nodeIds.start,
-        account_id: account._id, // ✅ CORREGIDO
-        flow_id: flow._id,
-        order: 0,
-        node_type: "text",
-        content: "Hola,",
-        typing_time: 2,
-        next_node_id: nodeIds.name,
-        end_conversation: false,
-        is_draft: true
-      },
-      {
-        _id: nodeIds.name,
-        account_id: account._id,
-        flow_id: flow._id,
-        order: 1,
-        node_type: "text_input",
-        content: "¿Cuál es tu nombre?",
-        variable_key: "name",
-        typing_time: 2,
-        validation: {
-          enabled: true,
-          rules: [{ type: "required", message: "El nombre es obligatorio" }]
-        },
-        next_node_id: nodeIds.lastname,
-        end_conversation: false,
-        is_draft: true
-      },
-      {
-        _id: nodeIds.lastname,
-        account_id: account._id,
-        flow_id: flow._id,
-        order: 2,
-        node_type: "text_input",
-        content: "¿Cuál es tu apellido?",
-        variable_key: "lastname",
-        typing_time: 2,
-        validation: {
-          enabled: true,
-          rules: [{ type: "required", message: "El apellido es obligatorio" }]
-        },
-        next_node_id: nodeIds.phone,
-        end_conversation: false,
-        is_draft: true
-      },
-      {
-        _id: nodeIds.phone,
-        account_id: account._id,
-        flow_id: flow._id,
-        order: 3,
-        node_type: "phone",
-        content: "¿Cuál es su número de teléfono?",
-        variable_key: "phone",
-        typing_time: 2,
-        validation: {
-          enabled: true,
-          rules: [
-            { type: "required", message: "Debes ingresar un teléfono." },
-            { type: "phone", message: "El teléfono no es válido." }
-          ]
-        },
-        next_node_id: nodeIds.email,
-        end_conversation: false,
-        is_draft: true
-      },
-      {
-        _id: nodeIds.email,
-        account_id: account._id,
-        flow_id: flow._id,
-        order: 4,
-        node_type: "email",
-        content: "¿Cuál es tu correo electrónico?",
-        variable_key: "email",
-        typing_time: 2,
-        validation: {
-          enabled: true,
-          rules: [
-            { type: "required", message: "Debes ingresar un email." },
-            { type: "email", message: "El email no es válido." }
-          ]
-        },
-        next_node_id: nodeIds.end,
-        end_conversation: false,
-        is_draft: true
-      },
-      {
-        _id: nodeIds.end,
-        account_id: account._id,
-        flow_id: flow._id,
-        order: 5,
-        node_type: "text",
-        content: "Gracias, ya puedes cerrar el chatbot.",
-        typing_time: 0,
-        next_node_id: null,
-        end_conversation: true,
-        is_draft: true
-      }
-    ];
+    /* ───────── CLONAR FLOW TEMPLATE ───────── */
 
-    await FlowNode.insertMany(defaultNodes, { session });
+    const flow = await cloneTemplateToFlow(
+      chatbotDoc._id,
+      user._id,
+      session,
+      name.trim()
+    );
 
-    flow.start_node_id = nodeIds.start;
-    await flow.save({ session });
+    /* ───────── TOKEN ───────── */
 
-    // ─────────── TOKEN ───────────
     const token = generateToken({
       id: user._id,
       role: user.role,
@@ -261,7 +150,7 @@ exports.registerFirst = async (req, res, next) => {
 
     await session.commitTransaction();
 
-    res.status(201).json({
+    return res.status(201).json({
       token,
       account,
       user: {
@@ -269,7 +158,10 @@ exports.registerFirst = async (req, res, next) => {
         name: user.name,
         email: user.email,
         role: user.role
-      }
+      },
+      chatbot: chatbotDoc,
+      flow_id: flow._id,
+      start_node_id: flow.start_node_id
     });
 
   } catch (error) {
