@@ -5,7 +5,6 @@ const auth = require("../middlewares/auth.middleware");
 const role = require("../middlewares/role.middleware");
 
 const flowController = require("../controllers/flows.controller");
-const flowEdit = require("../controllers/flowEditor.controller");
 
 const FLOW_ROLE = role("ADMIN", "CLIENT");
 
@@ -33,15 +32,6 @@ router.put(
   flowController.updateFlow
 );
 
-// Editor
-router.get(
-  "/:flowId/editor",
-  auth,
-  FLOW_ROLE,
-  flowEdit.getFlowEditorData
-);
-
-
 // Eliminar flujo
 router.delete(
   "/:id",
@@ -67,11 +57,13 @@ router.get(
   flowController.getFlowById
 );
 
-//Cerrar Editor
-router.post(
-  "/:id/unlock",
+// Obtener nodos por flow
+router.get(
+  "/flow/:flowId",
   auth,
-  flowController.unlockFlow
+  FLOW_ROLE,
+  flowController.getNodesByFlow
 );
+
 
 module.exports = router;

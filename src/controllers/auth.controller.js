@@ -280,7 +280,6 @@ exports.registerFirst = async (req, res, next) => {
   }
 };
 
-
 // Registro de usuario (por subdominio)
 exports.register = async (req, res) => {
   const session = await mongoose.startSession();
