@@ -2,16 +2,27 @@ const { Schema, model } = require("mongoose");
 
 const FlowSchema = new Schema(
   {
+    // 🔹 SOLO null cuando es template
     account_id: {
       type: Schema.Types.ObjectId,
       ref: "Account",
-      required: true
+      default: null,
+      index: true
     },
 
+    // 🔹 SOLO null cuando es template
     chatbot_id: {
       type: Schema.Types.ObjectId,
       ref: "Chatbot",
-      required: true
+      default: null,
+      index: true
+    },
+
+    // 🔥 CLAVE
+    is_template: {
+      type: Boolean,
+      default: false,
+      index: true
     },
 
     name: {
@@ -33,7 +44,7 @@ const FlowSchema = new Schema(
 
     lock: {
       locked_by: {
-        type: Schema.Types.ObjectId, 
+        type: Schema.Types.ObjectId,
         ref: "User",
         default: null
       },
@@ -46,6 +57,7 @@ const FlowSchema = new Schema(
       default: 1
     },
 
+    // 🔗 referencia al template original
     base_flow_id: {
       type: Schema.Types.ObjectId,
       ref: "Flow",
@@ -61,7 +73,15 @@ const FlowSchema = new Schema(
 );
 
 // Índices
-FlowSchema.index({ account_id: 1 });
+FlowSchema.index({ is_template: 1 });
+
+// Flows por chatbot
 FlowSchema.index({ chatbot_id: 1, status: 1 });
+
+// Flows por cuenta
+FlowSchema.index({ account_id: 1 });
+
+// Versionado
+FlowSchema.index({ base_flow_id: 1 });
 
 module.exports = model("Flow", FlowSchema);

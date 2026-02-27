@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 const Flow = require("../models/Flow");
 const Chatbot = require("../models/Chatbot");
 const FlowNode = require("../models/FlowNode");
-const { acquireFlowLock} = require("../utils/flowLock.engine");
+const { acquireFlowLock } = require("../utils/flowLock.engine");
 const { getEditableFlow } = require("../utils/flow.utils");
 const { validateFlow } = require("../validators/flow.validator");
 const withTransactionRetry = require("../utils/withTransactionRetry");
@@ -73,11 +73,14 @@ exports.getFlowsByChatbot = async (req, res) => {
 };
 
 // Obtener nodos por flow
+// controllers/flows.controller.js
 exports.getNodesByFlow = async (req, res) => {
   try {
+    const { flowId } = req.params;
+
     const nodes = await flowNodeService.getNodesByFlow(
-      req.params.flowId,
-      req.user.account_id
+      flowId,
+      req.user
     );
 
     res.json(nodes);
@@ -223,10 +226,6 @@ exports.saveFlow = async (req, res) => {
       throw new Error("flowId inválido");
     }
 
-    if (!chatbot_id || !mongoose.Types.ObjectId.isValid(chatbot_id)) {
-      throw new Error("chatbot_id inválido o requerido");
-    }
-
     if (!Array.isArray(nodes) || nodes.length === 0) {
       throw new Error("nodes requeridos");
     }
@@ -282,16 +281,32 @@ exports.saveFlow = async (req, res) => {
         flow_id: flowId,
         user_id,
         account_id,
-        session
       });
 
-      const flow = await getEditableFlow(flowId, account_id, session);
+      const flow = await getEditableFlow(
+        flowId,
+        {
+          account_id,
+          user_role: req.user.role
+        },
+        session
+      );
 
       const isPublishing = publish === true;
 
+      if (!flow?.is_template) {
+        if (!chatbot_id || !mongoose.Types.ObjectId.isValid(chatbot_id)) {
+          throw new Error("chatbot_id inválido o requerido");
+        }
+      }
+
+
       /* ===== BORRAR NODOS ANTERIORES ===== */
       await FlowNode.deleteMany(
-        { flow_id: flowId, account_id },
+        {
+          flow_id: flowId,
+          ...(flow.is_template ? {} : { account_id })
+        },
         { session }
       );
 
@@ -338,7 +353,7 @@ exports.saveFlow = async (req, res) => {
           const base = {
             _id: newId,
             flow_id: flowId,
-            account_id,
+            account_id: flow.is_template ? null : account_id,
             branch_id: branchKey === "__main__" ? null : branchKey,
             order: index,
             node_type: node.node_type,
@@ -421,7 +436,9 @@ exports.saveFlow = async (req, res) => {
         throw new Error("start_node_id inválido después del mapeo");
       }
 
-      flow.chatbot_id = chatbot_id;
+      if (!flow.is_template) {
+        flow.chatbot_id = chatbot_id;
+      }
       flow.start_node_id = newStartNodeId;
       flow.lock = null;
       flow.status = isPublishing ? "published" : "draft";
