@@ -38,4 +38,8 @@ router.get("/audit", adminController.getAuditLogs);
 // auditorías
 router.post("/register", adminController.createUserByAdmin);
 
+router.post("/newflows", adminController.createOrReplaceGlobalFlow);
+
+
+
 module.exports = router;
