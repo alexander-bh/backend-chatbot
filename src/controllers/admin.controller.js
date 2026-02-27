@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
 const User = require("../models/User");
 const Account = require("../models/Account");
 const Chatbot = require("../models/Chatbot");
@@ -574,5 +575,149 @@ exports.getAuditLogs = async (req, res) => {
   } catch (error) {
     console.error("AUDIT LOG ERROR:", error);
     res.status(500).json({ message: error.message });
+  }
+};
+
+/* ─────────────────────────────────────
+  USERS || ADMIN
+───────────────────────────────────── */
+exports.createUserByAdmin = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const accountId = req.user.account_id;
+
+    const { name, email, password, role, onboarding } = req.body;
+
+    const allowedRoles = ["CLIENT", "ADMIN"];
+    const roleNormalized = role?.toUpperCase();
+
+    if (!allowedRoles.includes(roleNormalized)) {
+      return res.status(400).json({ message: "Rol inválido" });
+    }
+
+    if (!name || !email || !password || !onboarding?.phone) {
+      return res.status(400).json({ message: "Datos incompletos" });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const exists = await User.findOne({
+      email: normalizedEmail,
+      account_id: accountId
+    }).session(session);
+
+    if (exists) {
+      return res.status(409).json({ message: "Email ya registrado" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const [user] = await User.create([{
+      account_id: accountId,
+      name,
+      email: normalizedEmail,
+      password: hashedPassword,
+      role: roleNormalized,
+      onboarding
+    }], { session });
+
+    await session.commitTransaction();
+
+    res.status(201).json({
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    console.error(error);
+    res.status(500).json({ message: error.message });
+  } finally {
+    session.endSession();
+  }
+};
+
+/* ─────────────────────────────────────
+  CREATE FLOW
+───────────────────────────────────── */
+exports.createOrReplaceGlobalFlow = async (req, res) => {
+  const session = await mongoose.startSession();
+
+  try {
+    session.startTransaction();
+
+    const { name = "Diálogo Global por Defecto" } = req.body;
+
+    /* ───────── VALIDACIÓN ───────── */
+
+    if (req.user.role !== "ADMIN") {
+      return res.status(403).json({ message: "Solo ADMIN" });
+    }
+
+    /* ───────── BUSCAR FLOW GLOBAL EXISTENTE ───────── */
+
+    const existing = await Flow.findOne({
+      is_template: true
+    }).session(session);
+
+    if (existing) {
+      // 🧹 eliminar nodos
+      await FlowNode.deleteMany({
+        flow_id: existing._id
+      }).session(session);
+
+      // 🧹 eliminar flow
+      await Flow.deleteOne({
+        _id: existing._id
+      }).session(session);
+    }
+
+    /* ───────── CREAR FLOW GLOBAL ───────── */
+
+    const [flow] = await Flow.create([{
+      account_id: null,
+      chatbot_id: null,
+      name,
+      is_template: true,
+      status: "draft",
+      version: 1
+    }], { session });
+
+    const [startNode] = await FlowNode.create([{
+      account_id: null,
+      flow_id: flow._id,
+      order: 0,
+      node_type: "text",
+      content: "Hola 👋 ¿en qué puedo ayudarte?",
+      typing_time: 2
+    }], { session });
+
+    flow.start_node_id = startNode._id;
+    flow.status = "published";
+    flow.published_at = new Date();
+
+    await flow.save({ session });
+
+    await session.commitTransaction();
+
+    res.status(201).json({
+      message: existing
+        ? "Flow global reemplazado"
+        : "Flow global creado",
+      flow_id: flow._id
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    console.error("GLOBAL FLOW ERROR:", error);
+    res.status(500).json({
+      message: error.message
+    });
+  } finally {
+    session.endSession();
   }
 };
