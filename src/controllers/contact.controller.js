@@ -45,7 +45,6 @@ exports.createContact = async (req, res) => {
   }
 };
 
-
 /* =========================
    GET CONTACTS BY CHATBOT
 ========================= */

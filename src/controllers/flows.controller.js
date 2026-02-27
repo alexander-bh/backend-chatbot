@@ -2,74 +2,11 @@ const mongoose = require("mongoose");
 const Flow = require("../models/Flow");
 const Chatbot = require("../models/Chatbot");
 const FlowNode = require("../models/FlowNode");
-const { acquireFlowLock, releaseFlowLock } = require("../utils/flowLock.engine");
+const { acquireFlowLock} = require("../utils/flowLock.engine");
 const { getEditableFlow } = require("../utils/flow.utils");
 const { validateFlow } = require("../validators/flow.validator");
 const withTransactionRetry = require("../utils/withTransactionRetry");
-
-// Crear flow
-exports.createFlow = async (req, res) => {
-  const session = await mongoose.startSession();
-
-  try {
-    const { chatbot_id, name } = req.body;
-
-    if (!chatbot_id || !name) {
-      return res.status(400).json({
-        message: "chatbot_id y name son requeridos"
-      });
-    }
-
-    const chatbot = await Chatbot.findOne({
-      _id: chatbot_id,
-      account_id: req.user.account_id
-    });
-
-    if (!chatbot) {
-      return res.status(404).json({
-        message: "Chatbot no encontrado"
-      });
-    }
-
-    session.startTransaction();
-
-    const [flow] = await Flow.create([{
-      account_id: req.user.account_id,
-      chatbot_id,
-      name,
-      status: "draft",
-      start_node_id: null,
-      version: 1
-    }], { session });
-
-    const [startNode] = await FlowNode.create([{
-      account_id: req.user.account_id,
-      flow_id: flow._id,
-      order: 0,
-      node_type: "text",
-      content: "Inicio del flujo",
-      next_node_id: null,
-      options: []
-    }], { session });
-
-    flow.start_node_id = startNode._id;
-    await flow.save({ session });
-
-    await session.commitTransaction();
-
-    res.status(201).json(flow);
-
-  } catch (error) {
-    await session.abortTransaction();
-    console.error("createFlow error:", error);
-    res.status(500).json({
-      message: "Error creando flow",
-      error: error.message
-    });
-  } finally {
-    session.endSession();
-  }
-};
+const flowNodeService = require("../services/flowNode.service");
 
 //Obtener flow por ID
 exports.getFlowById = async (req, res) => {
@@ -135,6 +72,84 @@ exports.getFlowsByChatbot = async (req, res) => {
   }
 };
 
+// Obtener nodos por flow
+exports.getNodesByFlow = async (req, res) => {
+  try {
+    const nodes = await flowNodeService.getNodesByFlow(
+      req.params.flowId,
+      req.user.account_id
+    );
+
+    res.json(nodes);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+};
+
+// Crear flow
+exports.createFlow = async (req, res) => {
+  const session = await mongoose.startSession();
+
+  try {
+    const { chatbot_id, name } = req.body;
+
+    if (!chatbot_id || !name) {
+      return res.status(400).json({
+        message: "chatbot_id y name son requeridos"
+      });
+    }
+
+    const chatbot = await Chatbot.findOne({
+      _id: chatbot_id,
+      account_id: req.user.account_id
+    });
+
+    if (!chatbot) {
+      return res.status(404).json({
+        message: "Chatbot no encontrado"
+      });
+    }
+
+    session.startTransaction();
+
+    const [flow] = await Flow.create([{
+      account_id: req.user.account_id,
+      chatbot_id,
+      name,
+      status: "draft",
+      start_node_id: null,
+      version: 1
+    }], { session });
+
+    const [startNode] = await FlowNode.create([{
+      account_id: req.user.account_id,
+      flow_id: flow._id,
+      order: 0,
+      node_type: "text",
+      content: "Inicio del flujo",
+      next_node_id: null,
+      options: []
+    }], { session });
+
+    flow.start_node_id = startNode._id;
+    await flow.save({ session });
+
+    await session.commitTransaction();
+
+    res.status(201).json(flow);
+
+  } catch (error) {
+    await session.abortTransaction();
+    console.error("createFlow error:", error);
+    res.status(500).json({
+      message: "Error creando flow",
+      error: error.message
+    });
+  } finally {
+    session.endSession();
+  }
+};
+
 // Actualizar flow
 exports.updateFlow = async (req, res) => {
   try {
@@ -186,7 +201,7 @@ exports.deleteFlow = async (req, res) => {
   }
 };
 
-// controllers/flow.controller.js
+// Guardar los flow 
 exports.saveFlow = async (req, res) => {
   try {
     const flowId = req.params.id;
@@ -435,44 +450,5 @@ exports.saveFlow = async (req, res) => {
       message: error.message,
       stack: error.stack
     });
-  }
-};
-
-// UNLOCK FLOW
-exports.unlockFlow = async (req, res) => {
-
-  const session = await mongoose.startSession();
-
-  try {
-    const flowId = req.params.id;
-
-    if (!mongoose.Types.ObjectId.isValid(flowId)) {
-      throw new Error("flowId inválido");
-    }
-
-    session.startTransaction();
-
-    await releaseFlowLock({
-      flow_id: flowId,
-      user_id: req.user.id,
-      account_id: req.user.account_id,
-      session
-    });
-
-    await session.commitTransaction();
-
-    res.json({
-      success: true,
-      message: "Flow desbloqueado correctamente"
-    });
-
-  } catch (error) {
-    await session.abortTransaction();
-    res.status(400).json({
-      success: false,
-      message: error.message
-    });
-  } finally {
-    session.endSession();
   }
 };

@@ -29,7 +29,7 @@ app.use("/api/admin", require("./routes/admin.routes.js"));
 
 app.use("/api/chatbots", require("./routes/chatbots.routes.js"));
 app.use("/api/flows", require("./routes/flows.routes.js"));
-app.use("/api/flownodes", require("./routes/flow.nodes.routes.js"));
+app.use("/api/flownodes", require("./routes/flows.routes.js"));
 
 app.use("/api/crm-fields", require("./routes/crmfields.routes"));
 app.use("/api/validation-rule",require("./routes/validationRule.routes.js"))

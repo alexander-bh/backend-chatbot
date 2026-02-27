@@ -59,7 +59,7 @@ exports.acquireFlowLock = async ({
   return flow;
 };
 
-
+/*
 exports.releaseFlowLock = async ({
   flow_id,
   user_id,
@@ -83,7 +83,6 @@ exports.releaseFlowLock = async ({
 
   return true;
 };
-
 
 exports.refreshFlowLock = async ({
   flow_id,
@@ -112,4 +111,4 @@ exports.refreshFlowLock = async ({
   await flow.save({ session });
 
   return true;
-};
+};*/
