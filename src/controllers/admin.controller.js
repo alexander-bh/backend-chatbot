@@ -94,6 +94,7 @@ exports.updateAnyUser = async (req, res) => {
 
     const before = user.toObject();
 
+    // ───── Validaciones de rol ─────
     if (req.body.role && targetUserId === loggedAdminId) {
       return res.status(400).json({ message: "No puedes cambiar tu propio rol" });
     }
@@ -110,12 +111,39 @@ exports.updateAnyUser = async (req, res) => {
       });
     }
 
-    delete req.body.password;
     delete req.body._id;
     delete req.body.role;
 
+    // ───── PASSWORD (SEGURO) ─────
+    if (req.body.password && req.body.password.trim() !== "") {
+      if (req.body.password.length < 6) {
+        return res.status(400).json({
+          message: "La contraseña debe tener al menos 6 caracteres"
+        });
+      }
+
+      user.password = await bcrypt.hash(req.body.password, 10);
+    }
+
+    delete req.body.password;
+
+    const empresaNueva = req.body?.onboarding?.empresa;
+    const empresaAnterior = user.onboarding?.empresa;
+
     Object.assign(user, req.body);
     await user.save();
+
+    // ───── Sincroniza Account ─────
+    if (
+      empresaNueva &&
+      empresaNueva.trim() !== "" &&
+      empresaNueva !== empresaAnterior
+    ) {
+      await Account.findByIdAndUpdate(
+        user.account_id,
+        { name: empresaNueva.trim() }
+      );
+    }
 
     await auditService.log({
       req,
@@ -126,7 +154,7 @@ exports.updateAnyUser = async (req, res) => {
       after: user.toObject()
     });
 
-    res.json(user);
+    res.json({ message: "Usuario actualizado correctamente" });
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
@@ -644,7 +672,6 @@ exports.createUserByAdmin = async (req, res) => {
 
     const normalizedEmail = email.toLowerCase().trim();
 
-    // ❌ no debe existir ningún usuario con ese email
     const exists = await User.findOne({
       email: normalizedEmail
     }).session(session);
@@ -674,7 +701,7 @@ exports.createUserByAdmin = async (req, res) => {
         : onboarding.phone;
 
     const [user] = await User.create([{
-      account_id: account._id, // 👈 cuenta propia
+      account_id: account._id,
       name,
       email: normalizedEmail,
       password: hashedPassword,
