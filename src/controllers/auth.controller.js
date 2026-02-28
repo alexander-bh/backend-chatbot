@@ -11,6 +11,7 @@ const { sendResetPasswordEmail } = require("../services/email.service");
 const auditService = require("../services/audit.service");
 const { sendPasswordChangedAlert } = require("../services/password-alert.service");
 const { cloneTemplateToFlow } = require("../services/flowNode.service");
+const { createFallbackFlow } = require("../services/flowNode.service");
 
 const generateOTP = () =>
   Math.floor(100000 + Math.random() * 900000).toString();
@@ -124,13 +125,26 @@ exports.registerFirst = async (req, res, next) => {
     const chatbotDoc = chatbot[0];
 
     /* ───────── CLONAR FLOW TEMPLATE ───────── */
+    let flow;
+    let flowName = name.trim(); 
 
-    const flow = await cloneTemplateToFlow(
-      chatbotDoc._id,
-      user._id,
-      session,
-      name.trim()
-    );
+    try {
+      flow = await cloneTemplateToFlow(
+        chatbotDoc._id,
+        req.user._id,
+        session,
+        flowName
+      );
+    } catch (err) {
+      console.warn("⚠️ No hay flow global, creando flow básico");
+
+      flow = await createFallbackFlow({
+        chatbot_id: chatbotDoc._id,
+        account_id: req.user.account_id,
+        session,
+        flowName
+      });
+    }
 
     /* ───────── TOKEN ───────── */
 
