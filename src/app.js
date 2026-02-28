@@ -30,11 +30,13 @@ app.use("/api/admin", require("./routes/admin.routes.js"));
 app.use("/api/chatbots", require("./routes/chatbots.routes.js"));
 app.use("/api/flows", require("./routes/flows.routes.js"));
 app.use("/api/flownodes", require("./routes/flows.routes.js"));
+app.use("/api/node-types", require("./routes/nodeType.routes"));
 
 app.use("/api/crm-fields", require("./routes/crmfields.routes"));
 app.use("/api/validation-rule",require("./routes/validationRule.routes.js"))
 app.use("/api/meta", require("./routes/meta.routes.js"));
 app.use("/api/conversations",require("./routes/conversationSession.routes.js"));
+
 
 app.use("/public", express.static(path.join(__dirname, "public")));
 
