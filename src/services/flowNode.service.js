@@ -2,7 +2,6 @@ const mongoose = require("mongoose");
 const Flow = require("../models/Flow");
 const FlowNode = require("../models/FlowNode");
 const Chatbot = require("../models/Chatbot");
-const withTransactionRetry = require("../utils/withTransactionRetry");
 
 // services/flowNode.service.js
 exports.getNodesByFlow = async (flowId, user) => {
@@ -41,6 +40,7 @@ exports.getNodesByFlow = async (flowId, user) => {
   }).sort({ order: 1 });
 };
 
+// services/cloneFlow + Node 
 exports.cloneTemplateToFlow = async (chatbot_id, user_id, session,name) => {
 
   if (!mongoose.Types.ObjectId.isValid(chatbot_id)) {
@@ -69,7 +69,7 @@ exports.cloneTemplateToFlow = async (chatbot_id, user_id, session,name) => {
 
   /* ================= NUEVO FLOW ================= */
   const [newFlow] = await Flow.create([{
-    name:`Flujo de chatbot: ${name}`,
+    name:`Flujo del chatbot: ${name}`,
     account_id,
     chatbot_id,
     is_template: false,
@@ -142,4 +142,37 @@ exports.cloneTemplateToFlow = async (chatbot_id, user_id, session,name) => {
   await newFlow.save({ session });
 
   return newFlow;
+};
+
+// sercice/flowFallback
+exports.createFallbackFlow = async ({
+  chatbot_id,
+  account_id,
+  session,
+  name
+}) => {
+
+  const [flow] = await Flow.create([{
+    account_id,
+    chatbot_id,
+    name: `Flujo del chatbot: ${name}`,
+    status: "draft",
+    version: 1,
+    is_template: false
+  }], { session });
+
+  const [node] = await FlowNode.create([{
+    flow_id: flow._id,
+    account_id,
+    order: 0,
+    node_type: "text",
+    content: "Hola 👋",
+    typing_time: 2,
+    end_conversation: false
+  }], { session });
+
+  flow.start_node_id = node._id;
+  await flow.save({ session });
+
+  return flow;
 };

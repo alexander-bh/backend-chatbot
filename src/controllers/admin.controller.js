@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const User = require("../models/User");
 const Account = require("../models/Account");
@@ -9,6 +10,16 @@ const AuditLog = require("../models/AuditLog");
 const auditService = require("../services/audit.service");
 const formatDateAMPM = require("../utils/formatDate");
 const { cloneTemplateToFlow } = require("../services/flowNode.service");
+const { createFallbackFlow } = require("../services/flowNode.service");
+
+// util simple
+const slugify = (text) =>
+  text
+    .toString()
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^\w-]/g, "");
 
 /* ─────────────────────────────────────
    DASHBOARD
@@ -189,6 +200,17 @@ exports.deleteAnyUser = async (req, res) => {
       { session }
     );
 
+    const usersInAccount = await User.countDocuments({
+      account_id: user.account_id
+    }).session(session);
+
+    if (usersInAccount <= 1) {
+      await Account.deleteOne(
+        { _id: user.account_id },
+        { session }
+      );
+    }
+
     // 7️⃣ Auditoría
     await auditService.log({
       req,
@@ -282,12 +304,25 @@ exports.createChatbotForUser = async (req, res) => {
 
     /* ───────── CLONAR FLOW TEMPLATE ───────── */
 
-    const flow = await cloneTemplateToFlow(
-      chatbotDoc._id,
-      req.user._id,
-      session,
-      name.trim()
-    );
+    let flow;
+    let flowName = name.trim();
+
+    try {
+      flow = await cloneTemplateToFlow(
+        chatbotDoc._id,
+        req.user._id,
+        session,
+        flowName
+      );
+    } catch (err) {
+      console.warn("⚠️ No hay flow global, creando flow básico");
+      flow = await createFallbackFlow({
+        chatbot_id: chatbotDoc._id,
+        account_id: req.user.account_id,
+        session,
+        flowName
+      });
+    }
 
     await session.commitTransaction();
 
@@ -586,9 +621,9 @@ exports.createUserByAdmin = async (req, res) => {
   session.startTransaction();
 
   try {
-    const accountId = req.user.account_id;
+    const { name, email, password, role, onboarding, account_name } = req.body;
 
-    const { name, email, password, role, onboarding } = req.body;
+    /* ───────── VALIDACIONES ───────── */
 
     const allowedRoles = ["CLIENT", "ADMIN"];
     const roleNormalized = role?.toUpperCase();
@@ -597,44 +632,80 @@ exports.createUserByAdmin = async (req, res) => {
       return res.status(400).json({ message: "Rol inválido" });
     }
 
-    if (!name || !email || !password || !onboarding?.phone) {
+    if (!name || !email || !password || !onboarding?.phone || !account_name) {
       return res.status(400).json({ message: "Datos incompletos" });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        message: "La contraseña debe tener al menos 6 caracteres"
+      });
     }
 
     const normalizedEmail = email.toLowerCase().trim();
 
+    // ❌ no debe existir ningún usuario con ese email
     const exists = await User.findOne({
-      email: normalizedEmail,
-      account_id: accountId
+      email: normalizedEmail
     }).session(session);
 
     if (exists) {
       return res.status(409).json({ message: "Email ya registrado" });
     }
 
+    /* ───────── ACCOUNT (NUEVA) ───────── */
+
+    const slug = `${slugify(account_name)}-${crypto.randomUUID().slice(0, 6)}`;
+
+    const [account] = await Account.create([{
+      name: account_name,
+      slug,
+      plan: "free",
+      status: "active"
+    }], { session });
+
+    /* ───────── USER ───────── */
+
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    const finalPhoneAlt =
+      onboarding.phone_alt && onboarding.phone_alt.trim() !== ""
+        ? onboarding.phone_alt
+        : onboarding.phone;
+
     const [user] = await User.create([{
-      account_id: accountId,
+      account_id: account._id, // 👈 cuenta propia
       name,
       email: normalizedEmail,
       password: hashedPassword,
       role: roleNormalized,
-      onboarding
+      onboarding: {
+        ...onboarding,
+        phone: onboarding.phone,
+        phone_alt: finalPhoneAlt
+      }
     }], { session });
 
     await session.commitTransaction();
 
     res.status(201).json({
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role
+      message: "Usuario y cuenta creados correctamente",
+      account: {
+        id: account._id,
+        name: account.name,
+        slug: account.slug
+      },
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
     });
 
   } catch (error) {
     await session.abortTransaction();
-    console.error(error);
+    console.error("CREATE USER BY ADMIN ERROR:", error);
     res.status(500).json({ message: error.message });
   } finally {
     session.endSession();

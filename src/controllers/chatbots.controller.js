@@ -9,6 +9,7 @@ const {
   generateCopyName
 } = require("../utils/chatbotName.helper");
 const { cloneTemplateToFlow } = require("../services/flowNode.service");
+const { createFallbackFlow } = require("../services/flowNode.service");
 
 // ═══════════════════════════════════════════════════════════
 // CREAR CHATBOT
@@ -26,8 +27,6 @@ exports.createChatbot = async (req, res) => {
       show_welcome_on_mobile
     } = req.body;
 
-    /* ───────── VALIDACIONES ───────── */
-
     if (!req.user?.account_id) {
       throw new Error("Usuario no autenticado");
     }
@@ -35,19 +34,6 @@ exports.createChatbot = async (req, res) => {
     if (!name || typeof name !== "string" || !name.trim()) {
       throw new Error("Nombre inválido");
     }
-
-    if (name.length > 60) {
-      throw new Error("El nombre es demasiado largo");
-    }
-
-    if (
-      welcome_delay !== undefined &&
-      (welcome_delay < 0 || welcome_delay > 10)
-    ) {
-      throw new Error("welcome_delay inválido");
-    }
-
-    /* ───────── CREAR CHATBOT ───────── */
 
     const chatbot = await Chatbot.create([{
       account_id: req.user.account_id,
@@ -65,14 +51,26 @@ exports.createChatbot = async (req, res) => {
 
     const chatbotDoc = chatbot[0];
 
-    /* ───────── CLONAR FLOW TEMPLATE ───────── */
+    let flow;
+    let flowName = name.trim();
 
-    const flow = await cloneTemplateToFlow(
-      chatbotDoc._id,
-      req.user._id,
-      session,
-      name.trim()
-    );
+    try {
+      flow = await cloneTemplateToFlow(
+        chatbotDoc._id,
+        req.user._id,
+        session,
+        flowName
+      );
+    } catch (err) {
+      console.warn("⚠️ No hay flow global, creando flow básico");
+
+      flow = await createFallbackFlow({
+        chatbot_id: chatbotDoc._id,
+        account_id: req.user.account_id,
+        session,
+        flowName
+      });
+    }
 
     await session.commitTransaction();
 
@@ -89,7 +87,6 @@ exports.createChatbot = async (req, res) => {
     return res.status(500).json({
       message: error.message
     });
-
   } finally {
     session.endSession();
   }
@@ -285,7 +282,6 @@ exports.updateChatbot = async (req, res) => {
           return res.status(400).json({ message: "URL de avatar inválida" });
         }
       }
-
       chatbot.avatar = avatar;
     }
 
@@ -302,6 +298,19 @@ exports.updateChatbot = async (req, res) => {
     }
 
     await chatbot.save();
+
+    if (name !== undefined) {
+      const flow = await Flow.findOne({
+        chatbot_id: chatbot._id,
+        account_id: req.user.account_id,
+        is_template: false
+      });
+
+      if (flow) {
+        flow.name = `Flujo de chatbot: ${chatbot.name}`;
+        await flow.save();
+      }
+    }
 
     res.json({
       message: "Chatbot actualizado correctamente",
