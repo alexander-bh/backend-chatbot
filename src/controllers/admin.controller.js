@@ -11,6 +11,8 @@ const auditService = require("../services/audit.service");
 const formatDateAMPM = require("../utils/formatDate");
 const { cloneTemplateToFlow } = require("../services/flowNode.service");
 const { createFallbackFlow } = require("../services/flowNode.service");
+const systemAvatars = require("../shared/enum/systemAvatars");
+
 
 // util simple
 const slugify = (text) =>
@@ -455,40 +457,114 @@ exports.updateAnyChatbot = async (req, res) => {
     const chatbot = await Chatbot.findById(req.params.id);
 
     if (!chatbot) {
-      return res.status(404).json({
-        message: "Chatbot no encontrado"
-      });
+      return res.status(404).json({ message: "Chatbot no encontrado" });
     }
 
     const before = chatbot.toObject();
 
-    // ✅ Lista blanca de campos editables por admin
-    const allowedFields = [
-      "name",
-      "status",
-      "is_enabled",
-      "welcome_message",
-      "welcome_delay",
-      "show_welcome_on_mobile",
-      "avatar",
-      "primary_color",
-      "secondary_color",
-      "launcher_text",
-      "position",
-      "input_placeholder",
-      "show_branding"
-    ];
+    const {
+      name,
+      welcome_message,
+      welcome_delay,
+      show_welcome_on_mobile,
+      primary_color,
+      secondary_color,
+      launcher_text,
+      input_placeholder,
+      position,
+      show_branding,
+      is_enabled,
+      status,
+      avatar
+    } = req.body;
 
-    // 🔒 Aplicar solo campos permitidos
-    for (const field of allowedFields) {
-      if (req.body[field] !== undefined) {
-        chatbot[field] = req.body[field];
+    /* ---------- VALIDACIONES ---------- */
+
+    if (name !== undefined) {
+      if (!name.trim() || name.length > 60) {
+        return res.status(400).json({ message: "Nombre inválido" });
       }
+      chatbot.name = name.trim();
+    }
+
+    if (welcome_delay !== undefined) {
+      if (welcome_delay < 0 || welcome_delay > 10) {
+        return res.status(400).json({ message: "welcome_delay inválido" });
+      }
+      chatbot.welcome_delay = welcome_delay;
+    }
+
+    const hexRegex = /^#([0-9A-F]{3}){1,2}$/i;
+
+    if (primary_color !== undefined) {
+      if (!hexRegex.test(primary_color)) {
+        return res.status(400).json({ message: "Color primario inválido" });
+      }
+      chatbot.primary_color = primary_color;
+    }
+
+    if (secondary_color !== undefined) {
+      if (!hexRegex.test(secondary_color)) {
+        return res.status(400).json({ message: "Color secundario inválido" });
+      }
+      chatbot.secondary_color = secondary_color;
+    }
+
+    const allowedStatus = ["active","inactive"];
+    if (status !== undefined) {
+      if (!allowedStatus.includes(status)) {
+        return res.status(400).json({ message: "Status inválido" });
+      }
+      chatbot.status = status;
+    }
+
+    if (is_enabled !== undefined) chatbot.is_enabled = is_enabled;
+    if (welcome_message !== undefined) chatbot.welcome_message = welcome_message;
+    if (show_welcome_on_mobile !== undefined)
+      chatbot.show_welcome_on_mobile = show_welcome_on_mobile;
+    if (launcher_text !== undefined) chatbot.launcher_text = launcher_text;
+    if (input_placeholder !== undefined)
+      chatbot.input_placeholder = input_placeholder;
+    if (position !== undefined) chatbot.position = position;
+    if (show_branding !== undefined) chatbot.show_branding = show_branding;
+
+    /* ---------- AVATAR POR ARCHIVO ---------- */
+    if (req.file) {
+      const avatarUrl = req.file.path;
+
+      chatbot.avatar = avatarUrl;
+
+      if (!Array.isArray(chatbot.uploaded_avatars)) {
+        chatbot.uploaded_avatars = [];
+      }
+
+      chatbot.uploaded_avatars.push({
+        id: crypto.randomUUID(),
+        label: `Avatar ${chatbot.uploaded_avatars.length + 1}`,
+        url: avatarUrl,
+        created_at: new Date()
+      });
+    }
+
+    /* ---------- AVATAR POR URL ---------- */
+    if (avatar && !req.file) {
+      const isSystem = systemAvatars.some(a => a.url === avatar);
+      const isUploaded =
+        chatbot.uploaded_avatars?.some(a => a.url === avatar);
+
+      if (!isSystem && !isUploaded) {
+        try {
+          new URL(avatar);
+        } catch {
+          return res.status(400).json({ message: "URL inválida" });
+        }
+      }
+
+      chatbot.avatar = avatar;
     }
 
     await chatbot.save();
 
-    // 🧾 Auditoría
     await auditService.log({
       req,
       targetType: "CHATBOT",
@@ -498,12 +574,153 @@ exports.updateAnyChatbot = async (req, res) => {
       after: chatbot.toObject()
     });
 
-    res.json(chatbot);
+    res.json({
+      message: "Chatbot actualizado correctamente (admin)",
+      chatbot
+    });
 
   } catch (error) {
-    res.status(400).json({
-      message: error.message
+    console.error("ADMIN UPDATE ERROR:", error);
+    res.status(500).json({ message: "Error al actualizar chatbot" });
+  }
+};
+
+exports.getAvailableAvatars = async (req, res) => {
+  try {
+    const chatbot = await Chatbot.findById(req.params.id).lean();
+
+    if (!chatbot) {
+      return res.status(404).json({ message: "Chatbot no encontrado" });
+    }
+
+    res.json({
+      system: systemAvatars,
+      uploaded: chatbot.uploaded_avatars || [],
+      active: chatbot.avatar
     });
+
+  } catch (error) {
+    console.error("GET AVATARS ERROR:", error);
+    res.status(500).json({ message: "Error al obtener avatares" });
+  }
+};
+
+exports.deleteAvatar = async (req, res) => {
+  try {
+    const chatbot = await Chatbot.findById(req.params.id);
+
+    if (!chatbot) {
+      return res.status(404).json({ message: "Chatbot no encontrado" });
+    }
+
+    const { avatarUrl } = req.body;
+    if (!avatarUrl) {
+      return res.status(400).json({ message: "avatarUrl requerido" });
+    }
+
+    if (systemAvatars.some(a => a.url === avatarUrl)) {
+      return res.status(400).json({
+        message: "No se puede eliminar un avatar del sistema"
+      });
+    }
+
+    const beforeLength = chatbot.uploaded_avatars?.length || 0;
+
+    chatbot.uploaded_avatars =
+      chatbot.uploaded_avatars?.filter(a => a.url !== avatarUrl) || [];
+
+    if (beforeLength === chatbot.uploaded_avatars.length) {
+      return res.status(404).json({ message: "Avatar no encontrado" });
+    }
+
+    if (chatbot.avatar === avatarUrl) {
+      chatbot.avatar =
+        process.env.DEFAULT_CHATBOT_AVATAR ||
+        systemAvatars[0]?.url;
+    }
+
+    await chatbot.save();
+
+    res.json({
+      message: "Avatar eliminado correctamente",
+      avatar: chatbot.avatar,
+      uploaded_avatars: chatbot.uploaded_avatars
+    });
+
+  } catch (error) {
+    console.error("DELETE AVATAR ERROR:", error);
+    res.status(500).json({ message: "Error al eliminar avatar" });
+  }
+};
+
+exports.toggleChatbot = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const account_id = req.user.account_id;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "ID inválido" });
+    }
+
+    const chatbot = await Chatbot.findOne({
+      _id: id,
+      account_id,
+    });
+
+    if (!chatbot) {
+      return res.status(404).json({ message: "Chatbot no encontrado" });
+    }
+
+    // 🔥 Toggle
+    chatbot.is_enabled = !chatbot.is_enabled;
+
+    // Opcional: sincronizar status si lo usas
+    chatbot.status = chatbot.is_enabled ? "active" : "inactive";
+
+    await chatbot.save();
+
+    res.json({
+      success: true,
+      is_enabled: chatbot.is_enabled,
+      status: chatbot.status,
+    });
+  } catch (error) {
+    console.error("Toggle Chatbot Error:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
+
+exports.regenerateInstallToken = async (req, res) => {
+  try {
+    const { publicId } = req.params;
+
+    const chatbot = await Chatbot.findOne({ public_id: publicId });
+
+    if (!chatbot) {
+      return res.status(404).json({ message: "Chatbot no encontrado" });
+    }
+
+    // 🔐 Control de acceso
+    if (
+      req.user.role !== "ADMIN" &&
+      String(chatbot.account_id) !== String(req.user.account_id)
+    ) {
+      return res.status(403).json({ message: "No autorizado" });
+    }
+
+    chatbot.install_token = crypto.randomUUID();
+    chatbot.allowed_domains = []; // opcional: invalidar dominios
+
+    await chatbot.save();
+
+    res.json({
+      success: true,
+      install_token: chatbot.install_token
+    });
+
+  } catch (error) {
+    console.error("REGENERATE TOKEN ERROR:", error);
+    res.status(500).json({ message: "Error regenerando token" });
   }
 };
 

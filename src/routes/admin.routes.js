@@ -3,6 +3,7 @@ const router = express.Router();
 const auth = require("../middlewares/auth.middleware");
 const role = require("../middlewares/role.middleware");
 const adminController = require("../controllers/admin.controller");
+const upload = require("../middlewares/uploadAvatar.middleware");
 
 router.use(auth);
 router.use(role("ADMIN"));
@@ -19,11 +20,43 @@ router.delete("/users/:id", adminController.deleteAnyUser);
 router.get("/accounts", adminController.getAllAccounts);
 
 // chatbots
-router.post("/chatbots",adminController.createChatbotForUser);
+router.post("/chatbots", adminController.createChatbotForUser);
+
 router.get("/chatbots", adminController.getAllChatbots);
+
 router.get("/chatbots/:id", adminController.getChatbotDetail);
+
 router.delete("/chatbots/:id", adminController.deleteAnyChatbot);
-router.put("/chatbots/:id", adminController.updateAnyChatbot);
+
+router.put(
+    "/chatbots/:id",
+    upload.single("avatar"),
+    adminController.updateAnyChatbot
+);
+
+/* ---------- AVATARS ADMIN ---------- */
+
+router.get(
+    "/chatbots/:id/avatars",
+    adminController.getAvailableAvatars
+);
+
+router.delete(
+    "/chatbots/:id/deleteAvatar",
+    adminController.deleteAvatar
+);
+
+router.patch(
+    "/chatbots/:id/toggle",
+
+    adminController.toggleChatbot
+);
+
+router.post(
+  "/:publicId/token/regenerate",
+  adminController.regenerateInstallToken
+);
+
 
 // flows
 router.get("/chatbots/:chatbotId/flows", adminController.getFlowsByChatbot);
@@ -39,7 +72,5 @@ router.get("/audit", adminController.getAuditLogs);
 router.post("/register", adminController.createUserByAdmin);
 
 router.post("/newflows", adminController.createOrReplaceGlobalFlow);
-
-
 
 module.exports = router;
