@@ -8,13 +8,15 @@ exports.createNodeType = async (req, res) => {
     const {
       key,
       label,
-      mode, // 👈 agregar
+      mode,
       answerUser,
       accordions,
       defaults,
       is_system,
       is_active
     } = req.body;
+
+    const account_id = req.user?.account_id || null;
 
     if (!key || !label) {
       return res.status(400).json({
@@ -23,10 +25,19 @@ exports.createNodeType = async (req, res) => {
       });
     }
 
+    // 🔥 validar mode
+    const allowedModes = ["basic", "advanced"];
+    if (mode && !allowedModes.includes(mode)) {
+      return res.status(400).json({
+        success: false,
+        message: "Modo inválido. Solo basic o advanced"
+      });
+    }
+
     // evitar duplicados por cuenta
     const exists = await NodeType.findOne({
       key,
-      account_id: req.user?.account_id || null
+      account_id
     });
 
     if (exists) {
@@ -37,10 +48,10 @@ exports.createNodeType = async (req, res) => {
     }
 
     const nodeType = await NodeType.create({
-      account_id: req.user?.account_id || null,
+      account_id,
       key,
       label,
-      mode: mode ?? "basic", // 👈 agregar esto
+      mode: mode ?? "basic",
       answerUser: answerUser ?? false,
       accordions: accordions ?? [],
       defaults: defaults ?? {},
@@ -52,6 +63,7 @@ exports.createNodeType = async (req, res) => {
       success: true,
       data: nodeType
     });
+
   } catch (error) {
     console.error("createNodeType error:", error);
     res.status(500).json({
@@ -61,15 +73,22 @@ exports.createNodeType = async (req, res) => {
   }
 };
 
-
 /* =========================================
    EDITAR NODE TYPE
 ========================================= */
 exports.updateNodeType = async (req, res) => {
   try {
     const { id } = req.params;
+    const account_id = req.user?.account_id || null;
 
-    const nodeType = await NodeType.findById(id);
+    // 🔥 Multi-tenant protection
+    const nodeType = await NodeType.findOne({
+      _id: id,
+      $or: [
+        { account_id: null },
+        { account_id }
+      ]
+    });
 
     if (!nodeType) {
       return res.status(404).json({
@@ -78,7 +97,6 @@ exports.updateNodeType = async (req, res) => {
       });
     }
 
-    // proteger system
     if (nodeType.is_system) {
       return res.status(403).json({
         success: false,
@@ -86,15 +104,26 @@ exports.updateNodeType = async (req, res) => {
       });
     }
 
+    // 🔥 validar mode si viene
+    if (req.body.mode) {
+      const allowedModes = ["basic", "advanced"];
+      if (!allowedModes.includes(req.body.mode)) {
+        return res.status(400).json({
+          success: false,
+          message: "Modo inválido"
+        });
+      }
+    }
+
     const allowedFields = [
       "label",
-      "mode", // 👈 agregar
+      "mode",
       "answerUser",
       "accordions",
       "defaults",
       "is_active"
     ];
-    
+
     allowedFields.forEach(field => {
       if (req.body[field] !== undefined) {
         nodeType[field] = req.body[field];
@@ -107,6 +136,7 @@ exports.updateNodeType = async (req, res) => {
       success: true,
       data: nodeType
     });
+
   } catch (error) {
     console.error("updateNodeType error:", error);
     res.status(500).json({
@@ -126,30 +156,24 @@ exports.getNodeTypes = async (req, res) => {
 
     const nodeTypes = await NodeType.find({
       $or: [
-        { account_id: null },   // globales sistema
-        { account_id }          // personalizados cuenta
+        { account_id: null },
+        { account_id }
       ],
       is_active: true
     }).sort({ createdAt: 1 });
 
-    // 🔥 Separar por modo
-    const basic = [];
-    const advanced = [];
-
-    for (const type of nodeTypes) {
-      if (type.mode === "advanced") {
-        advanced.push(type);
-      } else {
-        basic.push(type);
-      }
-    }
+    const grouped = nodeTypes.reduce(
+      (acc, type) => {
+        const mode = type.mode || "basic";
+        acc[mode].push(type);
+        return acc;
+      },
+      { basic: [], advanced: [] }
+    );
 
     res.json({
       success: true,
-      data: {
-        basic,
-        advanced
-      }
+      data: grouped
     });
 
   } catch (error) {
@@ -168,8 +192,15 @@ exports.getNodeTypes = async (req, res) => {
 exports.deleteNodeType = async (req, res) => {
   try {
     const { id } = req.params;
+    const account_id = req.user?.account_id || null;
 
-    const nodeType = await NodeType.findById(id);
+    const nodeType = await NodeType.findOne({
+      _id: id,
+      $or: [
+        { account_id: null },
+        { account_id }
+      ]
+    });
 
     if (!nodeType) {
       return res.status(404).json({
@@ -191,6 +222,7 @@ exports.deleteNodeType = async (req, res) => {
       success: true,
       message: "Tipo de nodo eliminado"
     });
+
   } catch (error) {
     console.error("deleteNodeType error:", error);
     res.status(500).json({
