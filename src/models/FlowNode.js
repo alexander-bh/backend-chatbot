@@ -2,7 +2,6 @@ const { Schema, model } = require("mongoose");
 
 /* ================= SUBSCHEMAS ================= */
 
-// 🔥 Unificamos estructura reutilizable para options y policy
 const OptionBaseSchema = new Schema(
   {
     label: { type: String, required: true },

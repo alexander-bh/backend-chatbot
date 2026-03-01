@@ -58,6 +58,13 @@ const NodeTypeSchema = new Schema(
       required: true
     },
 
+    mode: {
+      type: String,
+      enum: ["basic", "advanced"],
+      default: "basic",
+      index: true
+    },
+
     // si el usuario responde
     answerUser: {
       type: Boolean,

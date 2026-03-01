@@ -8,6 +8,7 @@ exports.createNodeType = async (req, res) => {
     const {
       key,
       label,
+      mode, // 👈 agregar
       answerUser,
       accordions,
       defaults,
@@ -39,6 +40,7 @@ exports.createNodeType = async (req, res) => {
       account_id: req.user?.account_id || null,
       key,
       label,
+      mode: mode ?? "basic", // 👈 agregar esto
       answerUser: answerUser ?? false,
       accordions: accordions ?? [],
       defaults: defaults ?? {},
@@ -86,12 +88,13 @@ exports.updateNodeType = async (req, res) => {
 
     const allowedFields = [
       "label",
+      "mode", // 👈 agregar
       "answerUser",
       "accordions",
       "defaults",
       "is_active"
     ];
-
+    
     allowedFields.forEach(field => {
       if (req.body[field] !== undefined) {
         nodeType[field] = req.body[field];
@@ -123,16 +126,32 @@ exports.getNodeTypes = async (req, res) => {
 
     const nodeTypes = await NodeType.find({
       $or: [
-        { account_id: null }, // system globales
-        { account_id }        // personalizados
+        { account_id: null },   // globales sistema
+        { account_id }          // personalizados cuenta
       ],
       is_active: true
     }).sort({ createdAt: 1 });
 
+    // 🔥 Separar por modo
+    const basic = [];
+    const advanced = [];
+
+    for (const type of nodeTypes) {
+      if (type.mode === "advanced") {
+        advanced.push(type);
+      } else {
+        basic.push(type);
+      }
+    }
+
     res.json({
       success: true,
-      data: nodeTypes
+      data: {
+        basic,
+        advanced
+      }
     });
+
   } catch (error) {
     console.error("getNodeTypes error:", error);
     res.status(500).json({
