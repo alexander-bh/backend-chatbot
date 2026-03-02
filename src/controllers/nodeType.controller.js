@@ -148,19 +148,23 @@ exports.updateNodeType = async (req, res) => {
 ========================================= */
 exports.getNodeTypes = async (req, res) => {
   try {
+    const isAdmin = req.user.role === "ADMIN";
     const account_id = req.user?.account_id || null;
 
-    const nodeTypes = await NodeType.find({
-      $or: [
+    let filter = { is_active: true };
+
+    if (!isAdmin) {
+      filter.$or = [
         { account_id: null },
         { account_id }
-      ],
-      is_active: true
-    }).sort({ createdAt: 1 });
+      ];
+    }
+
+    const nodeTypes = await NodeType.find(filter).sort({ createdAt: 1 });
 
     res.json({
       success: true,
-      data: nodeTypes   // 👈 ahora se devuelve todo junto
+      data: nodeTypes
     });
 
   } catch (error) {
