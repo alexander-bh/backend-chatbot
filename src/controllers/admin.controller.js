@@ -14,8 +14,6 @@ const { deleteFromCloudinary } = require("../services/cloudinary.service");
 const { cloneTemplateToFlow } = require("../services/flowNode.service");
 const { createFallbackFlow } = require("../services/flowNode.service");
 
-
-
 // util simple
 const slugify = (text) =>
   text
@@ -1117,7 +1115,6 @@ exports.getGlobalFlow = async (req, res) => {
     });
   }
 };
-
 
 // Avatar 
 exports.createAvatar = async (req, res) => {

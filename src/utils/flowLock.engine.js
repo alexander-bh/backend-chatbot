@@ -23,7 +23,25 @@ exports.acquireFlowLock = async ({
   session
 }) => {
 
-  validateIds({ flow_id, user_id, account_id });
+  if (!mongoose.Types.ObjectId.isValid(flow_id))
+    throw new Error("flow_id inválido");
+
+  if (!mongoose.Types.ObjectId.isValid(user_id))
+    throw new Error("user_id inválido");
+
+  const flowDoc = await Flow.findById(flow_id).session(session);
+
+  if (!flowDoc) {
+    throw new Error("Flow no encontrado");
+  }
+
+  const isTemplate = flowDoc.is_template === true;
+
+  // 🔥 SOLO validar account_id si NO es template
+  if (!isTemplate) {
+    if (!mongoose.Types.ObjectId.isValid(account_id))
+      throw new Error("account_id inválido");
+  }
 
   const now = new Date();
   const expires = new Date(now.getTime() + LOCK_MINUTES * 60000);
@@ -33,7 +51,7 @@ exports.acquireFlowLock = async ({
   const flow = await Flow.findOneAndUpdate(
     {
       _id: flow_id,
-      account_id,
+      ...(isTemplate ? {} : { account_id }),
       $or: [
         { lock: null },
         { "lock.lock_expires_at": { $lt: now } },
@@ -58,57 +76,3 @@ exports.acquireFlowLock = async ({
 
   return flow;
 };
-
-/*
-exports.releaseFlowLock = async ({
-  flow_id,
-  user_id,
-  account_id,
-  session
-}) => {
-
-  validateIds({ flow_id, user_id, account_id });
-
-  const flow = await Flow.findOne({
-    _id: flow_id,
-    account_id
-  }).session(session);
-
-  if (!flow || !flow.lock) return;
-
-  if (String(flow.lock.locked_by) === String(user_id)) {
-    flow.lock = null;
-    await flow.save({ session });
-  }
-
-  return true;
-};
-
-exports.refreshFlowLock = async ({
-  flow_id,
-  user_id,
-  account_id,
-  session
-}) => {
-
-  validateIds({ flow_id, user_id, account_id });
-
-  const now = new Date();
-  const expires = new Date(now.getTime() + LOCK_MINUTES * 60000);
-
-  const flow = await Flow.findOne({
-    _id: flow_id,
-    account_id,
-    "lock.locked_by": user_id
-  }).session(session);
-
-  if (!flow || !flow.lock) {
-    throw new Error("No tienes el lock");
-  }
-
-  flow.lock.lock_expires_at = expires;
-
-  await flow.save({ session });
-
-  return true;
-};*/
