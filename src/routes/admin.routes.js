@@ -71,6 +71,7 @@ router.get("/audit", adminController.getAuditLogs);
 router.post("/register", adminController.createUserByAdmin);
 
 router.post("/newflows", adminController.createOrReplaceGlobalFlow);
+router.get("/global-flow",adminController.getGlobalFlow);
 
 /* ---------- AVATARES GLOBALES (ADMIN) ---------- */
 
