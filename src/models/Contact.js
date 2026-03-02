@@ -42,19 +42,36 @@ const ContactSchema = new mongoose.Schema({
   chatbot_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Chatbot",
-    required: true,
+    required: false,   // 🔹 ya no obligatorio
     index: true
   },
 
   session_id: {
     type: mongoose.Schema.Types.ObjectId,
     unique: true,
-    required: true
+    sparse: true,      // 🔹 permite null sin romper unique
+    required: false
+  },
+
+  /* 🔥 NUEVO */
+  source: {
+    type: String,
+    enum: ["chatbot", "manual", "import"],
+    default: "chatbot",
+    index: true
   },
 
   name: String,
   email: String,
   phone: String,
+
+  company: String,
+  website: String,
+  city: String,
+  country: String,
+  address: String,
+  position: String,
+  internal_note: String,
 
   conversation: {
     type: [MessageSchema],
@@ -65,11 +82,6 @@ const ContactSchema = new mongoose.Schema({
     type: Object,
     default: {}
   },
-
-  origin_url: {
-  type: String,
-  index: true
-},
 
   status: {
     type: String,
