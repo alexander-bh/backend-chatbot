@@ -1,18 +1,19 @@
 const mongoose = require("mongoose");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
+const cloudinary = require("cloudinary").v2;
 const User = require("../models/User");
 const Account = require("../models/Account");
 const Chatbot = require("../models/Chatbot");
 const Flow = require("../models/Flow");
 const FlowNode = require("../models/FlowNode");
 const AuditLog = require("../models/AuditLog");
+const Avatar = require("../models/Avatar");
 const auditService = require("../services/audit.service");
 const formatDateAMPM = require("../utils/formatDate");
+const { deleteFromCloudinary } = require("../services/cloudinary.service");
 const { cloneTemplateToFlow } = require("../services/flowNode.service");
 const { createFallbackFlow } = require("../services/flowNode.service");
-const systemAvatars = require("../shared/enum/systemAvatars");
-
 
 // util simple
 const slugify = (text) =>
@@ -425,6 +426,22 @@ exports.deleteAnyChatbot = async (req, res) => {
 
     before = chatbot.toObject();
 
+    // ─────────── ELIMINAR AVATARES SUBIDOS (CLOUDINARY) ───────────
+    if (Array.isArray(chatbot.uploaded_avatars)) {
+      for (const avatar of chatbot.uploaded_avatars) {
+        if (avatar.public_id) {
+          try {
+            await deleteFromCloudinary(avatar.public_id);
+          } catch (err) {
+            console.error(
+              `Error eliminando avatar Cloudinary: ${avatar.public_id}`,
+              err
+            );
+          }
+        }
+      }
+    }
+
     const flows = await Flow.find({ chatbot_id: chatbot._id }).session(session);
     const flowIds = flows.map(f => f._id);
 
@@ -444,6 +461,7 @@ exports.deleteAnyChatbot = async (req, res) => {
     });
 
     res.json({ message: "Chatbot eliminado por admin" });
+
   } catch (err) {
     await session.abortTransaction();
     res.status(500).json({ message: err.message });
@@ -510,7 +528,7 @@ exports.updateAnyChatbot = async (req, res) => {
       chatbot.secondary_color = secondary_color;
     }
 
-    const allowedStatus = ["active","inactive"];
+    const allowedStatus = ["active", "inactive"];
     if (status !== undefined) {
       if (!allowedStatus.includes(status)) {
         return res.status(400).json({ message: "Status inválido" });
@@ -541,18 +559,26 @@ exports.updateAnyChatbot = async (req, res) => {
       chatbot.uploaded_avatars.push({
         id: crypto.randomUUID(),
         label: `Avatar ${chatbot.uploaded_avatars.length + 1}`,
-        url: avatarUrl,
+        url: req.file.path,
+        public_id: req.file.filename, // 👈 CLAVE
         created_at: new Date()
       });
     }
 
     /* ---------- AVATAR POR URL ---------- */
     if (avatar && !req.file) {
-      const isSystem = systemAvatars.some(a => a.url === avatar);
+
+      // 🔥 Verificar si es avatar del sistema
+      const systemAvatar = await Avatar.findOne({
+        url: avatar,
+        type: "SYSTEM"
+      });
+
+      // 🔥 Verificar si es avatar subido al chatbot
       const isUploaded =
         chatbot.uploaded_avatars?.some(a => a.url === avatar);
 
-      if (!isSystem && !isUploaded) {
+      if (!systemAvatar && !isUploaded) {
         try {
           new URL(avatar);
         } catch {
@@ -588,10 +614,13 @@ exports.updateAnyChatbot = async (req, res) => {
 exports.getAvailableAvatars = async (req, res) => {
   try {
     const chatbot = await Chatbot.findById(req.params.id).lean();
-
     if (!chatbot) {
       return res.status(404).json({ message: "Chatbot no encontrado" });
     }
+
+    const systemAvatars = await Avatar.find({
+      type: "SYSTEM"
+    }).lean();
 
     res.json({
       system: systemAvatars,
@@ -618,25 +647,40 @@ exports.deleteAvatar = async (req, res) => {
       return res.status(400).json({ message: "avatarUrl requerido" });
     }
 
-    if (systemAvatars.some(a => a.url === avatarUrl)) {
+    // 🔥 Verificar si es avatar del sistema en BD
+    const systemAvatar = await Avatar.findOne({
+      url: avatarUrl,
+      type: "SYSTEM"
+    });
+
+    if (systemAvatar) {
       return res.status(400).json({
         message: "No se puede eliminar un avatar del sistema"
       });
     }
 
-    const beforeLength = chatbot.uploaded_avatars?.length || 0;
+    const avatarToDelete = chatbot.uploaded_avatars?.find(
+      a => a.url === avatarUrl
+    );
 
-    chatbot.uploaded_avatars =
-      chatbot.uploaded_avatars?.filter(a => a.url !== avatarUrl) || [];
-
-    if (beforeLength === chatbot.uploaded_avatars.length) {
+    if (!avatarToDelete) {
       return res.status(404).json({ message: "Avatar no encontrado" });
     }
 
+    if (avatarToDelete.public_id) {
+      await deleteFromCloudinary(avatarToDelete.public_id);
+    }
+
+    chatbot.uploaded_avatars = chatbot.uploaded_avatars.filter(
+      a => a.url !== avatarUrl
+    );
+
     if (chatbot.avatar === avatarUrl) {
+      const fallback = await Avatar.findOne({ type: "SYSTEM" });
       chatbot.avatar =
         process.env.DEFAULT_CHATBOT_AVATAR ||
-        systemAvatars[0]?.url;
+        fallback?.url ||
+        null;
     }
 
     await chatbot.save();
@@ -1034,5 +1078,80 @@ exports.createOrReplaceGlobalFlow = async (req, res) => {
     });
   } finally {
     session.endSession();
+  }
+};
+
+
+// Avatar 
+exports.createAvatar = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "Imagen requerida" });
+    }
+
+    const avatar = await Avatar.create({
+      label: req.body.label || "Avatar personalizado",
+      url: req.file.path,
+      public_id: req.file.filename,
+      type: "CUSTOM",
+      created_by: req.user._id
+    });
+
+    res.status(201).json({
+      message: "Avatar creado correctamente",
+      avatar
+    });
+
+  } catch (error) {
+    console.error("CREATE AVATAR ERROR:", error);
+    res.status(500).json({ message: "Error al crear avatar" });
+  }
+};
+
+exports.getAllAvatars = async (req, res) => {
+  try {
+    const avatars = await Avatar.find()
+      .sort({ created_at: -1 })
+      .lean();
+
+    res.json(avatars);
+  } catch (error) {
+    res.status(500).json({ message: "Error al obtener avatares" });
+  }
+};
+
+exports.deleteAvatarGlobal = async (req, res) => {
+  try {
+    const avatar = await Avatar.findById(req.params.id);
+
+    if (!avatar) {
+      return res.status(404).json({ message: "Avatar no encontrado" });
+    }
+
+    if (avatar.type === "SYSTEM") {
+      return res.status(400).json({
+        message: "No se puede eliminar un avatar del sistema"
+      });
+    }
+
+    // 🔥 Verificar si algún chatbot lo usa
+    const chatbotUsing = await Chatbot.findOne({
+      avatar: avatar.url
+    });
+
+    if (chatbotUsing) {
+      return res.status(400).json({
+        message: "No se puede eliminar. Un chatbot está usando este avatar."
+      });
+    }
+
+    await deleteFromCloudinary(avatar.public_id);
+    await avatar.deleteOne();
+
+    res.json({ message: "Avatar eliminado correctamente" });
+
+  } catch (error) {
+    console.error("DELETE AVATAR ERROR:", error);
+    res.status(500).json({ message: "Error al eliminar avatar" });
   }
 };
