@@ -91,7 +91,9 @@ router.delete(
   adminController.deleteAvatarGlobal
 );
 
-
-
+router.patch(
+  "/avatars/:id/set-default",
+  adminController.setDefaultAvatar
+);
 
 module.exports = router;
