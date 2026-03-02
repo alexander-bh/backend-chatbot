@@ -333,16 +333,18 @@ exports.addAllowedDomain = async (req, res) => {
       return res.status(400).json({ error: "Dominio inválido" });
     }
 
+    const normalizedLower = normalized.toLowerCase();
     const isDev = process.env.NODE_ENV !== "production";
 
-    if (isLocalhost(normalized)) {
+    // Validación localhost
+    if (isLocalhost(normalizedLower)) {
       if (!isDev) {
         return res.status(400).json({
           error: "Dominios localhost no permitidos en producción"
         });
       }
     } else {
-      const exists = await domainExists(normalized);
+      const exists = await domainExists(normalizedLower);
       if (!exists) {
         return res.status(400).json({
           error: "El dominio no existe en DNS"
@@ -350,7 +352,7 @@ exports.addAllowedDomain = async (req, res) => {
       }
     }
 
-    // 🔥 QUERY DINÁMICO SEGÚN ROL
+    // 🔥 Query dinámico según rol
     const query = { public_id };
 
     if (req.user.role !== "ADMIN") {
@@ -366,14 +368,29 @@ exports.addAllowedDomain = async (req, res) => {
       return res.status(404).json({ error: "Chatbot no encontrado" });
     }
 
-    if (chatbot.allowed_domains.includes(normalized)) {
+    // 🔐 Prevención real de duplicados (case-insensitive)
+    const alreadyExists = chatbot.allowed_domains.some(
+      d => d.toLowerCase() === normalizedLower
+    );
+
+    if (alreadyExists) {
       return res.status(400).json({ error: "Dominio ya existe" });
     }
 
-    chatbot.allowed_domains.push(normalized);
+    // Agregar dominio
+    chatbot.allowed_domains.push(normalizedLower);
+
+    // 🛡️ Limpieza defensiva anti-duplicados
+    chatbot.allowed_domains = [
+      ...new Set(chatbot.allowed_domains.map(d => d.toLowerCase()))
+    ];
+
     await chatbot.save();
 
-    res.json({ success: true, domains: chatbot.allowed_domains });
+    res.json({
+      success: true,
+      domains: chatbot.allowed_domains
+    });
 
   } catch (err) {
     console.error("ADD DOMAIN:", err);

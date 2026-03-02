@@ -618,7 +618,7 @@ exports.getAvailableAvatars = async (req, res) => {
     const systemAvatars = await Avatar.find({
       type: "SYSTEM"
     }).lean();
-
+    
     res.json({
       system: systemAvatars,
       uploaded: chatbot.uploaded_avatars || [],
