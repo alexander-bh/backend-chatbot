@@ -4,18 +4,6 @@ const Flow = require("../models/Flow");
 
 const LOCK_MINUTES = 15;
 
-const validateIds = ({ flow_id, user_id, account_id }) => {
-
-  if (!mongoose.Types.ObjectId.isValid(flow_id))
-    throw new Error("flow_id inválido");
-
-  if (!mongoose.Types.ObjectId.isValid(account_id))
-    throw new Error("account_id inválido");
-
-  if (!mongoose.Types.ObjectId.isValid(user_id))
-    throw new Error("user_id inválido");
-};
-
 exports.acquireFlowLock = async ({
   flow_id,
   user_id,
