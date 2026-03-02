@@ -1081,6 +1081,44 @@ exports.createOrReplaceGlobalFlow = async (req, res) => {
   }
 };
 
+/* ─────────────────────────────────────
+   GLOBAL FLOW
+───────────────────────────────────── */
+exports.getGlobalFlow = async (req, res) => {
+  try {
+
+    // 🔍 Buscar flow template
+    const flow = await Flow.findOne({
+      is_template: true,
+      account_id: null,
+      chatbot_id: null
+    });
+
+    if (!flow) {
+      return res.status(404).json({
+        message: "No existe flow global"
+      });
+    }
+
+    // 🔍 Buscar nodos del flow
+    const nodes = await FlowNode.find({
+      flow_id: flow._id
+    }).sort({ order: 1 });
+
+    res.json({
+      success: true,
+      flow,
+      nodes
+    });
+
+  } catch (error) {
+    console.error("GET GLOBAL FLOW ERROR:", error);
+    res.status(500).json({
+      message: "Error obteniendo flow global"
+    });
+  }
+};
+
 
 // Avatar 
 exports.createAvatar = async (req, res) => {
