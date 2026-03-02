@@ -1,7 +1,6 @@
 const mongoose = require("mongoose");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
-const cloudinary = require("cloudinary").v2;
 const User = require("../models/User");
 const Account = require("../models/Account");
 const Chatbot = require("../models/Chatbot");
@@ -14,6 +13,8 @@ const formatDateAMPM = require("../utils/formatDate");
 const { deleteFromCloudinary } = require("../services/cloudinary.service");
 const { cloneTemplateToFlow } = require("../services/flowNode.service");
 const { createFallbackFlow } = require("../services/flowNode.service");
+const formatDateAMPM = require("../utils/formatDate");
+
 
 // util simple
 const slugify = (text) =>
@@ -1131,7 +1132,7 @@ exports.createAvatar = async (req, res) => {
       label: req.body.label || "Avatar personalizado",
       url: req.file.path,
       public_id: req.file.filename,
-      type: "SYSTEM",
+      type: "CUSTOM",
       created_by: req.user._id
     });
 
@@ -1152,44 +1153,89 @@ exports.getAllAvatars = async (req, res) => {
       .sort({ created_at: -1 })
       .lean();
 
-    res.json(avatars);
+    const formattedAvatars = avatars.map(avatar => ({
+      ...avatar,
+      created_at_raw: avatar.created_at,
+      created_at: formatDateAMPM(avatar.created_at)
+    }));
+
+    res.json(formattedAvatars);
+
   } catch (error) {
+    console.error("GET AVATARS ERROR:", error);
     res.status(500).json({ message: "Error al obtener avatares" });
   }
 };
 
 exports.deleteAvatarGlobal = async (req, res) => {
+  const session = await mongoose.startSession();
+
   try {
-    const avatar = await Avatar.findById(req.params.id);
+    session.startTransaction();
+
+    const avatar = await Avatar.findById(req.params.id).session(session);
 
     if (!avatar) {
-      return res.status(404).json({ message: "Avatar no encontrado" });
+      throw new Error("Avatar no encontrado");
     }
 
     if (avatar.type === "SYSTEM") {
-      return res.status(400).json({
-        message: "No se puede eliminar un avatar del sistema"
-      });
+      throw new Error("No se puede eliminar un avatar del sistema");
     }
 
-    // 🔥 Verificar si algún chatbot lo usa
-    const chatbotUsing = await Chatbot.findOne({
-      avatar: avatar.url
+    /* ───────── OBTENER AVATAR FALLBACK ───────── */
+
+    const fallbackAvatar = await Avatar.findOne({
+      type: "SYSTEM"
+    }).session(session);
+
+    if (!fallbackAvatar) {
+      throw new Error("No existe avatar SYSTEM de respaldo");
+    }
+
+    const fallbackUrl =
+      process.env.DEFAULT_CHATBOT_AVATAR || fallbackAvatar.url;
+
+    /* ───────── REEMPLAZO AUTOMÁTICO ───────── */
+
+    const result = await Chatbot.updateMany(
+      { avatar: avatar.url },
+      { $set: { avatar: fallbackUrl } },
+      { session }
+    );
+
+    console.log(
+      `✅ ${result.modifiedCount} chatbots actualizados con avatar fallback`
+    );
+
+    /* ───────── ELIMINAR CLOUDINARY ───────── */
+
+    if (avatar.public_id) {
+      await deleteFromCloudinary(avatar.public_id);
+    }
+
+    /* ───────── ELIMINAR BD ───────── */
+
+    await Avatar.deleteOne(
+      { _id: avatar._id },
+      { session }
+    );
+
+    await session.commitTransaction();
+
+    res.json({
+      message: "Avatar eliminado y reemplazado automáticamente",
+      replaced_chatbots: result.modifiedCount
     });
 
-    if (chatbotUsing) {
-      return res.status(400).json({
-        message: "No se puede eliminar. Un chatbot está usando este avatar."
-      });
-    }
-
-    await deleteFromCloudinary(avatar.public_id);
-    await avatar.deleteOne();
-
-    res.json({ message: "Avatar eliminado correctamente" });
-
   } catch (error) {
-    console.error("DELETE AVATAR ERROR:", error);
-    res.status(500).json({ message: "Error al eliminar avatar" });
+    await session.abortTransaction();
+    console.error("DELETE AVATAR GLOBAL ERROR:", error);
+
+    res.status(400).json({
+      message: error.message
+    });
+  } finally {
+    session.endSession();
   }
 };

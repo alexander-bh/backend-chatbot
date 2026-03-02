@@ -16,8 +16,8 @@ const AvatarSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ["SYSTEM"],
-    default: "SYSTEM"
+    enum: ["SYSTEM", "CUSTOM"],
+    default: "CUSTOM"
   },
   created_by: {
     type: mongoose.Schema.Types.ObjectId,
