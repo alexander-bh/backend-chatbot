@@ -1186,7 +1186,7 @@ exports.deleteAvatarGlobal = async (req, res) => {
     /* ───────── OBTENER AVATAR FALLBACK ───────── */
 
     const fallbackAvatar = await Avatar.findOne({
-      type: "SYSTEM"
+      type: "CUSTOM"
     }).session(session);
 
     if (!fallbackAvatar) {
