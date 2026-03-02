@@ -16,33 +16,11 @@ exports.createNodeType = async (req, res) => {
       is_active
     } = req.body;
 
-    const account_id = req.user?.account_id || null;
+    let account_id = req.user?.account_id || null;
 
-    if (!key || !label) {
-      return res.status(400).json({
-        success: false,
-        message: "key y label son requeridos"
-      });
-    }
-
-    const allowedModes = ["basic", "advanced"];
-    if (mode && !allowedModes.includes(mode)) {
-      return res.status(400).json({
-        success: false,
-        message: "Modo inválido. Solo basic o advanced"
-      });
-    }
-
-    const exists = await NodeType.findOne({
-      key,
-      account_id
-    });
-
-    if (exists) {
-      return res.status(400).json({
-        success: false,
-        message: "Ya existe un tipo de nodo con esa clave"
-      });
+    // 🔥 Si es del sistema, forzamos a null
+    if (is_system === true) {
+      account_id = null;
     }
 
     const nodeType = await NodeType.create({
@@ -63,11 +41,8 @@ exports.createNodeType = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("createNodeType error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Error creando tipo de nodo"
-    });
+    console.error(error);
+    res.status(500).json({ success: false });
   }
 };
 
