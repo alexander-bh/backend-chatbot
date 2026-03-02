@@ -14,6 +14,9 @@ const { createFallbackFlow } = require("../services/flowNode.service");
 // ═══════════════════════════════════════════════════════════
 // CREAR CHATBOT
 // ═══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+// CREAR CHATBOT (CLIENT)
+// ═══════════════════════════════════════════════════════════
 exports.createChatbot = async (req, res) => {
   const session = await mongoose.startSession();
 
@@ -35,6 +38,29 @@ exports.createChatbot = async (req, res) => {
       throw new Error("Nombre inválido");
     }
 
+    /* ───────── AVATAR DEFAULT LOGIC ───────── */
+
+    const defaultAvatar = await Avatar.findOne({
+      type: "SYSTEM",
+      is_default: true
+    }).session(session);
+
+    let avatarToUse = null;
+
+    if (defaultAvatar) {
+      avatarToUse = defaultAvatar.url;
+    } else if (process.env.DEFAULT_CHATBOT_AVATAR) {
+      avatarToUse = process.env.DEFAULT_CHATBOT_AVATAR;
+    } else {
+      const firstSystemAvatar = await Avatar.findOne({
+        type: "SYSTEM"
+      }).session(session);
+
+      avatarToUse = firstSystemAvatar?.url || null;
+    }
+
+    /* ───────── CREAR CHATBOT ───────── */
+
     const chatbot = await Chatbot.create([{
       account_id: req.user.account_id,
       public_id: crypto.randomUUID(),
@@ -46,10 +72,13 @@ exports.createChatbot = async (req, res) => {
       welcome_delay: welcome_delay ?? 2,
       show_welcome_on_mobile: show_welcome_on_mobile ?? true,
       status: "active",
-      is_enabled: true
+      is_enabled: true,
+      avatar: avatarToUse // 🔥 AQUÍ
     }], { session });
 
     const chatbotDoc = chatbot[0];
+
+    /* ───────── FLOW ───────── */
 
     let flow;
     let flowName = name.trim();

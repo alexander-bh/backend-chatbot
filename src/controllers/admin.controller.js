@@ -317,6 +317,25 @@ exports.createChatbotForUser = async (req, res) => {
 
     /* ───────── CREAR CHATBOT ───────── */
 
+    const defaultAvatar = await Avatar.findOne({
+      type: "SYSTEM",
+      is_default: true
+    }).session(session);
+
+    let avatarToUse = null;
+
+    if (defaultAvatar) {
+      avatarToUse = defaultAvatar.url;
+    } else if (process.env.DEFAULT_CHATBOT_AVATAR) {
+      avatarToUse = process.env.DEFAULT_CHATBOT_AVATAR;
+    } else {
+      const firstSystemAvatar = await Avatar.findOne({
+        type: "SYSTEM"
+      }).session(session);
+
+      avatarToUse = firstSystemAvatar?.url || null;
+    }
+
     const chatbot = await Chatbot.create([{
       account_id,
       owner_user_id: ownerUser._id,
@@ -326,7 +345,8 @@ exports.createChatbotForUser = async (req, res) => {
       welcome_delay: 2,
       show_welcome_on_mobile: true,
       status: "active",          // 👈 correcto
-      is_enabled: false,        // 👈 correcto
+      is_enabled: false,
+      avatar: avatarToUse,      // 👈 correcto
       created_by_admin: req.user._id
     }], { session });
 
@@ -618,7 +638,7 @@ exports.getAvailableAvatars = async (req, res) => {
     const systemAvatars = await Avatar.find({
       type: "SYSTEM"
     }).lean();
-    
+
     res.json({
       system: systemAvatars,
       uploaded: chatbot.uploaded_avatars || [],
@@ -1230,6 +1250,48 @@ exports.deleteAvatarGlobal = async (req, res) => {
     res.status(400).json({
       message: error.message
     });
+  } finally {
+    session.endSession();
+  }
+};
+
+exports.setDefaultAvatar = async (req, res) => {
+  const session = await mongoose.startSession();
+
+  try {
+    session.startTransaction();
+
+    const avatar = await Avatar.findById(req.params.id).session(session);
+
+    if (!avatar) {
+      throw new Error("Avatar no encontrado");
+    }
+
+    if (avatar.type !== "SYSTEM") {
+      throw new Error("Solo avatars SYSTEM pueden ser predeterminados");
+    }
+
+    // 1️⃣ Quitar default a todos
+    await Avatar.updateMany(
+      { type: "SYSTEM", is_default: true },
+      { $set: { is_default: false } },
+      { session }
+    );
+
+    // 2️⃣ Activar este
+    avatar.is_default = true;
+    await avatar.save({ session });
+
+    await session.commitTransaction();
+
+    res.json({
+      message: "Avatar marcado como predeterminado",
+      avatar
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    res.status(400).json({ message: error.message });
   } finally {
     session.endSession();
   }
