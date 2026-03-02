@@ -25,7 +25,6 @@ exports.createNodeType = async (req, res) => {
       });
     }
 
-    // 🔥 validar mode
     const allowedModes = ["basic", "advanced"];
     if (mode && !allowedModes.includes(mode)) {
       return res.status(400).json({
@@ -34,7 +33,6 @@ exports.createNodeType = async (req, res) => {
       });
     }
 
-    // evitar duplicados por cuenta
     const exists = await NodeType.findOne({
       key,
       account_id
@@ -81,7 +79,6 @@ exports.updateNodeType = async (req, res) => {
     const { id } = req.params;
     const account_id = req.user?.account_id || null;
 
-    // 🔥 Multi-tenant protection
     const nodeType = await NodeType.findOne({
       _id: id,
       $or: [
@@ -104,7 +101,6 @@ exports.updateNodeType = async (req, res) => {
       });
     }
 
-    // 🔥 validar mode si viene
     if (req.body.mode) {
       const allowedModes = ["basic", "advanced"];
       if (!allowedModes.includes(req.body.mode)) {
@@ -162,18 +158,9 @@ exports.getNodeTypes = async (req, res) => {
       is_active: true
     }).sort({ createdAt: 1 });
 
-    const grouped = nodeTypes.reduce(
-      (acc, type) => {
-        const mode = type.mode || "basic";
-        acc[mode].push(type);
-        return acc;
-      },
-      { basic: [], advanced: [] }
-    );
-
     res.json({
       success: true,
-      data: grouped
+      data: nodeTypes   // 👈 ahora se devuelve todo junto
     });
 
   } catch (error) {
@@ -184,7 +171,6 @@ exports.getNodeTypes = async (req, res) => {
     });
   }
 };
-
 
 /* =========================================
    ELIMINAR NODE TYPE

@@ -48,7 +48,6 @@ router.delete(
 
 router.patch(
     "/chatbots/:id/toggle",
-
     adminController.toggleChatbot
 );
 
@@ -72,5 +71,26 @@ router.get("/audit", adminController.getAuditLogs);
 router.post("/register", adminController.createUserByAdmin);
 
 router.post("/newflows", adminController.createOrReplaceGlobalFlow);
+
+/* ---------- AVATARES GLOBALES (ADMIN) ---------- */
+
+router.post(
+  "/avatars",
+  upload.single("avatar"),
+  adminController.createAvatar
+);
+
+router.get(
+  "/avatars",
+  adminController.getAllAvatars
+);
+
+router.delete(
+  "/avatars/:id",
+  adminController.deleteAvatarGlobal
+);
+
+
+
 
 module.exports = router;
