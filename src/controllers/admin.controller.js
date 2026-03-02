@@ -569,22 +569,20 @@ exports.updateAnyChatbot = async (req, res) => {
     /* ---------- AVATAR POR URL ---------- */
     if (avatar && !req.file) {
 
-      // 🔥 Verificar si es avatar del sistema
+      // 🔍 1. Verificar si es SYSTEM válido
       const systemAvatar = await Avatar.findOne({
         url: avatar,
         type: "SYSTEM"
       });
 
-      // 🔥 Verificar si es avatar subido al chatbot
+      // 🔍 2. Verificar si es CUSTOM subido a ese chatbot
       const isUploaded =
         chatbot.uploaded_avatars?.some(a => a.url === avatar);
 
       if (!systemAvatar && !isUploaded) {
-        try {
-          new URL(avatar);
-        } catch {
-          return res.status(400).json({ message: "URL inválida" });
-        }
+        return res.status(400).json({
+          message: "Solo se permiten avatares SYSTEM o CUSTOM del chatbot"
+        });
       }
 
       chatbot.avatar = avatar;
@@ -1129,15 +1127,15 @@ exports.createAvatar = async (req, res) => {
     }
 
     const avatar = await Avatar.create({
-      label: req.body.label || "Avatar personalizado",
+      label: req.body.label || "Avatar del sistema",
       url: req.file.path,
       public_id: req.file.filename,
-      type: "CUSTOM",
+      type: "SYSTEM", // 🔥 CAMBIO AQUÍ
       created_by: req.user._id
     });
 
     res.status(201).json({
-      message: "Avatar creado correctamente",
+      message: "Avatar SYSTEM creado correctamente",
       avatar
     });
 
@@ -1149,7 +1147,7 @@ exports.createAvatar = async (req, res) => {
 
 exports.getAllAvatars = async (req, res) => {
   try {
-    const avatars = await Avatar.find()
+    const avatars = await Avatar.find({ type: "SYSTEM" }) // 🔥 FILTRO AQUÍ
       .sort({ created_at: -1 })
       .lean();
 
@@ -1186,7 +1184,7 @@ exports.deleteAvatarGlobal = async (req, res) => {
     /* ───────── OBTENER AVATAR FALLBACK ───────── */
 
     const fallbackAvatar = await Avatar.findOne({
-      type: "CUSTOM"
+      type: "SYSTEM"
     }).session(session);
 
     if (!fallbackAvatar) {
