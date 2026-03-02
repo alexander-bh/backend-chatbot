@@ -5,22 +5,21 @@ const role = require("../middlewares/role.middleware");
 const nodeTypeController = require("../controllers/nodeType.controller");
 
 router.use(auth);
-router.use(role("ADMIN"));
 
 /* =========================
    NODE TYPE ROUTES
 ========================= */
 
 // Crear
-router.post("/", nodeTypeController.createNodeType);
+router.post("/", role("ADMIN"), nodeTypeController.createNodeType);
 
 // Editar
-router.put("/:id" , nodeTypeController.updateNodeType);
+router.put("/:id", role("ADMIN"), nodeTypeController.updateNodeType);
 
 // Listar
-router.get("/", nodeTypeController.getNodeTypes);
+router.get("/", role("ADMIN", "CLIENT"), nodeTypeController.getNodeTypes);
 
 // Eliminar
-router.delete("/:id", nodeTypeController.deleteNodeType);
+router.delete("/:id", role("ADMIN"), nodeTypeController.deleteNodeType);
 
 module.exports = router;
