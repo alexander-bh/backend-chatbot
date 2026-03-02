@@ -14,7 +14,7 @@ const ChatbotSchema = new Schema({
 
   status: {
     type: String,
-    enum: ["active", "inactive", "draft"],
+    enum: ["active", "inactive"],
     default: "active"
   },
 
