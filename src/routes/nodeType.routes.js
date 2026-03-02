@@ -15,7 +15,7 @@ router.post("/", role("ADMIN"), nodeTypeController.createNodeType);
 router.put("/:id", role("ADMIN"), nodeTypeController.updateNodeType);
 
 // Listar
-router.get("/", role("ADMIN","CLIENT"), nodeTypeController.getNodeTypes);
+router.get("/", nodeTypeController.getNodeTypes);
 
 // Eliminar
 router.delete("/:id", role("ADMIN"), nodeTypeController.deleteNodeType);
