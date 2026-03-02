@@ -15,11 +15,7 @@ router.post("/", role("ADMIN"), nodeTypeController.createNodeType);
 router.put("/:id", role("ADMIN"), nodeTypeController.updateNodeType);
 
 // Listar
-router.get(
-   "/global-flow",
-   role("ADMIN", "CLIENT"),
-   controller.getGlobalFlow
-);
+router.get("/",nodeTypeController.getNodeTypes);
 
 // Eliminar
 router.delete("/:id", role("ADMIN"), nodeTypeController.deleteNodeType);
