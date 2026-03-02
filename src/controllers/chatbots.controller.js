@@ -611,7 +611,7 @@ exports.getAvailableAvatars = async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 // ELIMINAR AVATAR SUBIDO
 // ═══════════════════════════════════════════════════════════
-exports.getAvailableAvatars = async (req, res) => {
+exports.deleteAvatar = async (req, res) => {
   try {
     if (!req.user?.account_id) {
       return res.status(401).json({ message: "Usuario no autenticado" });
@@ -620,24 +620,59 @@ exports.getAvailableAvatars = async (req, res) => {
     const chatbot = await Chatbot.findOne({
       _id: req.params.id,
       account_id: req.user.account_id
-    }).lean();
+    });
 
     if (!chatbot) {
       return res.status(404).json({ message: "Chatbot no encontrado" });
     }
 
-    const systemAvatars = await Avatar.find({
+    const { avatarUrl } = req.body;
+
+    if (!avatarUrl) {
+      return res.status(400).json({ message: "avatarUrl requerido" });
+    }
+
+    // 🔥 verificar si es avatar del sistema
+    const systemAvatar = await Avatar.findOne({
+      url: avatarUrl,
       type: "SYSTEM"
-    }).lean();
+    });
+
+    if (systemAvatar) {
+      return res.status(400).json({
+        message: "No se puede eliminar un avatar del sistema"
+      });
+    }
+
+    const before = chatbot.uploaded_avatars?.length || 0;
+
+    chatbot.uploaded_avatars = chatbot.uploaded_avatars.filter(
+      a => a.url !== avatarUrl
+    );
+
+    if (before === chatbot.uploaded_avatars.length) {
+      return res.status(404).json({ message: "Avatar no encontrado" });
+    }
+
+    // 🔥 si era el activo
+    if (chatbot.avatar === avatarUrl) {
+      const fallback = await Avatar.findOne({ type: "SYSTEM" });
+      chatbot.avatar =
+        process.env.DEFAULT_CHATBOT_AVATAR ||
+        fallback?.url ||
+        null;
+    }
+
+    await chatbot.save();
 
     res.json({
-      system: systemAvatars,
-      uploaded: chatbot.uploaded_avatars || [],
-      active: chatbot.avatar
+      message: "Avatar eliminado correctamente",
+      avatar: chatbot.avatar,
+      uploaded_avatars: chatbot.uploaded_avatars
     });
 
   } catch (error) {
-    console.error("GET AVATARS ERROR:", error);
-    res.status(500).json({ message: "Error al obtener avatares" });
+    console.error("DELETE AVATAR ERROR:", error);
+    res.status(500).json({ message: "Error al eliminar avatar" });
   }
 };
