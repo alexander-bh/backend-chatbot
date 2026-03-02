@@ -1131,7 +1131,7 @@ exports.createAvatar = async (req, res) => {
       label: req.body.label || "Avatar personalizado",
       url: req.file.path,
       public_id: req.file.filename,
-      type: "CUSTOM",
+      type: "SYSTEM",
       created_by: req.user._id
     });
 
