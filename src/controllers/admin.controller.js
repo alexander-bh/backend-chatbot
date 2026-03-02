@@ -1194,10 +1194,6 @@ exports.deleteAvatarGlobal = async (req, res) => {
       throw new Error("Avatar no encontrado");
     }
 
-    if (avatar.type === "SYSTEM") {
-      throw new Error("No se puede eliminar un avatar del sistema");
-    }
-
     /* ───────── OBTENER AVATAR FALLBACK ───────── */
 
     const fallbackAvatar = await Avatar.findOne({
