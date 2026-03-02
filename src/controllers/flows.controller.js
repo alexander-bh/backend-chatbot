@@ -203,7 +203,7 @@ exports.deleteFlow = async (req, res) => {
   }
 };
 
-// Guardar los flow 
+// Guardar los flow
 exports.saveFlow = async (req, res) => {
   try {
     const flowId = req.params.id;
@@ -219,7 +219,7 @@ exports.saveFlow = async (req, res) => {
     const account_id = req.user.account_id;
     const user_id = req.user._id || req.user.id;
 
-    /* ================= VALIDACIONES ================= */
+    /* ================= VALIDACIONES BÁSICAS ================= */
 
     if (!mongoose.Types.ObjectId.isValid(flowId)) {
       throw new Error("flowId inválido");
@@ -232,6 +232,8 @@ exports.saveFlow = async (req, res) => {
     if (!start_node_id) {
       throw new Error("start_node_id requerido");
     }
+
+    const isPublishing = publish === true;
 
     /* ================= UNIFICAR NODOS ================= */
 
@@ -291,16 +293,20 @@ exports.saveFlow = async (req, res) => {
         session
       );
 
-      const isPublishing = publish === true;
+      if (!flow) {
+        throw new Error("Flow no encontrado");
+      }
 
-      if (!flow?.is_template) {
+      /* ================= VALIDACIÓN CHATBOT ================= */
+
+      if (!flow.is_template && isPublishing) {
         if (!chatbot_id || !mongoose.Types.ObjectId.isValid(chatbot_id)) {
-          throw new Error("chatbot_id inválido o requerido");
+          throw new Error("chatbot_id inválido o requerido para publicar");
         }
       }
 
-
       /* ===== BORRAR NODOS ANTERIORES ===== */
+
       await FlowNode.deleteMany(
         {
           flow_id: flowId,
@@ -326,7 +332,7 @@ exports.saveFlow = async (req, res) => {
       for (const branchKey in groupedByBranch) {
 
         const branchNodes = groupedByBranch[branchKey]
-          .sort((a, b) => a.order - b.order);
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
         branchNodes.forEach((node, index) => {
 
@@ -373,7 +379,7 @@ exports.saveFlow = async (req, res) => {
                 ? node.options
                 : node.policy;
 
-            const mappedOptions = (sourceArray ?? []).map(opt => {
+            base[node.node_type] = (sourceArray ?? []).map(opt => {
 
               let mappedNextNodeId = null;
 
@@ -392,29 +398,23 @@ exports.saveFlow = async (req, res) => {
                 next_branch_id: opt.next_branch_id ?? null
               };
             });
-
-            if (node.node_type === "options") {
-              base.options = mappedOptions;
-            } else {
-              base.policy = mappedOptions;
-            }
           }
 
           /* ===== INPUT NODES ===== */
 
           if (INPUT_NODES.includes(node.node_type)) {
 
-            if (!node.variable_key) {
-              throw new Error(
-                `Nodo ${node.node_type} requiere variable_key`
-              );
+            let variableKey = node.variable_key?.trim();
+
+            // Si no viene o viene vacío → auto generar
+            if (!variableKey) {
+              variableKey = `${node.node_type}_${newId.toString().slice(-6)}`;
             }
 
-            base.variable_key = node.variable_key;
+            base.variable_key = variableKey;
             base.validation = node.validation ?? undefined;
             base.crm_field_key = node.crm_field_key ?? undefined;
           }
-
           /* ===== LINK ===== */
 
           if (node.node_type === "link") {
@@ -435,9 +435,10 @@ exports.saveFlow = async (req, res) => {
         throw new Error("start_node_id inválido después del mapeo");
       }
 
-      if (!flow.is_template) {
+      if (!flow.is_template && chatbot_id) {
         flow.chatbot_id = chatbot_id;
       }
+
       flow.start_node_id = newStartNodeId;
       flow.lock = null;
       flow.status = isPublishing ? "published" : "draft";
@@ -463,8 +464,7 @@ exports.saveFlow = async (req, res) => {
 
     return res.status(400).json({
       success: false,
-      message: error.message,
-      stack: error.stack
+      message: error.message
     });
   }
 };
