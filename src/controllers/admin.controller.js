@@ -8,6 +8,7 @@ const Flow = require("../models/Flow");
 const FlowNode = require("../models/FlowNode");
 const AuditLog = require("../models/AuditLog");
 const Avatar = require("../models/Avatar");
+const Contact = require("../models/Contact");
 const auditService = require("../services/audit.service");
 const formatDateAMPM = require("../utils/formatDate");
 const { deleteFromCloudinary } = require("../services/cloudinary.service");
@@ -372,6 +373,38 @@ exports.createChatbotForUser = async (req, res) => {
         session,
         flowName
       });
+    }
+
+    const templateContacts = await Contact.find({
+      is_template: true,
+      is_deleted: { $ne: true }
+    }).session(session);
+
+    if (!templateContacts.length) {
+      console.log("ℹ️ No existen contactos plantilla, se crea solo el chatbot");
+    } else {
+      const contactsToInsert = templateContacts.map(template => ({
+        account_id,
+        chatbot_id: chatbotDoc._id,
+        source: "system",
+        name: template.name,
+        email: template.email,
+        phone: template.phone,
+        company: template.company,
+        website: template.website,
+        city: template.city,
+        country: template.country,
+        address: template.address,
+        position: template.position,
+        internal_note: template.internal_note,
+        status: "new",
+        completed: false,
+        conversation: [],
+        variables: {},
+        is_deleted: false
+      }));
+
+      await Contact.insertMany(contactsToInsert, { session });
     }
 
     await session.commitTransaction();
@@ -1290,5 +1323,106 @@ exports.setDefaultAvatar = async (req, res) => {
     res.status(400).json({ message: error.message });
   } finally {
     session.endSession();
+  }
+};
+
+//contactos por predeterminado 
+exports.createDefaultContactTemplate = async (req, res) => {
+  try {
+    if (req.user.role !== "ADMIN") {
+      return res.status(403).json({ message: "Solo ADMIN" });
+    }
+
+    const { name, email, phone } = req.body;
+
+    const contact = await Contact.create({
+      account_id: null,
+      source: "system",
+      name,
+      email,
+      phone,
+      is_template: true
+    });
+
+    res.status(201).json({
+      message: "Contacto plantilla creado",
+      contact
+    });
+
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.getDefaultContactTemplates = async (req, res) => {
+  try {
+    if (req.user.role !== "ADMIN") {
+      return res.status(403).json({ message: "Solo ADMIN" });
+    }
+
+    const templates = await Contact.find({
+      is_template: true
+    }).sort({ createdAt: -1 });
+
+    res.json({
+      total: templates.length,
+      templates
+    });
+
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.updateDefaultContactTemplate = async (req, res) => {
+  try {
+    if (req.user.role !== "ADMIN") {
+      return res.status(403).json({ message: "Solo ADMIN" });
+    }
+
+    const { id } = req.params;
+    const updateData = req.body;
+
+    const template = await Contact.findOneAndUpdate(
+      { _id: id, is_template: true },
+      { $set: updateData },
+      { new: true }
+    );
+
+    if (!template) {
+      return res.status(404).json({ message: "Template no encontrado" });
+    }
+
+    res.json({
+      message: "Template actualizado",
+      template
+    });
+
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.deleteDefaultContactTemplate = async (req, res) => {
+  try {
+    if (req.user.role !== "ADMIN") {
+      return res.status(403).json({ message: "Solo ADMIN" });
+    }
+
+    const { id } = req.params;
+
+    const deleted = await Contact.findOneAndDelete({
+      _id: id,
+      is_template: true
+    });
+
+    if (!deleted) {
+      return res.status(404).json({ message: "Template no encontrado" });
+    }
+
+    res.json({ message: "Template eliminado correctamente" });
+
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 };
