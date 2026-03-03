@@ -23,14 +23,14 @@ exports.createNodeType = async (req, res) => {
     }
 
     const nodeType = await NodeType.create({
-      account_id,
+      account_id: null,
       key,
       label,
       mode: mode ?? "basic",
       answerUser: answerUser ?? false,
       accordions: accordions ?? [],
       defaults: defaults ?? {},
-      is_system: is_system ?? false,
+      is_system: is_system ?? true,
       is_active: is_active ?? true
     });
 
