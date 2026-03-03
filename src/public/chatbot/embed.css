@@ -757,6 +757,12 @@ main::-webkit-scrollbar-thumb:hover {
         box-shadow: 3px 3px 6px rgba(0, 0, 0, .04);
     }
 
+    .chat-widget.open~.chat-fab,
+    .chat-fab.active {
+        display: none !important;
+    }
+
+
     /* ── FAB ── */
     .chat-fab {
         bottom: 16px;
