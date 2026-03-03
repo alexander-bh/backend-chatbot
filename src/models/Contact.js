@@ -56,7 +56,7 @@ const ContactSchema = new mongoose.Schema({
   /* 🔥 NUEVO */
   source: {
     type: String,
-    enum: ["chatbot", "manual", "import"],
+    enum: ["chatbot", "manual"],
     default: "chatbot",
     index: true
   },
@@ -87,6 +87,12 @@ const ContactSchema = new mongoose.Schema({
     type: String,
     enum: ["new", "contacted", "qualified", "lost"],
     default: "new",
+    index: true
+  },
+
+  is_deleted: {
+    type: Boolean,
+    default: false,
     index: true
   },
 
