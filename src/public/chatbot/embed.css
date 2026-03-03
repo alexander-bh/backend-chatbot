@@ -217,10 +217,6 @@ body {
         visibility 0s;
 }
 
-.chat-widget.open .chat-avatar-fab {
-    display: none;
-}
-
 /* ===============================
     CHAT STRUCTURE
     ================================ */
