@@ -757,9 +757,6 @@ main::-webkit-scrollbar-thumb:hover {
         box-shadow: 3px 3px 6px rgba(0, 0, 0, .04);
     }
 
-    body.chat-open .chat-fab {
-        display: none !important;
-    }
 
     /* ── FAB ── */
     .chat-fab {
@@ -768,6 +765,14 @@ main::-webkit-scrollbar-thumb:hover {
         width: 56px;
         height: 56px;
         font-size: 24px;
+    }
+
+
+    .chat-fab.active {
+        animation: none;
+        transform: scale(0);
+        opacity: 0;
+        pointer-events: none;
     }
 
     /* ── Widget: pantalla completa real en móvil ── */
