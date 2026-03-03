@@ -47,7 +47,6 @@ exports.createContact = async (req, res) => {
           name,
           email,
           phone,
-          conversation: Array.isArray(conversation) ? conversation : [],
           variables: variables || {},
           completed: completed || false
         }
