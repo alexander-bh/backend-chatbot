@@ -70,30 +70,22 @@ router.get("/audit", adminController.getAuditLogs);
 // auditorías
 router.post("/register", adminController.createUserByAdmin);
 
+/* ---------- DIALOGO GLOBALE (ADMIN) ---------- */
+
 router.post("/newflows", adminController.createOrReplaceGlobalFlow);
 router.get("/global-flow",adminController.getGlobalFlow);
 
 /* ---------- AVATARES GLOBALES (ADMIN) ---------- */
 
-router.post(
-  "/avatars",
-  upload.single("avatar"),
-  adminController.createAvatar
-);
+router.post("/avatars",upload.single("avatar"),adminController.createAvatar);
+router.get("/avatars",adminController.getAllAvatars);
+router.delete("/avatars/:id",adminController.deleteAvatarGlobal);
+router.patch("/avatars/:id/set-default",adminController.setDefaultAvatar);
 
-router.get(
-  "/avatars",
-  adminController.getAllAvatars
-);
-
-router.delete(
-  "/avatars/:id",
-  adminController.deleteAvatarGlobal
-);
-
-router.patch(
-  "/avatars/:id/set-default",
-  adminController.setDefaultAvatar
-);
+/* ---------- Contacto GLOBALES (ADMIN) ---------- */
+router.post("/templates",adminController.createDefaultContactTemplate);
+router.get("/templates",  adminController.getDefaultContactTemplates);
+router.put("/templates/:id" , adminController.updateDefaultContactTemplate);
+router.delete("/templates/:id", adminController.deleteDefaultContactTemplate);
 
 module.exports = router;

@@ -96,6 +96,11 @@ const ContactSchema = new mongoose.Schema({
     index: true
   },
 
+  is_template: {
+    type: Boolean,
+    default: false
+  },
+
   completed: {
     type: Boolean,
     default: false
