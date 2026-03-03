@@ -1,5 +1,16 @@
 const Contact = require("../models/Contact");
-const formatDate = require("../utils/formatDate");
+const formatDateAMPM = require("../utils/formatDate");
+
+const formatContact = (contact) => {
+  const obj = contact.toObject ? contact.toObject() : contact;
+
+  return {
+    ...obj,
+    source: obj.source || "chatbot",
+    createdAtFormatted: obj.createdAt ? formatDateAMPM(obj.createdAt) : null,
+    updatedAtFormatted: obj.updatedAt ? formatDateAMPM(obj.updatedAt) : null
+  };
+};
 
 exports.createContact = async (req, res) => {
   try {
@@ -35,7 +46,7 @@ exports.createContact = async (req, res) => {
       completed: completed || false
     });
 
-    res.status(201).json(contact);
+    res.status(201).json(formatContact(contact));
 
   } catch (error) {
     console.error("CREATE CONTACT ERROR:", error);
@@ -50,10 +61,6 @@ exports.getContactsByChatbot = async (req, res) => {
     const { chatbot_id } = req.params;
     const { status } = req.query;
     const accountId = req.user.account_id;
-
-    /* ===============================
-       1️⃣ CONTACTOS DEL CHATBOT
-    =============================== */
 
     const filter = {
       chatbot_id,
@@ -70,25 +77,15 @@ exports.getContactsByChatbot = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    const formatted = contacts.map(c => ({
-      ...c,
-      created_at_formatted: formatDate(c.createdAt)
-    }));
-
-    /* ===============================
-       2️⃣ TOTAL GENERAL (TODOS LOS CHATBOTS)
-    =============================== */
+    const formatted = contacts.map(formatContact);
 
     const total_contacts_general = await Contact.countDocuments({
-      account_id: accountId
+      account_id: accountId,
+      is_deleted: false
     });
-
-    /* ===============================
-       RESPONSE
-    =============================== */
-
+    
     res.json({
-      total_contacts_chatbot: contacts.length,
+      total_contacts_chatbot: formatted.length,
       total_contacts_general,
       contacts: formatted
     });
@@ -131,7 +128,7 @@ exports.updateStatus = async (req, res) => {
       });
     }
 
-    res.json(updated);
+    res.json(formatContact(updated));
 
   } catch (error) {
     console.error("UPDATE STATUS ERROR:", error);
@@ -184,7 +181,7 @@ exports.createManualContact = async (req, res) => {
       variables: {},
       session_id: undefined
     });
-    res.status(201).json(contact);
+    res.status(201).json(formatContact(contact));
 
   } catch (error) {
     console.error("CREATE MANUAL CONTACT ERROR:", error);
@@ -270,14 +267,17 @@ exports.updateContact = async (req, res) => {
     delete safeUpdates.chatbot_id;
     delete safeUpdates.session_id;
 
-    const updated = await Contact.findByIdAndUpdate(
-      id,
+    const updated = await Contact.findOneAndUpdate(
+      {
+        _id: id,
+        account_id: accountId,
+        is_deleted: false
+      },
       { $set: safeUpdates },
       { new: true }
     );
 
-    res.json(updated);
-
+    res.json(formatContact(updated));
   } catch (error) {
     console.error("UPDATE CONTACT ERROR:", error);
     res.status(500).json({
@@ -292,7 +292,7 @@ exports.deleteContact = async (req, res) => {
     const accountId = req.user.account_id;
 
     const deleted = await Contact.findOneAndUpdate(
-      { _id: id, account_id: accountId },
+      { _id: id, account_id: accountId, is_deleted: false },
       { $set: { is_deleted: true } },
       { new: true }
     );
@@ -304,7 +304,8 @@ exports.deleteContact = async (req, res) => {
     }
 
     res.json({
-      message: "Contacto eliminado correctamente"
+      message: "Contacto eliminado correctamente",
+      contact: formatContact(deleted)
     });
 
   } catch (error) {
@@ -362,10 +363,7 @@ exports.getContacts = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    const normalized = contacts.map(contact => ({
-      ...contact,
-      source: contact.source || "chatbot"
-    }));
+    const normalized = contacts.map(formatContact);
 
     const baseCountFilter = {
       account_id: accountId,
@@ -413,9 +411,11 @@ exports.getDeletedContacts = async (req, res) => {
       .sort({ updatedAt: -1 })
       .lean();
 
+    const formatted = contacts.map(formatContact);
+
     res.json({
-      total_deleted: contacts.length,
-      contacts
+      total_deleted: formatted.length,
+      contacts: formatted
     });
 
   } catch (error) {
@@ -449,7 +449,7 @@ exports.restoreContact = async (req, res) => {
 
     res.json({
       message: "Contacto restaurado correctamente",
-      contact: restored
+      contact: formatContact(restored)
     });
 
   } catch (error) {
