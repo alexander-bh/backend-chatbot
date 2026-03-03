@@ -50,7 +50,6 @@ const ContactSchema = new mongoose.Schema({
 
   session_id: {
     type: mongoose.Schema.Types.ObjectId,
-    unique: true,
     sparse: true
   },
 
@@ -113,5 +112,9 @@ const ContactSchema = new mongoose.Schema({
    INDEXES EXTRA
 ========================= */
 ContactSchema.index({ account_id: 1, chatbot_id: 1, createdAt: -1 });
+ContactSchema.index(
+  { account_id: 1, chatbot_id: 1, session_id: 1 },
+  { unique: true, sparse: true }
+);
 
 module.exports = mongoose.model("Contact", ContactSchema);
