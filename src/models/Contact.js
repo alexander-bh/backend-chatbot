@@ -52,8 +52,7 @@ const ContactSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     sparse: true
   },
-
-  /* 🔥 NUEVO */
+  
   source: {
     type: String,
     enum: ["chatbot", "manual", "system"],
