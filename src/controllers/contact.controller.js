@@ -193,10 +193,9 @@ exports.createManualContact = async (req, res) => {
       internal_note,
       status: status || "new",
       completed: false,
-      conversation: [],
-      variables: {},
-      session_id: undefined
+      variables: {}
     });
+
     res.status(201).json(formatContact(contact));
 
   } catch (error) {
@@ -213,11 +212,10 @@ exports.updateContact = async (req, res) => {
     const accountId = req.user.account_id;
     const updates = req.body;
 
-    // 🔒 Buscar el contacto primero
     const contact = await Contact.findOne({
       _id: id,
       account_id: accountId,
-      is_deleted: false   // 👈 agregar esto
+      is_deleted: false
     });
 
     if (!contact) {
@@ -226,8 +224,15 @@ exports.updateContact = async (req, res) => {
       });
     }
 
-    // 🔹 Campos permitidos para TODOS
-    const commonFields = [
+    const allowedStatus = ["new", "contacted", "qualified", "lost"];
+
+    if (updates.status && !allowedStatus.includes(updates.status)) {
+      return res.status(400).json({
+        message: "Estado inválido"
+      });
+    }
+
+    const allowedFields = [
       "name",
       "last_name",
       "email",
@@ -247,45 +252,18 @@ exports.updateContact = async (req, res) => {
       "data_processing_consent",
       "internal_note",
       "status",
-      "completed"
-    ];
-
-    // 🔹 Campos solo para chatbot
-    const chatbotFields = [
-      "conversation",
+      "completed",
       "variables"
     ];
 
-    const allowedStatus = ["new", "contacted", "qualified", "lost"];
-
-    if (updates.status && !allowedStatus.includes(updates.status)) {
-      return res.status(400).json({
-        message: "Estado inválido"
-      });
-    }
-
     const safeUpdates = {};
 
-    // 🔹 Campos comunes
-    for (let field of commonFields) {
+    for (let field of allowedFields) {
       if (updates[field] !== undefined) {
         safeUpdates[field] = updates[field];
       }
     }
 
-    const isChatbotContact =
-      contact.source === "chatbot" || !contact.source;
-
-    // 🔹 Si es contacto de chatbot, permitir actualizar conversación
-    if (isChatbotContact) {
-      for (let field of chatbotFields) {
-        if (updates[field] !== undefined) {
-          safeUpdates[field] = updates[field];
-        }
-      }
-    }
-
-    // 🚫 Nunca permitir modificar estos campos
     delete safeUpdates.account_id;
     delete safeUpdates.source;
     delete safeUpdates.chatbot_id;
@@ -302,6 +280,7 @@ exports.updateContact = async (req, res) => {
     );
 
     res.json(formatContact(updated));
+
   } catch (error) {
     console.error("UPDATE CONTACT ERROR:", error);
     res.status(500).json({
