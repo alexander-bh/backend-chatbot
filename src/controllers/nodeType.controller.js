@@ -18,7 +18,6 @@ exports.createNodeType = async (req, res) => {
 
     let account_id = req.user?.account_id || null;
 
-    // 🔥 Si es del sistema, forzamos a null
     if (is_system === true) {
       account_id = null;
     }
@@ -41,8 +40,20 @@ exports.createNodeType = async (req, res) => {
     });
 
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false });
+
+    // 👇 MANEJO ESPECÍFICO DUPLICADOS
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: "Ya existe un tipo de nodo con esa clave para esta cuenta"
+      });
+    }
+
+    console.error("createNodeType error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error interno del servidor"
+    });
   }
 };
 
