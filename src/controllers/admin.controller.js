@@ -1363,11 +1363,19 @@ exports.getDefaultContactTemplates = async (req, res) => {
     const templates = await Contact.find({
       is_template: true,
       is_deleted: false
-    }).sort({ createdAt: -1 });
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const formattedTemplates = templates.map(template => ({
+      ...template,
+      createdAtFormatted: formatDateAMPM(template.createdAt),
+      updatedAtFormatted: formatDateAMPM(template.updatedAt)
+    }));
 
     res.json({
-      total: templates.length,
-      templates
+      total: formattedTemplates.length,
+      templates: formattedTemplates
     });
 
   } catch (error) {
@@ -1438,18 +1446,25 @@ exports.getDeletedDefaultContactTemplates = async (req, res) => {
     const templates = await Contact.find({
       is_template: true,
       is_deleted: true
-    }).sort({ updatedAt: -1 });
+    })
+      .sort({ updatedAt: -1 })
+      .lean();
+
+    const formattedTemplates = templates.map(template => ({
+      ...template,
+      createdAtFormatted: formatDateAMPM(template.createdAt),
+      updatedAtFormatted: formatDateAMPM(template.updatedAt)
+    }));
 
     res.json({
-      total_deleted: templates.length,
-      templates
+      total_deleted: formattedTemplates.length,
+      templates: formattedTemplates
     });
 
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
-
 exports.restoreDefaultContactTemplate = async (req, res) => {
   try {
     if (req.user.role !== "ADMIN") {
