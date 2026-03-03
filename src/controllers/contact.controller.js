@@ -181,7 +181,8 @@ exports.createManualContact = async (req, res) => {
       status: status || "new",
       completed: false,
       conversation: [],
-      variables: {}
+      variables: {},
+      session_id: undefined
     });
     res.status(201).json(contact);
 

@@ -51,14 +51,13 @@ const ContactSchema = new mongoose.Schema({
   session_id: {
     type: mongoose.Schema.Types.ObjectId,
     unique: true,
-    sparse: true,      // 🔹 permite null sin romper unique
-    required: false
+    sparse: true
   },
 
   /* 🔥 NUEVO */
   source: {
     type: String,
-    enum: ["chatbot", "manual","system"],
+    enum: ["chatbot", "manual", "system"],
     default: "chatbot",
     index: true
   },
