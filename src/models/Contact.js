@@ -35,7 +35,9 @@ const ContactSchema = new mongoose.Schema({
   account_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Account",
-    required: true,
+    required: function () {
+      return !this.is_template;
+    },
     index: true
   },
 
@@ -56,7 +58,7 @@ const ContactSchema = new mongoose.Schema({
   /* 🔥 NUEVO */
   source: {
     type: String,
-    enum: ["chatbot", "manual"],
+    enum: ["chatbot", "manual","system"],
     default: "chatbot",
     index: true
   },
