@@ -22,7 +22,6 @@ exports.createContact = async (req, res) => {
       name,
       email,
       phone,
-      conversation,
       variables,
       completed
     } = req.body;

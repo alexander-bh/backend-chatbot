@@ -55,7 +55,6 @@ const ChatbotSchema = new Schema({
     unique: true
   },
 
-
   /* ───────── SETTINGS EMBEBIDOS ───────── */
 
   welcome_message: {
