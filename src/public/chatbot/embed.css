@@ -757,12 +757,6 @@ main::-webkit-scrollbar-thumb:hover {
         box-shadow: 3px 3px 6px rgba(0, 0, 0, .04);
     }
 
-
-    .chat-fab {
-        z-index: 9999;
-        /* menor que el widget */
-    }
-
     /* ── FAB ── */
     .chat-fab {
         bottom: 16px;
