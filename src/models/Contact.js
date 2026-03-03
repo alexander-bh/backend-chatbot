@@ -62,16 +62,32 @@ const ContactSchema = new mongoose.Schema({
   },
 
   name: String,
+  last_name: String,
   email: String,
   phone: String,
 
   company: String,
   website: String,
+  company_phone: String,
+  company_extension: String,
+
   city: String,
   country: String,
   address: String,
+
   position: String,
-  internal_note: String,
+  birth_date: Date,
+
+  linkedin: String,
+  skype: String,
+
+  observations: String,
+
+  data_processing_consent: {
+    type: String,
+    enum: ["accepted", "rejected", "pending"],
+    default: "pending"
+  },
 
   conversation: {
     type: [MessageSchema],

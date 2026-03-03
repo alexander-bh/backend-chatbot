@@ -101,7 +101,7 @@ exports.getContactsByChatbot = async (req, res) => {
       account_id: accountId,
       is_deleted: false
     });
-    
+
     res.json({
       total_contacts_chatbot: formatted.length,
       total_contacts_general,
@@ -231,14 +231,22 @@ exports.updateContact = async (req, res) => {
     // 🔹 Campos permitidos para TODOS
     const commonFields = [
       "name",
+      "last_name",
       "email",
       "phone",
       "company",
       "website",
+      "company_phone",
+      "company_extension",
       "city",
       "country",
       "address",
       "position",
+      "birth_date",
+      "linkedin",
+      "skype",
+      "observations",
+      "data_processing_consent",
       "internal_note",
       "status",
       "completed"
