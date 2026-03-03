@@ -87,5 +87,8 @@ router.post("/templates",adminController.createDefaultContactTemplate);
 router.get("/templates",  adminController.getDefaultContactTemplates);
 router.put("/templates/:id" , adminController.updateDefaultContactTemplate);
 router.delete("/templates/:id", adminController.deleteDefaultContactTemplate);
+router.get("/templates/deleted", adminController.getDeletedDefaultContactTemplates);
+router.patch("/templates/:id/restore", adminController.restoreDefaultContactTemplate);
+router.delete("/templates/:id/permanent", adminController.permanentlyDeleteDefaultContactTemplate);
 
 module.exports = router;

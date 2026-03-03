@@ -1361,7 +1361,8 @@ exports.getDefaultContactTemplates = async (req, res) => {
     }
 
     const templates = await Contact.find({
-      is_template: true
+      is_template: true,
+      is_deleted: false
     }).sort({ createdAt: -1 });
 
     res.json({
@@ -1411,16 +1412,95 @@ exports.deleteDefaultContactTemplate = async (req, res) => {
 
     const { id } = req.params;
 
-    const deleted = await Contact.findOneAndDelete({
-      _id: id,
-      is_template: true
-    });
+    const deleted = await Contact.findOneAndUpdate(
+      { _id: id, is_template: true, is_deleted: false },
+      { $set: { is_deleted: true } },
+      { new: true }
+    );
 
     if (!deleted) {
       return res.status(404).json({ message: "Template no encontrado" });
     }
 
-    res.json({ message: "Template eliminado correctamente" });
+    res.json({ message: "Template enviado a papelera" });
+
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.getDeletedDefaultContactTemplates = async (req, res) => {
+  try {
+    if (req.user.role !== "ADMIN") {
+      return res.status(403).json({ message: "Solo ADMIN" });
+    }
+
+    const templates = await Contact.find({
+      is_template: true,
+      is_deleted: true
+    }).sort({ updatedAt: -1 });
+
+    res.json({
+      total_deleted: templates.length,
+      templates
+    });
+
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.restoreDefaultContactTemplate = async (req, res) => {
+  try {
+    if (req.user.role !== "ADMIN") {
+      return res.status(403).json({ message: "Solo ADMIN" });
+    }
+
+    const { id } = req.params;
+
+    const restored = await Contact.findOneAndUpdate(
+      { _id: id, is_template: true, is_deleted: true },
+      { $set: { is_deleted: false } },
+      { new: true }
+    );
+
+    if (!restored) {
+      return res.status(404).json({ message: "Template no encontrado" });
+    }
+
+    res.json({
+      message: "Template restaurado correctamente",
+      template: restored
+    });
+
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.permanentlyDeleteDefaultContactTemplate = async (req, res) => {
+  try {
+    if (req.user.role !== "ADMIN") {
+      return res.status(403).json({ message: "Solo ADMIN" });
+    }
+
+    const { id } = req.params;
+
+    const deleted = await Contact.findOneAndDelete({
+      _id: id,
+      is_template: true,
+      is_deleted: true
+    });
+
+    if (!deleted) {
+      return res.status(404).json({
+        message: "Template no encontrado o no está en papelera"
+      });
+    }
+
+    res.json({
+      message: "Template eliminado permanentemente"
+    });
 
   } catch (error) {
     res.status(500).json({ message: error.message });
