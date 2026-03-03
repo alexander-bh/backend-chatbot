@@ -757,7 +757,7 @@ main::-webkit-scrollbar-thumb:hover {
         box-shadow: 3px 3px 6px rgba(0, 0, 0, .04);
     }
 
-    
+
     /* ── FAB ── */
     .chat-fab {
         bottom: 16px;
@@ -765,6 +765,11 @@ main::-webkit-scrollbar-thumb:hover {
         width: 56px;
         height: 56px;
         font-size: 24px;
+    }
+
+    .chat-fab {
+        z-index: 9999;
+        /* menor que el widget */
     }
 
     /* ── Widget: pantalla completa real en móvil ── */
