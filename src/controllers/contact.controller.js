@@ -57,7 +57,8 @@ exports.getContactsByChatbot = async (req, res) => {
 
     const filter = {
       chatbot_id,
-      account_id: accountId
+      account_id: accountId,
+      is_deleted: false
     };
 
     if (status) {
@@ -114,11 +115,21 @@ exports.updateStatus = async (req, res) => {
       });
     }
 
-    const updated = await Contact.findByIdAndUpdate(
-      id,
-      { status },
+    const updated = await Contact.findOneAndUpdate(
+      {
+        _id: id,
+        account_id: req.user.account_id,
+        is_deleted: false
+      },
+      { $set: { status } },
       { new: true }
     );
+
+    if (!updated) {
+      return res.status(404).json({
+        message: "Contacto no encontrado"
+      });
+    }
 
     res.json(updated);
 
@@ -167,9 +178,11 @@ exports.createManualContact = async (req, res) => {
       address,
       position,
       internal_note,
-      status: status || "new"
+      status: status || "new",
+      completed: false,
+      conversation: [],
+      variables: {}
     });
-
     res.status(201).json(contact);
 
   } catch (error) {
@@ -189,7 +202,8 @@ exports.updateContact = async (req, res) => {
     // 🔒 Buscar el contacto primero
     const contact = await Contact.findOne({
       _id: id,
-      account_id: accountId
+      account_id: accountId,
+      is_deleted: false   // 👈 agregar esto
     });
 
     if (!contact) {
@@ -237,8 +251,11 @@ exports.updateContact = async (req, res) => {
       }
     }
 
+    const isChatbotContact =
+      contact.source === "chatbot" || !contact.source;
+
     // 🔹 Si es contacto de chatbot, permitir actualizar conversación
-    if (contact.source === "chatbot") {
+    if (isChatbotContact) {
       for (let field of chatbotFields) {
         if (updates[field] !== undefined) {
           safeUpdates[field] = updates[field];
@@ -273,10 +290,11 @@ exports.deleteContact = async (req, res) => {
     const { id } = req.params;
     const accountId = req.user.account_id;
 
-    const deleted = await Contact.findOneAndDelete({
-      _id: id,
-      account_id: accountId
-    });
+    const deleted = await Contact.findOneAndUpdate(
+      { _id: id, account_id: accountId },
+      { $set: { is_deleted: true } },
+      { new: true }
+    );
 
     if (!deleted) {
       return res.status(404).json({
@@ -299,50 +317,173 @@ exports.deleteContact = async (req, res) => {
 exports.getContacts = async (req, res) => {
   try {
     const accountId = req.user.account_id;
-    const { chatbot_id, source, status } = req.query;
+    const { source, status, search } = req.query;
 
     const filter = {
-      account_id: accountId
+      account_id: accountId,
+      is_deleted: false
     };
 
-    if (chatbot_id) {
-      filter.chatbot_id = chatbot_id;
-    }
-
-    if (source && ["manual", "chatbot", "import"].includes(source)) {
-      filter.source = source;
-    }
-
-    // 🔹 Filtro por status
     if (status) {
       filter.status = status;
+    }
+
+    if (source === "manual") {
+      filter.source = "manual";
+    }
+
+    if (source === "chatbot") {
+      filter.$or = [
+        { source: "chatbot" },
+        { source: { $exists: false } }
+      ];
+    }
+
+    if (search) {
+      const searchFilter = [
+        { name: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { phone: { $regex: search, $options: "i" } }
+      ];
+
+      if (filter.$or) {
+        filter.$and = [
+          { $or: filter.$or },
+          { $or: searchFilter }
+        ];
+        delete filter.$or;
+      } else {
+        filter.$or = searchFilter;
+      }
     }
 
     const contacts = await Contact.find(filter)
       .sort({ createdAt: -1 })
       .lean();
 
-    const total = contacts.length;
+    const normalized = contacts.map(contact => ({
+      ...contact,
+      source: contact.source || "chatbot"
+    }));
 
-    const total_manual = await Contact.countDocuments({
+    const baseCountFilter = {
       account_id: accountId,
-      source: "manual"
-    });
+      is_deleted: false
+    };
 
-    const total_chatbot = await Contact.countDocuments({
-      account_id: accountId,
-      source: "chatbot"
-    });
+    const [total, total_manual, total_chatbot] = await Promise.all([
+      Contact.countDocuments(baseCountFilter),
+
+      Contact.countDocuments({
+        ...baseCountFilter,
+        source: "manual"
+      }),
+
+      Contact.countDocuments({
+        ...baseCountFilter,
+        $or: [
+          { source: "chatbot" },
+          { source: { $exists: false } }
+        ]
+      })
+    ]);
 
     res.json({
       total,
       total_manual,
       total_chatbot,
-      contacts
+      contacts: normalized
     });
 
   } catch (error) {
     console.error("GET CONTACTS ERROR:", error);
     res.status(500).json({ message: "Error al obtener contactos" });
+  }
+};
+
+exports.getDeletedContacts = async (req, res) => {
+  try {
+    const accountId = req.user.account_id;
+
+    const contacts = await Contact.find({
+      account_id: accountId,
+      is_deleted: true
+    })
+      .sort({ updatedAt: -1 })
+      .lean();
+
+    res.json({
+      total_deleted: contacts.length,
+      contacts
+    });
+
+  } catch (error) {
+    console.error("GET DELETED CONTACTS ERROR:", error);
+    res.status(500).json({
+      message: "Error al obtener contactos eliminados"
+    });
+  }
+};
+
+exports.restoreContact = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const accountId = req.user.account_id;
+
+    const restored = await Contact.findOneAndUpdate(
+      {
+        _id: id,
+        account_id: accountId,
+        is_deleted: true
+      },
+      { $set: { is_deleted: false } },
+      { new: true }
+    );
+
+    if (!restored) {
+      return res.status(404).json({
+        message: "Contacto no encontrado o ya está activo"
+      });
+    }
+
+    res.json({
+      message: "Contacto restaurado correctamente",
+      contact: restored
+    });
+
+  } catch (error) {
+    console.error("RESTORE CONTACT ERROR:", error);
+    res.status(500).json({
+      message: "Error al restaurar contacto"
+    });
+  }
+};
+
+exports.permanentlyDeleteContact = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const accountId = req.user.account_id;
+
+    const deleted = await Contact.findOneAndDelete({
+      _id: id,
+      account_id: accountId,
+      is_deleted: true
+    });
+
+    if (!deleted) {
+      return res.status(404).json({
+        message: "Contacto no encontrado o no está en papelera"
+      });
+    }
+
+    res.json({
+      message: "Contacto eliminado permanentemente"
+    });
+
+  } catch (error) {
+    console.error("HARD DELETE CONTACT ERROR:", error);
+    res.status(500).json({
+      message: "Error al eliminar definitivamente"
+    });
   }
 };

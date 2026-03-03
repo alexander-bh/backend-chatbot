@@ -11,6 +11,10 @@ router.post("/manual", auth, contactController.createManualContact);
 router.put("/:id", auth, contactController.updateContact);
 router.delete("/:id", auth, contactController.deleteContact);
 router.get("/", auth, contactController.getContacts);
+router.get("/deleted", auth, contactController.getDeletedContacts);
+router.patch("/restore/:id", auth, contactController.restoreContact);
+router.delete("/force/:id", auth, contactController.permanentlyDeleteContact);
+
 router.get("/:chatbot_id", auth, contactController.getContactsByChatbot);
 router.get("/metrics/:chatbot_id", auth, metricsController.getChatbotMetrics);
 router.get("/funnel/:chatbot_id",auth,metricsController.getNodeFunnel);
