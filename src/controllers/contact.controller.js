@@ -33,23 +33,41 @@ exports.createContact = async (req, res) => {
       });
     }
 
-    const contact = await Contact.create({
-      account_id: accountId,
-      chatbot_id,
-      session_id,
-      source: "chatbot",
-      name,
-      email,
-      phone,
-      conversation: Array.isArray(conversation) ? conversation : [],
-      variables: variables || {},
-      completed: completed || false
-    });
+    const contact = await Contact.findOneAndUpdate(
+      {
+        account_id: accountId,
+        chatbot_id,
+        session_id
+      },
+      {
+        $setOnInsert: {
+          account_id: accountId,
+          chatbot_id,
+          session_id,
+          source: "chatbot",
+          name,
+          email,
+          phone,
+          conversation: Array.isArray(conversation) ? conversation : [],
+          variables: variables || {},
+          completed: completed || false
+        }
+      },
+      {
+        new: true,
+        upsert: true
+      }
+    );
 
-    res.status(201).json(formatContact(contact));
+    res.status(200).json(formatContact(contact));
 
   } catch (error) {
     console.error("CREATE CONTACT ERROR:", error);
+
+    if (error.code === 11000) {
+      return res.status(200).json({ message: "Contacto ya existente" });
+    }
+
     res.status(500).json({
       message: "Error al guardar contacto"
     });
