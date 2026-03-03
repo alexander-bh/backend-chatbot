@@ -23,7 +23,7 @@ exports.createNodeType = async (req, res) => {
     }
 
     const nodeType = await NodeType.create({
-      account_id: null,
+      account_id,
       key,
       label,
       mode: mode ?? "basic",
