@@ -766,6 +766,12 @@ main::-webkit-scrollbar-thumb:hover {
         font-size: 24px;
     }
 
+    .chat-fab.active {
+        transform: scale(0);
+        opacity: 0;
+        pointer-events: none;
+    }
+
     /* ── Widget: pantalla completa real en móvil ── */
     .chat-widget {
         position: fixed !important;
