@@ -6,8 +6,6 @@
     --chat-shadow-light: rgba(0, 0, 0, 0.08);
     --chat-shadow-medium: rgba(0, 0, 0, 0.12);
     --chat-shadow-heavy: rgba(0, 0, 0, 0.25);
-
-    /* Breakpoints como variables para JS si se necesitan */
     --mobile-breakpoint: 480px;
 }
 
@@ -52,7 +50,6 @@ body {
     z-index: 10000;
 }
 
-/* Flecha lateral (desktop) */
 .chat-welcome::after {
     content: "";
     position: absolute;
@@ -128,8 +125,6 @@ body {
         transform 0.2s ease,
         box-shadow 0.2s ease,
         opacity 0.2s ease;
-
-    /* Área táctil mínima recomendada: 44x44px — ya cumplida */
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
 }
@@ -151,7 +146,6 @@ body {
     transform: scale(0);
     opacity: 0;
     pointer-events: none;
-    /* FIX: era auto, causaba clicks fantasma */
 }
 
 .chat-fab.active:hover {
@@ -160,17 +154,9 @@ body {
 }
 
 @keyframes pulse {
-    0% {
-        box-shadow: 0 0 0 0 rgba(var(--chat-primary-rgb), 0.45);
-    }
-
-    70% {
-        box-shadow: 0 0 0 18px rgba(var(--chat-primary-rgb), 0);
-    }
-
-    100% {
-        box-shadow: 0 0 0 0 rgba(var(--chat-primary-rgb), 0);
-    }
+    0% { box-shadow: 0 0 0 0 rgba(var(--chat-primary-rgb), 0.45); }
+    70% { box-shadow: 0 0 0 18px rgba(var(--chat-primary-rgb), 0); }
+    100% { box-shadow: 0 0 0 0 rgba(var(--chat-primary-rgb), 0); }
 }
 
 /* ===============================
@@ -246,7 +232,6 @@ body {
         inset 0 -1px 0 rgba(255, 255, 255, 0.15),
         0 2px 8px rgba(0, 0, 0, 0.1);
     flex-shrink: 0;
-    /* Evita que se comprima en pantallas pequeñas */
 }
 
 .chat-avatar {
@@ -271,7 +256,6 @@ body {
 .chat-header-info {
     flex: 1;
     min-width: 0;
-    /* Necesario para que el texto haga ellipsis correctamente */
 }
 
 .chat-header strong {
@@ -318,8 +302,6 @@ body {
     flex-shrink: 0;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
-
-    /* Área táctil extendida para móvil sin afectar el visual */
     min-width: 44px;
     min-height: 44px;
 }
@@ -343,9 +325,7 @@ body {
     transition: opacity .2s ease;
 }
 
-.chat-restart:hover::before {
-    opacity: 1;
-}
+.chat-restart:hover::before { opacity: 1; }
 
 .chat-restart svg {
     width: 18px;
@@ -354,51 +334,38 @@ body {
     transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.chat-restart:hover svg {
-    transform: rotate(-180deg);
-}
+.chat-restart:hover svg { transform: rotate(-180deg); }
 
 .chat-restart:active,
-.chat-close:active {
-    transform: scale(0.92);
-}
+.chat-close:active { transform: scale(0.92); }
 
 /* ===============================
     MESSAGES
     ================================ */
 main {
     flex: 1;
-    padding: 20px 16px;
+    padding: 16px 12px;
     overflow-y: auto;
     overflow-x: hidden;
     background: linear-gradient(to bottom, #f9fafb 0%, #f3f4f6 100%);
     border-top: 1px solid #e5e7eb;
     border-bottom: 1px solid #e5e7eb;
     -webkit-overflow-scrolling: touch;
-    /* Scroll suave en iOS */
     overscroll-behavior: contain;
-    /* Evita scroll del fondo en móvil */
 }
 
 .msg {
     display: flex;
-    gap: 10px;
-    margin-bottom: 20px;
+    gap: 8px;
+    margin-bottom: 16px;
     align-items: flex-end;
     width: 100%;
     animation: slideIn 0.3s ease;
 }
 
 @keyframes slideIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 /* Typing indicator */
@@ -423,66 +390,57 @@ main {
     animation: typingBounce 1.4s infinite ease-in-out both;
 }
 
-.typing-dots span:nth-child(1) {
-    animation-delay: -0.32s;
-}
-
-.typing-dots span:nth-child(2) {
-    animation-delay: -0.16s;
-}
-
-.typing-dots span:nth-child(3) {
-    animation-delay: 0s;
-}
+.typing-dots span:nth-child(1) { animation-delay: -0.32s; }
+.typing-dots span:nth-child(2) { animation-delay: -0.16s; }
+.typing-dots span:nth-child(3) { animation-delay: 0s; }
 
 @keyframes typingBounce {
-
-    0%,
-    80%,
-    100% {
-        transform: scale(0.6);
-        opacity: 0.5;
-    }
-
-    40% {
-        transform: scale(1);
-        opacity: 1;
-    }
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
+    40% { transform: scale(1); opacity: 1; }
 }
 
-.msg.bot {
-    justify-content: flex-start;
-}
+.msg.bot { justify-content: flex-start; }
+.msg.user { justify-content: flex-end; }
 
-.msg.user {
-    justify-content: flex-end;
-}
-
+/* FIX: Avatar alineado correctamente */
 .msg-avatar {
     width: 32px;
     height: 32px;
+    min-width: 32px; /* FIX: evita que el avatar se comprima */
     border-radius: 50%;
     border: 2px solid white;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     flex-shrink: 0;
+    align-self: flex-end; /* FIX: avatar se alinea al final del mensaje */
 }
 
+/* FIX: Contenido del mensaje con width controlado */
 .msg-content {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    max-width: 82%;
+    gap: 2px;
+    max-width: 75%; /* FIX: reducido para que no se vea tan ancho */
     min-width: 0;
 }
 
+/* FIX: Usuario sin avatar, más espacio disponible */
+.msg.user .msg-content {
+    max-width: 78%;
+    align-items: flex-end;
+}
+
+.msg.bot .msg-content {
+    align-items: flex-start;
+}
+
 .bubble {
-    padding: 14px 18px;
-    border-radius: 20px;
+    padding: 12px 16px;
+    border-radius: 18px;
     max-width: 100%;
-    min-width: 60px;
+    min-width: 48px;
     font-size: 14.5px;
-    line-height: 1.6;
-    letter-spacing: 0.15px;
+    line-height: 1.55;
+    letter-spacing: 0.1px;
     hyphens: auto;
     word-wrap: break-word;
     overflow-wrap: anywhere;
@@ -492,22 +450,18 @@ main {
 .msg.bot .bubble {
     background: white;
     color: var(--chat-secondary);
-    border: 2px solid #e5e7eb;
+    border: 1.5px solid #e5e7eb;
     border-bottom-left-radius: 4px;
-    box-shadow:
-        0 1px 3px rgba(0, 0, 0, 0.08),
-        0 0 0 1px rgba(0, 0, 0, 0.02);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.07);
 }
 
 .msg.user .bubble {
     background: var(--chat-primary);
     color: white;
-    border-bottom-right-radius: 6px;
-    padding: 16px 22px;
-    min-width: 64px;
-    box-shadow:
-        0 4px 12px rgba(37, 99, 235, 0.35),
-        inset 0 1px 2px rgba(255, 255, 255, 0.25);
+    border-bottom-right-radius: 4px;
+    padding: 12px 18px;
+    min-width: 48px;
+    box-shadow: 0 3px 10px rgba(37, 99, 235, 0.3);
 }
 
 .msg.user .bubble {
@@ -521,9 +475,6 @@ main {
     display: flex;
     flex-direction: column;
     align-items: stretch;
-}
-
-.msg.bot .bubble {
     gap: 4px;
 }
 
@@ -539,19 +490,15 @@ main {
 }
 
 .message-time {
-    font-size: 12px;
-    margin-top: 6px;
-    opacity: 0.6;
-    color: #252629;
+    font-size: 11px;
+    margin-top: 4px;
+    opacity: 0.55;
+    color: #374151;
+    padding: 0 4px;
 }
 
-.msg.user .message-time {
-    text-align: right;
-}
-
-.msg.bot .message-time {
-    text-align: left;
-}
+.msg.user .message-time { text-align: right; }
+.msg.bot .message-time { text-align: left; }
 
 .bubble-link {
     display: inline-block;
@@ -578,25 +525,12 @@ main {
     text-align: center;
 }
 
-.link-action:hover {
-    background: rgba(var(--chat-primary-rgb), 0.2);
-}
+.link-action:hover { background: rgba(var(--chat-primary-rgb), 0.2); }
 
-/* Opcional: iconos por tipo */
-.link-whatsapp {
-    background: #25d36620;
-    color: #128c7e;
-}
+.link-whatsapp { background: #25d36620; color: #128c7e; }
+.link-phone { background: #3b82f620; }
+.link-email { background: #6366f120; }
 
-.link-phone {
-    background: #3b82f620;
-}
-
-.link-email {
-    background: #6366f120;
-}
-
-/* Opciones rápidas */
 .bubble.options {
     display: flex;
     flex-direction: column;
@@ -606,15 +540,15 @@ main {
 .bubble.options button {
     border: 1px solid #e5e7eb;
     background: white;
-    padding: 8px 12px;
-    border-radius: 8px;
+    padding: 10px 14px;
+    border-radius: 10px;
     cursor: pointer;
     transition: all 0.2s ease;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
     min-height: 44px;
-    /* Área táctil adecuada */
     font-size: 14px;
+    text-align: left;
 }
 
 .bubble.options button:hover,
@@ -645,11 +579,9 @@ footer {
     border-radius: 999px;
     outline: none;
     font-size: 16px;
-    /* >=16px previene zoom automático en iOS */
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
     background: #f9fafb;
     -webkit-appearance: none;
-    /* Quita estilos nativos en iOS */
     appearance: none;
     resize: none;
     font-family: inherit;
@@ -665,8 +597,8 @@ footer {
 }
 
 #sendBtn {
-    width: 48px;
-    height: 48px;
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -676,51 +608,29 @@ footer {
     cursor: pointer;
     padding: 0;
     transition: all 0.2s ease;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    box-shadow: 0 3px 10px rgba(37, 99, 235, 0.3);
     flex-shrink: 0;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
 }
 
-#sendBtn svg {
-    width: 22px;
-    height: 22px;
-    display: block;
-}
+#sendBtn svg { width: 20px; height: 20px; display: block; }
 
 #sendBtn:hover:not(:disabled) {
     transform: scale(1.08);
     box-shadow: 0 6px 18px rgba(37, 99, 235, 0.4);
 }
 
-#sendBtn:active:not(:disabled) {
-    transform: scale(0.95);
-}
-
-#sendBtn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
+#sendBtn:active:not(:disabled) { transform: scale(0.95); }
+#sendBtn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ===============================
     SCROLLBAR
     ================================ */
-main::-webkit-scrollbar {
-    width: 6px;
-}
-
-main::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-main::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 4px;
-}
-
-main::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
-}
+main::-webkit-scrollbar { width: 4px; }
+main::-webkit-scrollbar-track { background: transparent; }
+main::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+main::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
 /* ===============================
     RESPONSIVE — TABLET (481px – 768px)
@@ -733,7 +643,7 @@ main::-webkit-scrollbar-thumb:hover {
 }
 
 /* ===============================
-    RESPONSIVE — MÓVIL (≤ 480px)
+    RESPONSIVE — MÓVIL (≤ 480px)  ← FIXES PRINCIPALES AQUÍ
     ================================ */
 @media (max-width: 480px) {
 
@@ -750,7 +660,6 @@ main::-webkit-scrollbar-thumb:hover {
         transform: translateY(0) scale(1);
     }
 
-    /* Flecha hacia abajo en móvil */
     .chat-welcome::after {
         right: 22px;
         top: auto;
@@ -781,8 +690,6 @@ main::-webkit-scrollbar-thumb:hover {
         bottom: 0;
         border-radius: 0;
         border: none;
-
-        /* Animación: sube desde abajo en lugar de escalar */
         transform: translateY(100%);
     }
 
@@ -794,27 +701,104 @@ main::-webkit-scrollbar-thumb:hover {
     .chat-header {
         border-top-left-radius: 0;
         border-top-right-radius: 0;
-        /* Respeta el notch/isla dinámica en iOS */
         padding-top: calc(16px + env(safe-area-inset-top));
+        padding-left: 16px;
+        padding-right: 16px;
     }
 
-    /* ── Mensajes: más espacio lateral ── */
+    /* ── Avatar en header ── */
+    .chat-avatar {
+        width: 36px;
+        height: 36px;
+    }
+
+    /* ── Área de mensajes con padding lateral justo ── */
+    main {
+        padding: 14px 10px 14px 10px;
+    }
+
+    /* ── FIX PRINCIPAL: layout de mensajes en móvil ── */
+    .msg {
+        gap: 6px;
+        margin-bottom: 12px;
+        align-items: flex-end; /* alinear todo al baseline inferior */
+    }
+
+    /* FIX: Avatar más pequeño en mensajes y que no se comprima */
+    .msg-avatar {
+        width: 28px;
+        height: 28px;
+        min-width: 28px;
+        margin-bottom: 2px; /* pequeño margen para separarlo del timestamp */
+    }
+
+    /* FIX: Ancho máximo de burbujas bien calibrado */
     .msg-content {
-        max-width: 88%;
+        max-width: calc(100% - 46px); /* 28px avatar + 6px gap + 12px margen */
     }
 
-    /* ── Footer: respeta el home indicator de iOS ── */
+    .msg.user .msg-content {
+        max-width: 82%; /* usuario sin avatar, puede ser más ancho */
+        align-items: flex-end;
+    }
+
+    /* FIX: Burbujas con padding más compacto en móvil */
+    .bubble {
+        padding: 10px 14px;
+        font-size: 14px;
+        line-height: 1.5;
+        border-radius: 16px;
+    }
+
+    .msg.bot .bubble {
+        border-bottom-left-radius: 4px;
+    }
+
+    .msg.user .bubble {
+        border-bottom-right-radius: 4px;
+        padding: 10px 16px;
+    }
+
+    /* FIX: Timestamp más pequeño y claro */
+    .message-time {
+        font-size: 10px;
+        margin-top: 3px;
+        opacity: 0.5;
+    }
+
+    /* ── Footer con altura correcta ── */
     footer {
-        padding-bottom: calc(12px + env(safe-area-inset-bottom));
+        padding: 8px 10px;
+        padding-bottom: calc(8px + env(safe-area-inset-bottom));
+        gap: 6px;
     }
 
-    /* ── Input: evita zoom en iOS (font-size >= 16px) ── */
+    /* ── Input sin zoom en iOS ── */
     #messageInput {
         font-size: 16px;
+        padding: 10px 14px;
+        border-radius: 999px;
+    }
+
+    /* ── Botón enviar ── */
+    #sendBtn {
+        width: 42px;
+        height: 42px;
+    }
+
+    #sendBtn svg {
+        width: 18px;
+        height: 18px;
+    }
+
+    /* ── Botones de opciones más táctiles ── */
+    .bubble.options button {
+        min-height: 48px;
+        font-size: 14px;
         padding: 12px 14px;
     }
 
-    /* ── Botones de acciones: área táctil generosa ── */
+    /* ── Botones header ── */
     .chat-close,
     .chat-restart {
         min-width: 44px;
@@ -822,22 +806,42 @@ main::-webkit-scrollbar-thumb:hover {
     }
 }
 
+/* ── Extra small (< 360px, ej: iPhone SE 1ra gen) ── */
+@media (max-width: 360px) {
+    .msg-content {
+        max-width: calc(100% - 40px);
+    }
+
+    .msg.user .msg-content {
+        max-width: 80%;
+    }
+
+    .bubble {
+        font-size: 13.5px;
+        padding: 9px 12px;
+    }
+
+    .chat-header strong {
+        font-size: 14px;
+    }
+
+    .chat-status {
+        font-size: 11px;
+    }
+}
+
 /* ===============================
     ACCESIBILIDAD
     ================================ */
 @media (prefers-reduced-motion: reduce) {
-    .chat-fab {
-        animation: none;
-    }
+    .chat-fab { animation: none; }
 
     .chat-welcome,
     .chat-widget {
         transition: opacity 0.15s ease, visibility 0s;
     }
 
-    .msg {
-        animation: none;
-    }
+    .msg { animation: none; }
 
     .typing-dots span {
         animation: none;
@@ -845,7 +849,6 @@ main::-webkit-scrollbar-thumb:hover {
     }
 }
 
-/* Focus visible para navegación por teclado */
 .chat-fab:focus-visible,
 .chat-close:focus-visible,
 .chat-restart:focus-visible,
@@ -855,7 +858,6 @@ main::-webkit-scrollbar-thumb:hover {
     outline-offset: 2px;
 }
 
-/* Oculta focus ring en clicks (solo teclado) */
 .chat-fab:focus:not(:focus-visible),
 .chat-close:focus:not(:focus-visible),
 .chat-restart:focus:not(:focus-visible),
