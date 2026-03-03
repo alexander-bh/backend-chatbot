@@ -681,20 +681,25 @@ main::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         font-size: 24px;
     }
 
-    /* ── Widget: pantalla completa en móvil ── */
+    /* ── Widget: pantalla completa real en móvil ── */
     .chat-widget {
-        width: 100%;
-        height: 100%;
-        max-height: 100%;
-        right: 0;
-        bottom: 0;
-        border-radius: 0;
-        border: none;
-        transform: translateY(100%);
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        max-height: 100% !important;
+        min-height: 100% !important;
+        border-radius: 0 !important;
+        border: none !important;
+        transform: translateY(100%) !important;
+        margin: 0 !important;
     }
 
     .chat-widget.open {
-        transform: translateY(0);
+        transform: translateY(0) !important;
     }
 
     /* ── Header: sin bordes redondeados ── */
