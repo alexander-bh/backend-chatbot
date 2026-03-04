@@ -297,7 +297,7 @@ exports.saveFlow = async (req, res) => {
         throw new Error("Flow no encontrado");
       }
 
-      /* ================= RESTRICCIÓN GLOBAL TEMPLATE ================= */
+      /* ============== RESTRICCIÓN GLOBAL TEMPLATE ============== */
 
       if (flow.is_template && req.user.role !== "ADMIN") {
         throw new Error("No tienes permisos para modificar un Flow global");
