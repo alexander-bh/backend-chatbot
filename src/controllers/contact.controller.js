@@ -1,5 +1,6 @@
 const Contact = require("../models/Contact");
 const formatDateAMPM = require("../utils/formatDate");
+const ConversationSession = require("../models/ConversationSession");
 
 const formatContact = (contact) => {
   const obj = contact.toObject ? contact.toObject() : contact;
@@ -294,21 +295,38 @@ exports.deleteContact = async (req, res) => {
     const { id } = req.params;
     const accountId = req.user.account_id;
 
-    const deleted = await Contact.findOneAndUpdate(
-      { _id: id, account_id: accountId, is_deleted: false },
-      { $set: { is_deleted: true } },
-      { new: true }
-    );
+    const contact = await Contact.findOne({
+      _id: id,
+      account_id: accountId,
+      is_deleted: false
+    });
 
-    if (!deleted) {
+    if (!contact) {
       return res.status(404).json({
         message: "Contacto no encontrado"
       });
     }
 
-    res.json({
-      message: "Contacto eliminado correctamente",
-      contact: formatContact(deleted)
+    /* ================= SOFT DELETE CONTACT ================= */
+
+    contact.is_deleted = true;
+    await contact.save();
+
+    /* ================= SOFT DELETE CONVERSATION ================= */
+
+    await ConversationSession.updateOne(
+      {
+        _id: contact.session_id,
+        account_id: accountId
+      },
+      {
+        $set: { is_deleted: true }
+      }
+    );
+
+    return res.json({
+      message: "Contacto y conversación eliminados correctamente",
+      contact: formatContact(contact)
     });
 
   } catch (error) {
@@ -323,6 +341,8 @@ exports.getContacts = async (req, res) => {
   try {
     const accountId = req.user.account_id;
     const { source, status, search } = req.query;
+
+    /* ================= FILTRO BASE ================= */
 
     const filter = {
       account_id: accountId,
@@ -362,11 +382,35 @@ exports.getContacts = async (req, res) => {
       }
     }
 
+    /* ================= OBTENER CONTACTOS ================= */
+
     const contacts = await Contact.find(filter)
       .sort({ createdAt: -1 })
       .lean();
 
-    const normalized = contacts.map(formatContact);
+    /* ================= FILTRAR POR SESSION ACTIVA ================= */
+
+    const sessionIds = contacts
+      .filter(c => c.session_id)
+      .map(c => c.session_id);
+
+    const activeSessions = await ConversationSession.find({
+      _id: { $in: sessionIds },
+      is_deleted: false
+    }).select("_id").lean();
+
+    const activeSessionSet = new Set(
+      activeSessions.map(s => String(s._id))
+    );
+
+    const filteredContacts = contacts.filter(c => {
+      if (!c.session_id) return true; // manual
+      return activeSessionSet.has(String(c.session_id));
+    });
+
+    const normalized = filteredContacts.map(formatContact);
+
+    /* ================= CONTADORES ================= */
 
     const baseCountFilter = {
       account_id: accountId,
@@ -374,6 +418,7 @@ exports.getContacts = async (req, res) => {
     };
 
     const [total, total_manual, total_chatbot] = await Promise.all([
+
       Contact.countDocuments(baseCountFilter),
 
       Contact.countDocuments({
@@ -388,6 +433,7 @@ exports.getContacts = async (req, res) => {
           { source: { $exists: false } }
         ]
       })
+
     ]);
 
     res.json({
@@ -414,7 +460,25 @@ exports.getDeletedContacts = async (req, res) => {
       .sort({ updatedAt: -1 })
       .lean();
 
-    const formatted = contacts.map(formatContact);
+    const sessionIds = contacts
+      .filter(c => c.session_id)
+      .map(c => c.session_id);
+
+    const deletedSessions = await ConversationSession.find({
+      _id: { $in: sessionIds },
+      is_deleted: true
+    }).select("_id").lean();
+
+    const deletedSessionSet = new Set(
+      deletedSessions.map(s => String(s._id))
+    );
+
+    const filteredContacts = contacts.filter(c => {
+      if (!c.session_id) return true;
+      return deletedSessionSet.has(String(c.session_id));
+    });
+
+    const formatted = filteredContacts.map(formatContact);
 
     res.json({
       total_deleted: formatted.length,
@@ -434,25 +498,34 @@ exports.restoreContact = async (req, res) => {
     const { id } = req.params;
     const accountId = req.user.account_id;
 
-    const restored = await Contact.findOneAndUpdate(
-      {
-        _id: id,
-        account_id: accountId,
-        is_deleted: true
-      },
-      { $set: { is_deleted: false } },
-      { new: true }
-    );
+    const contact = await Contact.findOne({
+      _id: id,
+      account_id: accountId,
+      is_deleted: true
+    });
 
-    if (!restored) {
+    if (!contact) {
       return res.status(404).json({
         message: "Contacto no encontrado o ya está activo"
       });
     }
 
+    contact.is_deleted = false;
+    await contact.save();
+
+    await ConversationSession.updateOne(
+      {
+        _id: contact.session_id,
+        account_id: accountId
+      },
+      {
+        $set: { is_deleted: false }
+      }
+    );
+
     res.json({
       message: "Contacto restaurado correctamente",
-      contact: formatContact(restored)
+      contact: formatContact(contact)
     });
 
   } catch (error) {
@@ -468,20 +541,33 @@ exports.permanentlyDeleteContact = async (req, res) => {
     const { id } = req.params;
     const accountId = req.user.account_id;
 
-    const deleted = await Contact.findOneAndDelete({
+    const contact = await Contact.findOne({
       _id: id,
       account_id: accountId,
       is_deleted: true
     });
 
-    if (!deleted) {
+    if (!contact) {
       return res.status(404).json({
         message: "Contacto no encontrado o no está en papelera"
       });
     }
 
+    /* ================= DELETE CONVERSATION ================= */
+
+    await ConversationSession.deleteOne({
+      _id: contact.session_id,
+      account_id: accountId
+    });
+
+    /* ================= DELETE CONTACT ================= */
+
+    await Contact.deleteOne({
+      _id: id
+    });
+
     res.json({
-      message: "Contacto eliminado permanentemente"
+      message: "Contacto y conversación eliminados permanentemente"
     });
 
   } catch (error) {

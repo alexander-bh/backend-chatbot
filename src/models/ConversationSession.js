@@ -41,8 +41,7 @@ const ConversationSessionSchema = new mongoose.Schema(
       default: null,
       index: true
     },
-
-    // 🔥 NUEVO → historial completo
+    
     history: [
       {
         node_id: {
