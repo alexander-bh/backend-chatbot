@@ -4,13 +4,10 @@ const auth = require("../middlewares/auth.middleware");
 const role = require("../middlewares/role.middleware");
 const adminController = require("../controllers/admin.controller");
 const upload = require("../middlewares/uploadAvatar.middleware");
-
 router.use(auth);
 router.get("/flows/:id", adminController.getFlowDetail);
 
-
 router.use(role("ADMIN"));
-
 router.get("/dashboard", adminController.getDashboard);
 // users
 router.get("/users", adminController.getAllUsers);
