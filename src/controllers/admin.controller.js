@@ -1137,7 +1137,15 @@ exports.createOrReplaceGlobalFlow = async (req, res) => {
 exports.getGlobalFlow = async (req, res) => {
   try {
 
-    // 🔍 Buscar flow template
+    // 👇 Si no es admin, no devuelvas error
+    if (req.user.role !== "ADMIN") {
+      return res.json({
+        success: true,
+        flow: null,
+        nodes: []
+      });
+    }
+
     const flow = await Flow.findOne({
       is_template: true,
       account_id: null,
@@ -1145,12 +1153,13 @@ exports.getGlobalFlow = async (req, res) => {
     });
 
     if (!flow) {
-      return res.status(404).json({
-        message: "No existe flow global"
+      return res.json({
+        success: true,
+        flow: null,
+        nodes: []
       });
     }
 
-    // 🔍 Buscar nodos del flow
     const nodes = await FlowNode.find({
       flow_id: flow._id
     }).sort({ order: 1 });
