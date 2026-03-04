@@ -6,80 +6,123 @@ const adminController = require("../controllers/admin.controller");
 const upload = require("../middlewares/uploadAvatar.middleware");
 
 router.use(auth);
+
+/* =========================
+   GLOBAL FLOW
+========================= */
+
+// Puede verlo cualquier usuario autenticado
 router.get("/global-flow", adminController.getFlowDetail);
 
-router.use(role("ADMIN"));
 
-router.get("/dashboard", adminController.getDashboard);
+/* =========================
+   DASHBOARD
+========================= */
 
-// users
-router.get("/users", adminController.getAllUsers);
-router.get("/users/:id", adminController.getUserDetail);
-router.put("/users/:id", adminController.updateAnyUser);
-router.delete("/users/:id", adminController.deleteAnyUser);
+router.get("/dashboard", role("ADMIN"), adminController.getDashboard);
 
-// accounts
-router.get("/accounts", adminController.getAllAccounts);
 
-// chatbots
-router.post("/chatbots", adminController.createChatbotForUser);
+/* =========================
+   USERS (ADMIN)
+========================= */
 
-router.get("/chatbots", adminController.getAllChatbots);
+router.get("/users", role("ADMIN"), adminController.getAllUsers);
+router.get("/users/:id", role("ADMIN"), adminController.getUserDetail);
+router.put("/users/:id", role("ADMIN"), adminController.updateAnyUser);
+router.delete("/users/:id", role("ADMIN"), adminController.deleteAnyUser);
 
-router.get("/chatbots/:id", adminController.getChatbotDetail);
 
-router.delete("/chatbots/:id", adminController.deleteAnyChatbot);
+/* =========================
+   ACCOUNTS (ADMIN)
+========================= */
 
+router.get("/accounts", role("ADMIN"), adminController.getAllAccounts);
+
+
+/* =========================
+   CHATBOTS
+========================= */
+
+// Crear chatbot → solo ADMIN
+router.post("/chatbots", role("ADMIN"), adminController.createChatbotForUser);
+
+// Listar chatbots → solo ADMIN
+router.get("/chatbots", role("ADMIN"), adminController.getAllChatbots);
+
+// Detalle → solo ADMIN
+router.get("/chatbots/:id", role("ADMIN"), adminController.getChatbotDetail);
+
+// Eliminar → solo ADMIN
+router.delete("/chatbots/:id", role("ADMIN"), adminController.deleteAnyChatbot);
+
+// Editar → solo ADMIN
 router.put(
-    "/chatbots/:id",
-    upload.single("avatar"),
-    adminController.updateAnyChatbot
-);
-
-/* ---------- AVATARS ADMIN ---------- */
-
-router.get("/chatbots/:id/avatars",adminController.getAvailableAvatars);
-
-router.delete("/chatbots/:id/deleteAvatar",adminController.deleteAvatar);
-
-router.patch("/chatbots/:id/toggle",adminController.toggleChatbot);
-
-router.post(
-"/:publicId/token/regenerate",
-  adminController.regenerateInstallToken
+  "/chatbots/:id",
+  role("ADMIN"),
+  upload.single("avatar"),
+  adminController.updateAnyChatbot
 );
 
 
-// flows
-router.get("/chatbots/:chatbotId/flows", adminController.getFlowsByChatbot);
+/* =========================
+   AVATARS ADMIN
+========================= */
 
-// soporte
-router.post("/impersonate/:id", adminController.impersonateUser);
+router.get("/chatbots/:id/avatars", role("ADMIN"), adminController.getAvailableAvatars);
+router.delete("/chatbots/:id/deleteAvatar", role("ADMIN"), adminController.deleteAvatar);
+router.patch("/chatbots/:id/toggle", role("ADMIN"), adminController.toggleChatbot);
+router.post("/:publicId/token/regenerate", role("ADMIN"), adminController.regenerateInstallToken);
 
-// auditorías
-router.get("/audit", adminController.getAuditLogs);
 
-// auditorías
-router.post("/register", adminController.createUserByAdmin);
+/* =========================
+   FLOWS
+========================= */
 
-/* ---------- DIALOGO GLOBALE (ADMIN) ---------- */
+router.get("/chatbots/:chatbotId/flows", role("ADMIN"), adminController.getFlowsByChatbot);
 
-router.post("/newflows", adminController.createOrReplaceGlobalFlow);
 
-/* ---------- AVATARES GLOBALES (ADMIN) ---------- */
+/* =========================
+   SOPORTE
+========================= */
 
-router.post("/avatars",upload.single("avatar"),adminController.createAvatar);
-router.get("/avatars",adminController.getAllAvatars);
-router.delete("/avatars/:id",adminController.deleteAvatarGlobal);
-router.patch("/avatars/:id/set-default",adminController.setDefaultAvatar);
+router.post("/impersonate/:id", role("ADMIN"), adminController.impersonateUser);
 
-/* ---------- Contacto GLOBALES (ADMIN) ---------- */
-router.post("/templates",adminController.createDefaultContactTemplate);
-router.get("/templates",  adminController.getDefaultContactTemplates);
-router.put("/templates/:id" , adminController.updateDefaultContactTemplate);
-router.delete("/templates/:id", adminController.deleteDefaultContactTemplate);
-router.get("/templates/deleted", adminController.getDeletedDefaultContactTemplates);
-router.patch("/templates/:id/restore", adminController.restoreDefaultContactTemplate);
-router.delete("/templates/:id/permanent", adminController.permanentlyDeleteDefaultContactTemplate);
+
+/* =========================
+   AUDITORÍAS
+========================= */
+
+router.get("/audit", role("ADMIN"), adminController.getAuditLogs);
+router.post("/register", role("ADMIN"), adminController.createUserByAdmin);
+
+
+/* =========================
+   GLOBAL FLOW ADMIN
+========================= */
+
+router.post("/newflows", role("ADMIN"), adminController.createOrReplaceGlobalFlow);
+
+
+/* =========================
+   AVATARES GLOBALES
+========================= */
+
+router.post("/avatars", role("ADMIN"), upload.single("avatar"), adminController.createAvatar);
+router.get("/avatars", role("ADMIN"), adminController.getAllAvatars);
+router.delete("/avatars/:id", role("ADMIN"), adminController.deleteAvatarGlobal);
+router.patch("/avatars/:id/set-default", role("ADMIN"), adminController.setDefaultAvatar);
+
+
+/* =========================
+   CONTACTO GLOBAL
+========================= */
+
+router.post("/templates", role("ADMIN"), adminController.createDefaultContactTemplate);
+router.get("/templates", role("ADMIN"), adminController.getDefaultContactTemplates);
+router.put("/templates/:id", role("ADMIN"), adminController.updateDefaultContactTemplate);
+router.delete("/templates/:id", role("ADMIN"), adminController.deleteDefaultContactTemplate);
+router.get("/templates/deleted", role("ADMIN"), adminController.getDeletedDefaultContactTemplates);
+router.patch("/templates/:id/restore", role("ADMIN"), adminController.restoreDefaultContactTemplate);
+router.delete("/templates/:id/permanent", role("ADMIN"), adminController.permanentlyDeleteDefaultContactTemplate);
 
 module.exports = router;
