@@ -12,7 +12,6 @@ exports.createNodeType = async (req, res) => {
       answerUser,
       accordions,
       defaults,
-      is_system,
       is_active
     } = req.body;
 
