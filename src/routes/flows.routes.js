@@ -16,7 +16,7 @@ router.post(
   flowController.createFlow
 );
 
-// Listar flujos por chatbot
+// Listar flujos por chatbot elimianr 
 router.get(
   "/chatbot/:chatbotId",
   auth,

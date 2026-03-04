@@ -133,7 +133,7 @@ exports.createChatbot = async (req, res) => {
 
       await Contact.insertMany(contactsToInsert, { session });
     }
-    
+
     await session.commitTransaction();
 
     return res.status(201).json({
@@ -192,8 +192,12 @@ exports.listChatbots = async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 exports.getChatbotById = async (req, res) => {
   try {
+
     if (!req.user?.account_id) {
-      return res.status(401).json({ message: "Usuario no autenticado" });
+      return res.status(401).json({
+        success: false,
+        message: "Usuario no autenticado"
+      });
     }
 
     const chatbot = await Chatbot.findOne({
@@ -204,13 +208,32 @@ exports.getChatbotById = async (req, res) => {
       .lean();
 
     if (!chatbot) {
-      return res.status(404).json({ message: "Chatbot no encontrado" });
+      return res.status(404).json({
+        success: false,
+        message: "Chatbot no encontrado"
+      });
     }
 
-    res.json(chatbot);
+    const flows = await Flow.find({
+      chatbot_id: chatbot._id,
+      account_id: req.user.account_id
+    })
+      .sort({ createdAt: 1 }) // 👈 corregido (era created_at)
+      .lean();
+
+    return res.json({
+      success: true,
+      chatbot,
+      flows
+    });
+
   } catch (error) {
     console.error("GET CHATBOT ERROR:", error);
-    res.status(500).json({ message: "Error al obtener chatbot" });
+
+    return res.status(500).json({
+      success: false,
+      message: "Error al obtener chatbot"
+    });
   }
 };
 
