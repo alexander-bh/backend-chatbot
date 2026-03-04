@@ -5,9 +5,9 @@ const role = require("../middlewares/role.middleware");
 const adminController = require("../controllers/admin.controller");
 const upload = require("../middlewares/uploadAvatar.middleware");
 
+router.use(auth);
 router.get("/global-flow", adminController.getFlowDetail);
 
-router.use(auth);
 router.use(role("ADMIN"));
 
 router.get("/dashboard", adminController.getDashboard);
