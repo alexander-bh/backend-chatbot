@@ -13,9 +13,6 @@ const { cloneTemplateToFlow } = require("../services/flowNode.service");
 const { createFallbackFlow } = require("../services/flowNode.service");
 
 // ═══════════════════════════════════════════════════════════
-// CREAR CHATBOT
-// ═══════════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════════
 // CREAR CHATBOT (CLIENT)
 // ═══════════════════════════════════════════════════════════
 exports.createChatbot = async (req, res) => {
@@ -126,7 +123,6 @@ exports.createChatbot = async (req, res) => {
         internal_note: template.internal_note,
         status: "new",
         completed: false,
-        conversation: [],
         variables: {},
         is_deleted: false
       }));
@@ -160,30 +156,70 @@ exports.createChatbot = async (req, res) => {
 exports.listChatbots = async (req, res) => {
   try {
     if (!req.user?.account_id) {
-      return res.status(401).json({ message: "Usuario no autenticado" });
+      return res.status(401).json({
+        success: false,
+        message: "Usuario no autenticado"
+      });
     }
 
+    const account_id = req.user.account_id;
+
+    /* ================= CHATBOTS ================= */
+
     const chatbots = await Chatbot.find({
-      account_id: req.user.account_id
+      account_id
     })
-      .select("public_id name status is_enabled avatar created_at")
-      .sort({ created_at: -1 })
+      .select("public_id name status is_enabled avatar createdAt")
+      .sort({ createdAt: -1 })
       .lean();
+
+    /* ================= FLOWS ================= */
+
+    const flows = await Flow.find({
+      account_id
+    })
+      .select("_id chatbot_id name status version createdAt")
+      .sort({ createdAt: 1 })
+      .lean();
+
+    /* ================= AGRUPAR FLOWS ================= */
+
+    const flowsByChatbot = {};
+
+    flows.forEach(flow => {
+      const key = String(flow.chatbot_id);
+      if (!flowsByChatbot[key]) {
+        flowsByChatbot[key] = [];
+      }
+      flowsByChatbot[key].push(flow);
+    });
+
+    /* ================= FORMATEAR ================= */
 
     const formatted = chatbots.map(bot => ({
       ...bot,
-      created_at: new Date(bot.created_at).toLocaleString("es-MX", {
+      created_at: new Date(bot.createdAt).toLocaleString("es-MX", {
         day: "2-digit",
         month: "2-digit",
         year: "numeric",
         hour: "2-digit",
         minute: "2-digit"
-      })
+      }),
+      flows: flowsByChatbot[String(bot._id)] || []
     }));
 
-    res.json(formatted);
+    return res.json({
+      success: true,
+      chatbots: formatted
+    });
+
   } catch (error) {
-    res.status(500).json({ message: "Error al listar chatbots" });
+    console.error("LIST CHATBOTS ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Error al listar chatbots"
+    });
   }
 };
 
@@ -234,47 +270,6 @@ exports.getChatbotById = async (req, res) => {
       success: false,
       message: "Error al obtener chatbot"
     });
-  }
-};
-
-// ═══════════════════════════════════════════════════════════
-// DATOS DEL EDITOR
-// ═══════════════════════════════════════════════════════════
-exports.getChatbotEditorData = async (req, res) => {
-  try {
-    if (!req.user?.account_id) {
-      return res.status(401).json({ message: "Usuario no autenticado" });
-    }
-
-    const chatbot = await Chatbot.findOne({
-      _id: req.params.id,
-      account_id: req.user.account_id
-    }).lean();
-
-    if (!chatbot) {
-      return res.status(404).json({ message: "Chatbot no encontrado" });
-    }
-
-    const flows = await Flow.find({
-      chatbot_id: chatbot._id,
-      account_id: req.user.account_id
-    }).sort({ created_at: 1 }).lean();
-
-    const flowsWithNodes = await Promise.all(
-      flows.map(async flow => {
-        const nodes = await FlowNode.find({
-          flow_id: flow._id,
-          account_id: req.user.account_id
-        }).lean();
-
-        return { ...flow, nodes };
-      })
-    );
-
-    res.json({ chatbot, flows: flowsWithNodes });
-  } catch (error) {
-    console.error("EDITOR DATA ERROR:", error);
-    res.status(500).json({ message: "Error al cargar editor" });
   }
 };
 

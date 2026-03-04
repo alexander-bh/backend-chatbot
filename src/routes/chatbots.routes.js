@@ -21,8 +21,6 @@ router.delete("/:id", auth, role("ADMIN", "CLIENT"), chatbotController.deleteCha
 router.post("/:id/duplicate-full",auth,role("ADMIN", "CLIENT"),chatbotController.duplicateChatbotFull);
 // obtener chatbot por id
 router.get("/:id",auth,role("ADMIN", "CLIENT"),chatbotController.getChatbotById);
-// obtener datos completos del editor
-router.get("/:id/editor",auth,role("ADMIN", "CLIENT"),chatbotController.getChatbotEditorData);
 //Actualizar chatbot 
 router.put("/:id/settings",auth,conditionalUpload,chatbotController.updateChatbot);
 // Obtener avatares disponibles
