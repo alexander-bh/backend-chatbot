@@ -12,7 +12,7 @@ exports.createNodeType = async (req, res) => {
       answerUser,
       accordions,
       defaults,
-      is_system = true,
+      is_system,
       is_active
     } = req.body;
 
@@ -37,7 +37,7 @@ exports.createNodeType = async (req, res) => {
         link_actions: defaults?.link_actions ?? [],
         variable_key: defaults?.variable_key ?? null
       },
-      is_system,
+      is_system:true,
       is_active: is_active ?? true
     });
 
