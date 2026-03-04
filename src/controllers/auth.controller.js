@@ -126,7 +126,7 @@ exports.registerFirst = async (req, res, next) => {
 
     /* ───────── CLONAR FLOW TEMPLATE ───────── */
     let flow;
-    let flowName = name.trim(); 
+    let flowName = name.trim();
 
     try {
       flow = await cloneTemplateToFlow(
@@ -150,6 +150,7 @@ exports.registerFirst = async (req, res, next) => {
 
     const token = generateToken({
       id: user._id,
+      name: user.name,
       role: user.role,
       account_id: account._id
     });
@@ -292,6 +293,7 @@ exports.login = async (req, res) => {
 
   const token = generateToken({
     id: user._id,
+    name: user.name,
     role: user.role,
     account_id: account._id
   });

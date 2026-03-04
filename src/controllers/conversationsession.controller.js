@@ -32,6 +32,12 @@ exports.startConversation = async (req, res) => {
       return res.status(404).json({ message: "Chatbot no válido" });
     }
 
+    if (!chatbot.is_enabled) {
+      return res.status(403).json({
+        message: "Chatbot deshabilitado"
+      });
+    }
+
     let flow;
 
     if (mode === "production") {
@@ -82,7 +88,7 @@ exports.startConversation = async (req, res) => {
       flow_id: flow._id,
       current_node_id: startNode._id,
       variables: {},
-      origin_url, // 🔥 aquí
+      origin_url,
       mode,
       is_completed: false,
       history: [

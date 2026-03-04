@@ -6,7 +6,8 @@ module.exports = async function upsertContactFromSession(session) {
 
     await Contact.findOneAndUpdate(
       {
-        session_id: session._id
+        session_id: session._id,
+        is_deleted: { $ne: true } 
       },
       {
         account_id: session.account_id,
