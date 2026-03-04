@@ -30,7 +30,7 @@ exports.createNodeType = async (req, res) => {
       answerUser: answerUser ?? false,
       accordions: accordions ?? [],
       defaults: defaults ?? {},
-       is_system: true,  
+      is_system: true,
       is_active: is_active ?? true
     });
 
