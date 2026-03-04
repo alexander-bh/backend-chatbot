@@ -112,6 +112,6 @@ const NodeTypeSchema = new Schema(
 /* ================= INDEXES ================= */
 
 // evitar duplicados por cuenta
-NodeTypeSchema.index({ key: 1, account_id: 1 }, { unique: true });
+NodeTypeSchema.index({ key: 1, account_id: 1 });
 
 module.exports = model("NodeType", NodeTypeSchema);
