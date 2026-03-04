@@ -40,15 +40,6 @@ exports.createNodeType = async (req, res) => {
     });
 
   } catch (error) {
-
-    // 👇 MANEJO ESPECÍFICO DUPLICADOS
-    if (error.code === 11000) {
-      return res.status(400).json({
-        success: false,
-        message: "Ya existe un tipo de nodo con esa clave para esta cuenta"
-      });
-    }
-
     console.error("createNodeType error:", error);
     res.status(500).json({
       success: false,
