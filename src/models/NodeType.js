@@ -92,7 +92,8 @@ const NodeTypeSchema = new Schema(
       typing_time: { type: Number, default: 2 },
       validation: { type: ValidationSchema, default: undefined },
       options: { type: Array, default: [] },
-      link_actions: { type: Array, default: [] }
+      link_actions: { type: Array, default: [] },
+      variable_key: { type: String, default: null }
     },
 
     // control de sistema

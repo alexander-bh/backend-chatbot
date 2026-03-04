@@ -29,8 +29,15 @@ exports.createNodeType = async (req, res) => {
       mode: mode ?? "basic",
       answerUser: answerUser ?? false,
       accordions: accordions ?? [],
-      defaults: defaults ?? {},
-      is_system: true,
+      defaults: {
+        content: defaults?.content ?? "",
+        typing_time: defaults?.typing_time ?? 2,
+        validation: defaults?.validation,
+        options: defaults?.options ?? [],
+        link_actions: defaults?.link_actions ?? [],
+        variable_key: defaults?.variable_key ?? null
+      },
+      is_system,
       is_active: is_active ?? true
     });
 
@@ -91,7 +98,12 @@ exports.updateNodeType = async (req, res) => {
     ];
 
     allowedFields.forEach(field => {
-      if (req.body[field] !== undefined) {
+      if (field === "defaults" && req.body.defaults) {
+        nodeType.defaults = {
+          ...nodeType.defaults.toObject(),
+          ...req.body.defaults
+        };
+      } else if (req.body[field] !== undefined) {
         nodeType[field] = req.body[field];
       }
     });
