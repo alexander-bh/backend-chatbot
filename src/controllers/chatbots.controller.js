@@ -11,6 +11,7 @@ const {
 } = require("../utils/chatbotName.helper");
 const { cloneTemplateToFlow } = require("../services/flowNode.service");
 const { createFallbackFlow } = require("../services/flowNode.service");
+const formatDateAMPM = require("../utils/formatDate");
 
 // ═══════════════════════════════════════════════════════════
 // CREAR CHATBOT (CLIENT)
@@ -166,52 +167,53 @@ exports.listChatbots = async (req, res) => {
 
     /* ================= CHATBOTS ================= */
 
-    const chatbots = await Chatbot.find({
-      account_id
-    })
-      .select("public_id name status is_enabled avatar createdAt")
-      .sort({ createdAt: -1 })
+    const chatbots = await Chatbot.find({ account_id })
+      .select("_id public_id name status is_enabled avatar created_at")
+      .sort({ created_at: -1 })
       .lean();
 
-    /* ================= FLOWS ================= */
+    /* ================= FLOWS (solo id y name) ================= */
 
     const flows = await Flow.find({
-      account_id
+      account_id,
+      is_template: false
     })
-      .select("_id chatbot_id name status version createdAt")
-      .sort({ createdAt: 1 })
+      .select("_id chatbot_id name")
       .lean();
 
-    /* ================= AGRUPAR FLOWS ================= */
+    /* ================= AGRUPAR FLOWS POR CHATBOT ================= */
 
     const flowsByChatbot = {};
 
     flows.forEach(flow => {
       const key = String(flow.chatbot_id);
+
       if (!flowsByChatbot[key]) {
         flowsByChatbot[key] = [];
       }
-      flowsByChatbot[key].push(flow);
+
+      flowsByChatbot[key].push({
+        _id: flow._id,
+        name: flow.name
+      });
     });
 
-    /* ================= FORMATEAR ================= */
+    /* ================= FORMATEAR RESPUESTA ================= */
 
     const formatted = chatbots.map(bot => ({
-      ...bot,
-      created_at: new Date(bot.createdAt).toLocaleString("es-MX", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit"
-      }),
+      _id: bot._id,
+      public_id: bot.public_id,
+      name: bot.name,
+      status: bot.status,
+      is_enabled: bot.is_enabled,
+      avatar: bot.avatar,
+      created_at: bot.created_at
+        ? formatDateAMPM(bot.created_at)
+        : null,
       flows: flowsByChatbot[String(bot._id)] || []
     }));
 
-    return res.json({
-      success: true,
-      chatbots: formatted
-    });
+    return res.json(formatted);
 
   } catch (error) {
     console.error("LIST CHATBOTS ERROR:", error);
@@ -272,6 +274,7 @@ exports.getChatbotById = async (req, res) => {
     });
   }
 };
+
 
 // ═══════════════════════════════════════════════════════════
 // ACTUALIZAR CHATBOT
