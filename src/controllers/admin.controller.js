@@ -1134,35 +1134,29 @@ exports.createOrReplaceGlobalFlow = async (req, res) => {
 /* ─────────────────────────────────────
    GLOBAL FLOW
 ───────────────────────────────────── */
-exports.getGlobalFlow = async (req, res) => {
+exports.getFlowDetail = async (req, res) => {
   try {
 
-    // 👇 Si no es admin, no devuelvas error
-    if (req.user.role !== "ADMIN") {
-      return res.json({
-        success: true,
-        flow: null,
-        nodes: []
+    // 🔒 Bloqueo por rol
+    if (req.user.role === "CLIENT") {
+      return res.status(403).json({
+        success: false,
+        message: "No autorizado"
       });
     }
 
-    const flow = await Flow.findOne({
-      is_template: true,
-      account_id: null,
-      chatbot_id: null
-    });
+    const flow = await Flow.findById(req.params.id);
 
     if (!flow) {
-      return res.json({
-        success: true,
-        flow: null,
-        nodes: []
+      return res.status(404).json({
+        success: false,
+        message: "Flow no encontrado"
       });
     }
 
     const nodes = await FlowNode.find({
       flow_id: flow._id
-    }).sort({ order: 1 });
+    });
 
     res.json({
       success: true,
@@ -1170,10 +1164,10 @@ exports.getGlobalFlow = async (req, res) => {
       nodes
     });
 
-  } catch (error) {
-    console.error("GET GLOBAL FLOW ERROR:", error);
+  } catch (err) {
     res.status(500).json({
-      message: "Error obteniendo flow global"
+      success: false,
+      message: err.message
     });
   }
 };
