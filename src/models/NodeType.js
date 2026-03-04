@@ -109,4 +109,9 @@ const NodeTypeSchema = new Schema(
   { timestamps: true }
 );
 
+/* ================= INDEXES ================= */
+
+// evitar duplicados por cuenta
+NodeTypeSchema.index({ key: 1, account_id: 1 }, { unique: true });
+
 module.exports = model("NodeType", NodeTypeSchema);

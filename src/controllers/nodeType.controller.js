@@ -12,11 +12,18 @@ exports.createNodeType = async (req, res) => {
       answerUser,
       accordions,
       defaults,
+      is_system = true,
       is_active
     } = req.body;
 
+    let account_id = req.user?.account_id || null;
+
+    if (is_system === true) {
+      account_id = null;
+    }
+
     const nodeType = await NodeType.create({
-      account_id:null,
+      account_id,
       key,
       label,
       mode: mode ?? "basic",
@@ -167,14 +174,6 @@ exports.deleteNodeType = async (req, res) => {
         message: "Tipo de nodo no encontrado"
       });
     }
-
-    if (nodeType.is_system) {
-      return res.status(403).json({
-        success: false,
-        message: "No se puede eliminar un tipo de nodo del sistema"
-      });
-    }
-
     await nodeType.deleteOne();
 
     res.json({
