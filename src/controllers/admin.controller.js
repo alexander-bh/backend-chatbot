@@ -835,18 +835,30 @@ exports.getFlowsByChatbot = async (req, res) => {
 
 exports.getFlowDetail = async (req, res) => {
   try {
-    const flow = await Flow.findById(req.params.id);
+    const flow = await Flow.findOne({
+      is_template: true,
+      account_id: null,
+      chatbot_id: null
+    });
+
     if (!flow) {
-      return res.status(404).json({
-        message: "Flow no encontrado"
+      return res.json({
+        success: true,
+        flow: null,
+        nodes: []
       });
     }
 
     const nodes = await FlowNode.find({
       flow_id: flow._id
+    }).sort({ order: 1 });
+
+    res.json({
+      success: true,
+      flow,
+      nodes
     });
 
-    res.json({ flow, nodes });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
