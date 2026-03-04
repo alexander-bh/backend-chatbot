@@ -765,7 +765,7 @@ main::-webkit-scrollbar-thumb:hover {
         width: 56px;
         height: 56px;
         font-size: 24px;
-        z-index: 10002;
+         z-index: 9998;
     }
 
     .chat-fab.active {
@@ -790,6 +790,7 @@ main::-webkit-scrollbar-thumb:hover {
         /* CRÍTICO: cuando está cerrado, no bloquea el FAB */
         pointer-events: none;
         visibility: hidden;
+         z-index: 10000;
     }
 
     .chat-widget.open {
