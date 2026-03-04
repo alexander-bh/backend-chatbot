@@ -3,8 +3,16 @@ const NodeType = require("../models/NodeType");
 /* =========================================
    CREAR NODE TYPE
 ========================================= */
-exports.createNodeType = async (req, res) => {
+exports.createGlobalNodeType = async (req, res) => {
   try {
+
+    if (req.user.role !== "ADMIN") {
+      return res.status(403).json({
+        success: false,
+        message: "Solo ADMIN puede crear nodos globales"
+      });
+    }
+
     const {
       key,
       label,
@@ -12,25 +20,18 @@ exports.createNodeType = async (req, res) => {
       answerUser,
       accordions,
       defaults,
-      is_system,
       is_active
     } = req.body;
 
-    let account_id = req.user?.account_id || null;
-
-    if (is_system === true) {
-      account_id = null;
-    }
-
     const nodeType = await NodeType.create({
-      account_id,
+      account_id: null,       // 🔥 siempre null
       key,
       label,
       mode: mode ?? "basic",
       answerUser: answerUser ?? false,
       accordions: accordions ?? [],
       defaults: defaults ?? {},
-      is_system: is_system ?? true,
+      is_system: true,        // 🔥 siempre true
       is_active: is_active ?? true
     });
 
@@ -41,18 +42,16 @@ exports.createNodeType = async (req, res) => {
 
   } catch (error) {
 
-    // 👇 MANEJO ESPECÍFICO DUPLICADOS
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
-        message: "Ya existe un tipo de nodo con esa clave para esta cuenta"
+        message: "Ya existe un tipo de nodo global con esa clave y modo"
       });
     }
 
-    console.error("createNodeType error:", error);
     res.status(500).json({
       success: false,
-      message: "Error interno del servidor"
+      message: "Error creando nodo global"
     });
   }
 };
@@ -142,7 +141,7 @@ exports.getNodeTypes = async (req, res) => {
       { account_id: null },
       { account_id }
     ];
-    
+
     const nodeTypes = await NodeType.find(filter).sort({ createdAt: 1 });
 
     res.json({
