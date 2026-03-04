@@ -218,6 +218,8 @@ exports.saveFlow = async (req, res) => {
 
     const account_id = req.user.account_id;
     const user_id = req.user._id || req.user.id;
+    const isAdmin = req.user.role === "ADMIN";
+    const isPublishing = publish === true;
 
     /* ================= VALIDACIONES BÁSICAS ================= */
 
@@ -233,56 +235,13 @@ exports.saveFlow = async (req, res) => {
       throw new Error("start_node_id requerido");
     }
 
-    const isPublishing = publish === true;
-
-    /* ================= UNIFICAR NODOS ================= */
-
-    const allNodes = [
-      ...nodes.map(n => ({ ...n, branch_id: null })),
-      ...branches.flatMap(branch =>
-        (branch.nodes || []).map(n => ({
-          ...n,
-          branch_id: branch.id
-        }))
-      )
-    ];
-
-    /* ================= MAPEO DE IDS ================= */
-
-    const idMap = new Map();
-    const validOldIds = new Set();
-
-    allNodes.forEach(n => {
-      if (!n._id) throw new Error("Nodo sin _id");
-
-      const oldId = String(n._id);
-
-      if (validOldIds.has(oldId)) {
-        throw new Error(`_id duplicado: ${oldId}`);
-      }
-
-      validOldIds.add(oldId);
-      idMap.set(oldId, new mongoose.Types.ObjectId());
-      n.__old_id = oldId;
-    });
-
-    if (!validOldIds.has(String(start_node_id))) {
-      throw new Error("start_node_id no existe en nodes");
-    }
-
     /* ================= VALIDACIÓN ESTRUCTURAL ================= */
 
     validateFlow(nodes, branches, start_node_id);
 
     /* ================= TRANSACCIÓN ================= */
 
-    await withTransactionRetry(async session => {
-
-      await acquireFlowLock({
-        flow_id: flowId,
-        user_id,
-        account_id,
-      });
+    await withTransactionRetry(async (session) => {
 
       const flow = await getEditableFlow(
         flowId,
@@ -297,24 +256,65 @@ exports.saveFlow = async (req, res) => {
         throw new Error("Flow no encontrado");
       }
 
-      /* ============== RESTRICCIÓN GLOBAL TEMPLATE ============== */
+      const isTemplate = flow.is_template === true;
 
-      if (flow.is_template && req.user.role !== "ADMIN") {
+      /* ============== RESTRICCIÓN TEMPLATE GLOBAL ============== */
+
+      if (isTemplate && !isAdmin) {
         throw new Error("No tienes permisos para modificar un Flow global");
       }
 
-      if (isTemplate && isAdmin) {
-        // Admin puede forzar lock siempre
-        flowDoc.lock = null;
-        await flowDoc.save({ session });
+      /* ============== LOCK (solo si no es template o es admin) ============== */
+
+      if (!isTemplate || isAdmin) {
+        await acquireFlowLock({
+          flow_id: flowId,
+          user_id,
+          account_id
+        });
       }
 
       /* ================= VALIDACIÓN CHATBOT ================= */
 
-      if (!flow.is_template && isPublishing) {
+      if (!isTemplate && isPublishing) {
         if (!chatbot_id || !mongoose.Types.ObjectId.isValid(chatbot_id)) {
           throw new Error("chatbot_id inválido o requerido para publicar");
         }
+      }
+
+      /* ================= UNIFICAR NODOS ================= */
+
+      const allNodes = [
+        ...nodes.map(n => ({ ...n, branch_id: null })),
+        ...branches.flatMap(branch =>
+          (branch.nodes || []).map(n => ({
+            ...n,
+            branch_id: branch.id
+          }))
+        )
+      ];
+
+      /* ================= MAPEO DE IDS ================= */
+
+      const idMap = new Map();
+      const validOldIds = new Set();
+
+      allNodes.forEach(n => {
+        if (!n._id) throw new Error("Nodo sin _id");
+
+        const oldId = String(n._id);
+
+        if (validOldIds.has(oldId)) {
+          throw new Error(`_id duplicado: ${oldId}`);
+        }
+
+        validOldIds.add(oldId);
+        idMap.set(oldId, new mongoose.Types.ObjectId());
+        n.__old_id = oldId;
+      });
+
+      if (!validOldIds.has(String(start_node_id))) {
+        throw new Error("start_node_id no existe en nodes");
       }
 
       /* ===== BORRAR NODOS ANTERIORES ===== */
@@ -322,15 +322,12 @@ exports.saveFlow = async (req, res) => {
       await FlowNode.deleteMany(
         {
           flow_id: flowId,
-          ...(flow.is_template ? {} : { account_id })
+          ...(isTemplate ? {} : { account_id })
         },
         { session }
       );
 
       const INPUT_NODES = ["text_input", "email", "phone", "number"];
-
-      /* ================= AGRUPAR POR RAMA ================= */
-
       const groupedByBranch = {};
 
       allNodes.forEach(node => {
@@ -351,8 +348,6 @@ exports.saveFlow = async (req, res) => {
           const oldId = node.__old_id;
           const newId = idMap.get(oldId);
 
-          /* ===== RESOLVER NEXT ===== */
-
           let nextNodeId = null;
 
           if (
@@ -370,7 +365,7 @@ exports.saveFlow = async (req, res) => {
           const base = {
             _id: newId,
             flow_id: flowId,
-            account_id: flow.is_template ? null : account_id,
+            account_id: isTemplate ? null : account_id,
             branch_id: branchKey === "__main__" ? null : branchKey,
             order: index,
             node_type: node.node_type,
@@ -412,13 +407,12 @@ exports.saveFlow = async (req, res) => {
             });
           }
 
-          /* ===== INPUT NODES ===== */
+          /* ===== INPUT ===== */
 
           if (INPUT_NODES.includes(node.node_type)) {
 
             let variableKey = node.variable_key?.trim();
 
-            // Si no viene o viene vacío → auto generar
             if (!variableKey) {
               variableKey = `${node.node_type}_${newId.toString().slice(-6)}`;
             }
@@ -427,7 +421,6 @@ exports.saveFlow = async (req, res) => {
             base.validation = node.validation ?? undefined;
             base.crm_field_key = node.crm_field_key ?? undefined;
           }
-          /* ===== LINK ===== */
 
           if (node.node_type === "link") {
             base.link_actions = node.link_actions ?? undefined;
@@ -443,11 +436,11 @@ exports.saveFlow = async (req, res) => {
 
       const newStartNodeId = idMap.get(String(start_node_id));
 
-      if (!newStartNodeId || !mongoose.Types.ObjectId.isValid(newStartNodeId)) {
+      if (!newStartNodeId) {
         throw new Error("start_node_id inválido después del mapeo");
       }
 
-      if (!flow.is_template && chatbot_id) {
+      if (!isTemplate && chatbot_id) {
         flow.chatbot_id = chatbot_id;
       }
 
@@ -465,15 +458,13 @@ exports.saveFlow = async (req, res) => {
 
     return res.json({
       success: true,
-      message: publish
+      message: isPublishing
         ? "Flow publicado correctamente"
         : "Flow guardado como borrador"
     });
 
   } catch (error) {
     console.log("🔥 FULL ERROR:", error);
-    console.log("🔥 STACK:", error.stack);
-
     return res.status(400).json({
       success: false,
       message: error.message
