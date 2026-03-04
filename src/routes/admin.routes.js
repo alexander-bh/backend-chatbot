@@ -6,7 +6,7 @@ const adminController = require("../controllers/admin.controller");
 const upload = require("../middlewares/uploadAvatar.middleware");
 
 router.use(auth);
-router.get("/global-flow", role("ADMIN", "CLIENT"), adminController.getFlowDetail);
+router.get("/global-flow", adminController.getFlowDetail);
 
 router.use(role("ADMIN"));
 
@@ -65,7 +65,6 @@ router.post("/register", adminController.createUserByAdmin);
 /* ---------- DIALOGO GLOBALE (ADMIN) ---------- */
 
 router.post("/newflows", adminController.createOrReplaceGlobalFlow);
-router.get("/global-flow",adminController.getGlobalFlow);
 
 /* ---------- AVATARES GLOBALES (ADMIN) ---------- */
 
