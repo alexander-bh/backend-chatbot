@@ -303,6 +303,12 @@ exports.saveFlow = async (req, res) => {
         throw new Error("No tienes permisos para modificar un Flow global");
       }
 
+      if (isTemplate && isAdmin) {
+        // Admin puede forzar lock siempre
+        flowDoc.lock = null;
+        await flowDoc.save({ session });
+      }
+
       /* ================= VALIDACIÓN CHATBOT ================= */
 
       if (!flow.is_template && isPublishing) {
