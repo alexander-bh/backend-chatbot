@@ -121,23 +121,8 @@
                     const subject = encodeURIComponent("Contacto desde el chatbot");
                     const body = encodeURIComponent("Hola, quiero más información.");
 
-                    a.href = "#";
-
-                    a.onclick = e => {
-                        e.preventDefault();
-
-                        if (isMobileDevice()) {
-                            // 📱 MÓVIL → abre app de correo
-                            window.location.href =
-                                `mailto:${email}?subject=${subject}&body=${body}`;
-                        } else {
-                            // 💻 DESKTOP → alerta + copia
-                            navigator.clipboard?.writeText(email);
-                            alert(
-                                `📧 Escríbenos a:\n\n${email}\n\nEl correo fue copiado al portapapeles`
-                            );
-                        }
-                    };
+                    a.href = `mailto:${email}?subject=${subject}&body=${body}`;
+                    a.target = "_self";
 
                     break;
                 }
@@ -437,9 +422,6 @@
         try {
             typing(true);
             status("Conectando...");
-
-            console.log("PUBLIC ID DESDE CONFIG:", publicId);
-            console.log("ORIGIN DOMAIN:", originDomain);
             const r = await fetch(
                 `${apiBase}/api/public-chatbot/chatbot-conversation/${publicId}/start`,
                 {
