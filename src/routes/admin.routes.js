@@ -12,7 +12,7 @@ router.use(auth);
 ========================= */
 
 // Puede verlo cualquier usuario autenticado
-router.get("/global-flow", adminController.getFlowDetail);
+router.get("/flow", adminController.getFlowDetail);
 
 
 /* =========================
