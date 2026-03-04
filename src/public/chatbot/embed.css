@@ -764,12 +764,16 @@ main::-webkit-scrollbar-thumb:hover {
         width: 56px;
         height: 56px;
         font-size: 24px;
+        /* CRÍTICO: z-index mayor que el widget en móvil */
+        z-index: 10002;
     }
 
     .chat-fab.active {
         transform: scale(0);
         opacity: 0;
         pointer-events: none;
+        /* Asegura que no sea visible pero siga en el DOM */
+        visibility: hidden;
     }
 
     /* ── Widget: pantalla completa real en móvil ── */
@@ -787,10 +791,15 @@ main::-webkit-scrollbar-thumb:hover {
         border: none !important;
         transform: translateY(100%) !important;
         margin: 0 !important;
+        /* CRÍTICO: cuando está cerrado, no bloquea el FAB */
+        pointer-events: none;
+        visibility: hidden;
     }
 
     .chat-widget.open {
         transform: translateY(0) !important;
+        pointer-events: auto;
+        visibility: visible;
     }
 
     /* ── Header: sin bordes redondeados ── */
