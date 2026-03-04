@@ -80,13 +80,6 @@ exports.updateNodeType = async (req, res) => {
       });
     }
 
-    if (nodeType.is_system) {
-      return res.status(403).json({
-        success: false,
-        message: "No se puede editar un tipo de nodo del sistema"
-      });
-    }
-
     if (req.body.mode) {
       const allowedModes = ["basic", "advanced"];
       if (!allowedModes.includes(req.body.mode)) {
