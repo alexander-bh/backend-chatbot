@@ -835,11 +835,33 @@ exports.getFlowsByChatbot = async (req, res) => {
 
 exports.getFlowDetail = async (req, res) => {
   try {
-    const flow = await Flow.findOne({
-      is_template: true,
-      account_id: null,
-      chatbot_id: null
-    });
+
+    const account_id = req.user.account_id;
+    const isAdmin = req.user.role === "ADMIN";
+
+    let flow;
+
+    /* ================= ADMIN → FLOW GLOBAL ================= */
+
+    if (isAdmin) {
+
+      flow = await Flow.findOne({
+        is_template: true,
+        account_id: null,
+        chatbot_id: null
+      });
+
+    } else {
+
+      /* ================= CLIENTE → FLOW DE SU ACCOUNT ================= */
+      flow = await Flow.findOne({
+        account_id,
+        is_template: false
+      });
+
+    }
+    
+    /* ================= SI NO EXISTE ================= */
 
     if (!flow) {
       return res.json({
@@ -853,14 +875,17 @@ exports.getFlowDetail = async (req, res) => {
       flow_id: flow._id
     }).sort({ order: 1 });
 
-    res.json({
+    return res.json({
       success: true,
       flow,
       nodes
     });
 
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({
+      success: false,
+      message: err.message
+    });
   }
 };
 
