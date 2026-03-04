@@ -6,8 +6,6 @@ const adminController = require("../controllers/admin.controller");
 const upload = require("../middlewares/uploadAvatar.middleware");
 
 router.use(auth);
-router.get("/global-flow",adminController.getGlobalFlow);
-
 router.use(role("ADMIN"));
 
 router.get("/dashboard", adminController.getDashboard);
@@ -44,7 +42,10 @@ router.delete("/chatbots/:id/deleteAvatar",adminController.deleteAvatar);
 
 router.patch("/chatbots/:id/toggle",adminController.toggleChatbot);
 
-router.post("/:publicId/token/regenerate",adminController.regenerateInstallToken);
+router.post(
+"/:publicId/token/regenerate",
+  adminController.regenerateInstallToken
+);
 
 
 // flows
