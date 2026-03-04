@@ -16,14 +16,8 @@ exports.createNodeType = async (req, res) => {
       is_active
     } = req.body;
 
-    let account_id = req.user?.account_id || null;
-
-    if (is_system === true) {
-      account_id = null;
-    }
-
     const nodeType = await NodeType.create({
-      account_id,
+      account_id: null,
       key,
       label,
       mode: mode ?? "basic",

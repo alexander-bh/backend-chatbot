@@ -61,10 +61,6 @@ const ContactSchema = new mongoose.Schema({
   country: String,
   address: String,
 
-  // 🌐 Profesionales
-  linkedin: String,
-  skype: String,
-
   observations: String,
 
   data_processing_consent: {
