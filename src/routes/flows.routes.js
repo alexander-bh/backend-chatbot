@@ -59,7 +59,7 @@ router.get(
 
 // Obtener nodos por flow
 router.get(
-  "/flow/:flowId",
+  "/:flowId",
   auth,
   FLOW_ROLE,
   flowController.getNodesByFlow
