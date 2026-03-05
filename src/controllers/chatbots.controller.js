@@ -611,13 +611,10 @@ exports.duplicateChatbotFull = async (req, res) => {
       // options
       if (originalNode.options?.length) {
         createdNode.options = originalNode.options.map(opt => ({
-          label: opt.label,
-          value: opt.value ?? opt.label, // fallback por seguridad
-          order: opt.order ?? 0,
+          ...opt.toObject(),
           next_node_id: opt.next_node_id
             ? nodeIdMap.get(String(opt.next_node_id))
-            : null,
-          next_branch_id: opt.next_branch_id ?? null
+            : null
         }));
 
         needsUpdate = true;
