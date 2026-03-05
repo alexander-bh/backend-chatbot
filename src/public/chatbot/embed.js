@@ -234,11 +234,13 @@
                 break;
 
             case "middle-right":
-                chatButton.style.bottom = "20px";
-                chatButton.style.left = "20px";
+                chatButton.style.top = "50%";
+                chatButton.style.right = "20px";
+                chatButton.style.transform = "translateY(-50%)";
 
-                chatWindow.style.bottom = "20px";  // ← antes era "90px"
-                chatWindow.style.left = "20px";
+                chatWindow.style.top = "50%";
+                chatWindow.style.right = "90px";
+                chatWindow.style.transform = "translateY(-50%)";
                 break;
         }
     }
