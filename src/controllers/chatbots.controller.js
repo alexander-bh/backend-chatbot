@@ -94,7 +94,7 @@ exports.createChatbot = async (req, res) => {
         chatbot_id: chatbotDoc._id,
         account_id: req.user.account_id,
         session,
-        flowName
+        name: flowName
       });
     }
     const templateContacts = await Contact.find({
