@@ -162,7 +162,7 @@ exports.createFallbackFlow = async ({
   const [flow] = await Flow.create([{
     account_id,
     chatbot_id,
-    name: `Flujo del chatbot: ${name}`,
+    name: `Diálogo del chatbot - ${name}`,
     status: "draft",
     version: 1,
     is_template: false
@@ -236,7 +236,7 @@ exports.ensureFlowExists = async ({
       throw new Error("Chatbot no encontrado");
     }
 
-    flowName = `Diálogo - ${chatbot.name}`;
+    flowName = `Diálogo del chatbot - ${chatbot.name}`;
   }
 
   const [newFlow] = await Flow.create([{
