@@ -248,56 +248,6 @@
         }
     }
 
-    function applyPosition(position) {
-        const chatButton = el.toggle;
-        const chatWindow = el.widget;
-
-        if (!chatButton || !chatWindow) return;
-
-        // Reset
-        chatWindow.style.cssText = "";
-        chatButton.style.cssText = "";
-
-        switch (position) {
-            case "bottom-right":
-                chatButton.style.setProperty("bottom", "20px", "important");
-                chatButton.style.setProperty("right", "20px", "important");
-
-                chatWindow.style.setProperty("bottom", "20px", "important");
-                chatWindow.style.setProperty("right", "20px", "important");
-                chatWindow.style.setProperty("width", "380px", "important");
-                chatWindow.style.setProperty("height", "600px", "important");
-                chatWindow.style.setProperty("min-height", "600px", "important");
-                chatWindow.style.setProperty("max-height", "600px", "important");
-                break;
-
-            case "bottom-left":
-                chatButton.style.setProperty("bottom", "20px", "important");
-                chatButton.style.setProperty("left", "20px", "important");
-
-                chatWindow.style.setProperty("bottom", "20px", "important");
-                chatWindow.style.setProperty("left", "20px", "important");
-                chatWindow.style.setProperty("width", "380px", "important");
-                chatWindow.style.setProperty("height", "600px", "important");
-                chatWindow.style.setProperty("min-height", "600px", "important");
-                chatWindow.style.setProperty("max-height", "600px", "important");
-                break;
-
-            case "middle-right":
-                chatButton.style.setProperty("top", "50%", "important");
-                chatButton.style.setProperty("right", "20px", "important");
-                chatButton.style.setProperty("transform", "translateY(-50%)", "important");
-
-                chatWindow.style.setProperty("bottom", "20px", "important");
-                chatWindow.style.setProperty("right", "20px", "important");
-                chatWindow.style.setProperty("width", "380px", "important");
-                chatWindow.style.setProperty("height", "600px", "important");
-                chatWindow.style.setProperty("min-height", "600px", "important");
-                chatWindow.style.setProperty("max-height", "600px", "important");
-                break;
-        }
-    }
-
     function renderBotMessage(html) {
         const m = document.createElement("div");
         m.className = "msg bot";
