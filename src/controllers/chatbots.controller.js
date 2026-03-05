@@ -607,18 +607,29 @@ exports.duplicateChatbotFull = async (req, res) => {
 
       let needsUpdate = false;
 
-      // parent_node_id
+      /* parent_node_id
       if (originalNode.parent_node_id) {
         createdNode.parent_node_id =
           nodeIdMap.get(String(originalNode.parent_node_id)) || null;
         needsUpdate = true;
-      }
+      }*/
 
       // options
       if (originalNode.options?.length) {
         createdNode.options = originalNode.options.map(opt => ({
           label: opt.label,
-          value: opt.value, 
+          value: opt.value,
+          next_node_id: opt.next_node_id
+            ? nodeIdMap.get(String(opt.next_node_id))
+            : null
+        }));
+        needsUpdate = true;
+      }
+
+      if (originalNode.policy?.length) {
+        createdNode.options = originalNode.options.map(opt => ({
+          label: opt.label,
+          value: opt.value,
           next_node_id: opt.next_node_id
             ? nodeIdMap.get(String(opt.next_node_id))
             : null
