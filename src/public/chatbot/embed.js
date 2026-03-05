@@ -234,13 +234,16 @@
                 break;
 
             case "middle-right":
+                // Botón: se mantiene en el centro derecho
                 chatButton.style.top = "50%";
                 chatButton.style.right = "20px";
                 chatButton.style.transform = "translateY(-50%)";
 
-                chatWindow.style.top = "50%";
-                chatWindow.style.right = "90px";
-                chatWindow.style.transform = "translateY(-50%)";
+                // Widget: se abre abajo a la derecha (como bottom-right)
+                chatWindow.style.bottom = "20px";
+                chatWindow.style.right = "20px";
+                chatWindow.style.top = "";           // ← limpiar top
+                chatWindow.style.transform = "";     // ← limpiar transform
                 break;
         }
     }
