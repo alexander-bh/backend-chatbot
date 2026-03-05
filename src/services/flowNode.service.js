@@ -6,38 +6,45 @@ const Chatbot = require("../models/Chatbot");
 // services/flowNode.service.js
 exports.getNodesByFlow = async (flowId, user) => {
 
-  if (!mongoose.Types.ObjectId.isValid(flowId)) {
-    throw new Error("flowId inválido");
+  // 🛑 ADMIN nunca recibe nodos
+  if (user?.role === "ADMIN") {
+    return [];
   }
 
-  const flow = await Flow.findById(flowId);
+  // 🛑 flowId null | undefined | vacío
+  if (!flowId) {
+    return [];
+  }
 
+  // 🛑 validar ObjectId
+  if (!mongoose.Types.ObjectId.isValid(flowId)) {
+    return [];
+  }
+
+  const flow = await Flow.findById(flowId).lean();
+
+  // 🛑 flow no existe
   if (!flow) {
-    throw new Error("Flow no encontrado");
+    return [];
   }
 
   /* ───────── TEMPLATE GLOBAL ───────── */
   if (flow.is_template === true) {
-    if (user.role !== "ADMIN") {
-      throw new Error("Solo ADMIN puede acceder al diálogo global");
-    }
-
-    return FlowNode.find({
-      flow_id: flow._id
-    }).sort({ order: 1 });
+    return [];
   }
 
-  /* ───────── FLOW NORMAL ───────── */
-  if (
-    user.role !== "ADMIN" &&
-    String(flow.account_id) !== String(user.account_id)
-  ) {
-    throw new Error("Flow no autorizado");
+  /* ───────── VALIDAR CUENTA ───────── */
+  if (!flow.account_id || String(flow.account_id) !== String(user?.account_id)) {
+    return [];
   }
 
-  return FlowNode.find({
+  const nodes = await FlowNode.find({
     flow_id: flow._id
-  }).sort({ order: 1 });
+  })
+  .sort({ order: 1 })
+  .lean();
+
+  return nodes || [];
 };
 
 // services/cloneFlow + Node 
@@ -175,4 +182,72 @@ exports.createFallbackFlow = async ({
   await flow.save({ session });
 
   return flow;
+};
+
+exports.ensureFlowExists = async ({
+  flowId,
+  chatbot_id,
+  account_id,
+  user_role,
+  session
+}) => {
+
+  let flow = null;
+  const isAdmin = user_role === "ADMIN";
+
+  // 1️⃣ Buscar por ID
+  if (flowId && mongoose.Types.ObjectId.isValid(flowId)) {
+    flow = await Flow.findById(flowId).session(session);
+    if (flow) return flow;
+  }
+
+  // 2️⃣ Admin → buscar template global
+  if (isAdmin) {
+    flow = await Flow.findOne({
+      is_template: true,
+      chatbot_id: null,
+      account_id: null
+    }).session(session);
+
+    if (flow) return flow;
+  }
+
+  // ✅ 3️⃣ Cliente → buscar si ya existe
+  if (!isAdmin && chatbot_id) {
+    flow = await Flow.findOne({
+      chatbot_id,
+      account_id,
+      is_template: false
+    }).session(session);
+
+    if (flow) return flow;
+  }
+
+  // 4️⃣ Crear solo si realmente no existe
+  let flowName = "Diálogo global";
+
+  if (!isAdmin) {
+    const chatbot = await Chatbot.findOne({
+      _id: chatbot_id,
+      account_id
+    }).session(session);
+
+    if (!chatbot) {
+      throw new Error("Chatbot no encontrado");
+    }
+
+    flowName = `Diálogo - ${chatbot.name}`;
+  }
+
+  const [newFlow] = await Flow.create([{
+    chatbot_id: isAdmin ? null : chatbot_id,
+    account_id: isAdmin ? null : account_id,
+    name: flowName,
+    status: "draft",
+    version: 1,
+    is_template: isAdmin,
+    lock: null
+  }], { session });
+
+  return newFlow;
 };

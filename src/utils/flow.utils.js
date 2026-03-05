@@ -9,6 +9,7 @@ exports.getEditableFlow = async (
   } = {},
   session = null
 ) => {
+
   const q = Flow.findById(flow_id);
 
   if (session) {
@@ -21,15 +22,32 @@ exports.getEditableFlow = async (
     throw new Error("Flow no encontrado");
   }
 
-  // 🔒 TEMPLATE GLOBAL
-  if (flow.is_template) {
+  /* ===============================
+     TEMPLATE GLOBAL
+  =============================== */
+
+  if (flow.is_template === true) {
+
     if (user_role !== "ADMIN") {
       throw new Error("Solo ADMIN puede editar el diálogo global");
     }
+
     return flow;
   }
 
-  // 🔐 FLOW NORMAL
+  /* ===============================
+     ADMIN NO PUEDE EDITAR FLOWS
+     DE CLIENTES
+  =============================== */
+
+  if (user_role === "ADMIN") {
+    throw new Error("ADMIN no puede editar flows de clientes");
+  }
+
+  /* ===============================
+     VALIDAR PROPIEDAD DEL FLOW
+  =============================== */
+
   if (!flow.account_id || String(flow.account_id) !== String(account_id)) {
     throw new Error("Flow no autorizado");
   }

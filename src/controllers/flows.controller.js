@@ -5,6 +5,7 @@ const FlowNode = require("../models/FlowNode");
 const { acquireFlowLock } = require("../utils/flowLock.engine");
 const { getEditableFlow } = require("../utils/flow.utils");
 const { validateFlow } = require("../validators/flow.validator");
+const { ensureFlowExists } = require("../services/flowNode.service");
 const withTransactionRetry = require("../utils/withTransactionRetry");
 const flowNodeService = require("../services/flowNode.service");
 
@@ -75,16 +76,21 @@ exports.getFlowsByChatbot = async (req, res) => {
 // Obtener nodos por flow
 exports.getNodesByFlow = async (req, res) => {
   try {
-    const { flowId } = req.params;
+
+    console.log("ENTRO A GET NODES");
+
+    const flowId = req.params?.flowId || null;
 
     const nodes = await flowNodeService.getNodesByFlow(
       flowId,
       req.user
     );
 
-    res.json(nodes);
+    res.json(nodes || []);
+
   } catch (err) {
-    res.status(400).json({ message: err.message });
+    console.error(err);
+    res.status(500).json([]);
   }
 };
 
@@ -206,7 +212,11 @@ exports.deleteFlow = async (req, res) => {
 // Guardar los flow
 exports.saveFlow = async (req, res) => {
   try {
-    const flowId = req.params.id;
+    let flowId = req.params.id;
+
+    if (!flowId || flowId === "null" || flowId === "undefined") {
+      flowId = null;
+    }
 
     const {
       nodes = [],
@@ -221,7 +231,10 @@ exports.saveFlow = async (req, res) => {
 
     /* ================= VALIDACIONES BÁSICAS ================= */
 
-    if (!mongoose.Types.ObjectId.isValid(flowId)) {
+    const isValidFlowId =
+      flowId && mongoose.Types.ObjectId.isValid(flowId);
+
+    if (flowId && !isValidFlowId) {
       throw new Error("flowId inválido");
     }
 
@@ -278,24 +291,20 @@ exports.saveFlow = async (req, res) => {
 
     await withTransactionRetry(async session => {
 
-      await acquireFlowLock({
-        flow_id: flowId,
-        user_id,
+      const flow = await ensureFlowExists({
+        flowId: isValidFlowId ? flowId : null,
+        chatbot_id,
         account_id,
+        user_role: req.user.role,
+        session
       });
 
-      const flow = await getEditableFlow(
-        flowId,
-        {
-          account_id,
-          user_role: req.user.role
-        },
+      await acquireFlowLock({
+        flow_id: flow._id,
+        user_id,
+        account_id,
         session
-      );
-
-      if (!flow) {
-        throw new Error("Flow no encontrado");
-      }
+      });
 
       /* ================= VALIDACIÓN CHATBOT ================= */
 
@@ -309,13 +318,18 @@ exports.saveFlow = async (req, res) => {
 
       await FlowNode.deleteMany(
         {
-          flow_id: flowId,
+          flow_id: flow._id,
           ...(flow.is_template ? {} : { account_id })
         },
         { session }
       );
 
-      const INPUT_NODES = ["text_input", "email", "phone", "number"];
+      const INPUT_NODES = [
+        "question",
+        "email",
+        "phone",
+        "number"
+      ];
 
       /* ================= AGRUPAR POR RAMA ================= */
 
@@ -357,7 +371,7 @@ exports.saveFlow = async (req, res) => {
 
           const base = {
             _id: newId,
-            flow_id: flowId,
+            flow_id: flow._id,
             account_id: flow.is_template ? null : account_id,
             branch_id: branchKey === "__main__" ? null : branchKey,
             order: index,
@@ -408,13 +422,14 @@ exports.saveFlow = async (req, res) => {
 
             // Si no viene o viene vacío → auto generar
             if (!variableKey) {
-              variableKey = `${node.node_type}_${newId.toString().slice(-6)}`;
+              variableKey = `${node.node_type}`;
             }
 
             base.variable_key = variableKey;
             base.validation = node.validation ?? undefined;
             base.crm_field_key = node.crm_field_key ?? undefined;
           }
+          
           /* ===== LINK ===== */
 
           if (node.node_type === "link") {
@@ -431,7 +446,7 @@ exports.saveFlow = async (req, res) => {
 
       const newStartNodeId = idMap.get(String(start_node_id));
 
-      if (!newStartNodeId || !mongoose.Types.ObjectId.isValid(newStartNodeId)) {
+      if (!newStartNodeId) {
         throw new Error("start_node_id inválido después del mapeo");
       }
 

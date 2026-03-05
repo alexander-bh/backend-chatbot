@@ -16,7 +16,7 @@ router.post(
   flowController.createFlow
 );
 
-// Listar flujos por chatbot elimianr 
+// Listar flujos por chatbot
 router.get(
   "/chatbot/:chatbotId",
   auth,
@@ -49,19 +49,10 @@ router.post(
   flowController.saveFlow
 );
 
-// Obtener flujo por ID
-router.get(
-  "/:id",
-  auth,
-  FLOW_ROLE,
-  flowController.getFlowById
-);
-
 // Obtener nodos por flow
 router.get(
   "/:flowId",
   auth,
-  FLOW_ROLE,
   flowController.getNodesByFlow
 );
 
