@@ -523,8 +523,17 @@ exports.deleteAnyChatbot = async (req, res) => {
 };
 
 exports.updateAnyChatbot = async (req, res) => {
+  const session = await mongoose.startSession();
+
   try {
-    const chatbot = await Chatbot.findById(req.params.id);
+
+    session.startTransaction();
+
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "ID de chatbot inválido" });
+    }
+
+    const chatbot = await Chatbot.findById(req.params.id).session(session);
 
     if (!chatbot) {
       return res.status(404).json({ message: "Chatbot no encontrado" });
@@ -551,16 +560,20 @@ exports.updateAnyChatbot = async (req, res) => {
     /* ---------- VALIDACIONES ---------- */
 
     if (name !== undefined) {
-      if (!name.trim() || name.length > 60) {
+      const trimmed = name.trim();
+
+      if (!trimmed || trimmed.length > 60) {
         return res.status(400).json({ message: "Nombre inválido" });
       }
-      chatbot.name = name.trim();
+
+      chatbot.name = trimmed;
     }
 
     if (welcome_delay !== undefined) {
       if (welcome_delay < 0 || welcome_delay > 10) {
         return res.status(400).json({ message: "welcome_delay inválido" });
       }
+
       chatbot.welcome_delay = welcome_delay;
     }
 
@@ -581,6 +594,7 @@ exports.updateAnyChatbot = async (req, res) => {
     }
 
     const allowedStatus = ["active", "inactive"];
+
     if (status !== undefined) {
       if (!allowedStatus.includes(status)) {
         return res.status(400).json({ message: "Status inválido" });
@@ -599,6 +613,7 @@ exports.updateAnyChatbot = async (req, res) => {
     if (show_branding !== undefined) chatbot.show_branding = show_branding;
 
     /* ---------- AVATAR POR ARCHIVO ---------- */
+
     if (req.file) {
       const avatarUrl = req.file.path;
 
@@ -611,22 +626,21 @@ exports.updateAnyChatbot = async (req, res) => {
       chatbot.uploaded_avatars.push({
         id: crypto.randomUUID(),
         label: `Avatar ${chatbot.uploaded_avatars.length + 1}`,
-        url: req.file.path,
-        public_id: req.file.filename, // 👈 CLAVE
+        url: avatarUrl,
+        public_id: req.file.filename,
         created_at: new Date()
       });
     }
 
     /* ---------- AVATAR POR URL ---------- */
+
     if (avatar && !req.file) {
 
-      // 🔍 1. Verificar si es SYSTEM válido
       const systemAvatar = await Avatar.findOne({
         url: avatar,
         type: "SYSTEM"
-      });
+      }).session(session);
 
-      // 🔍 2. Verificar si es CUSTOM subido a ese chatbot
       const isUploaded =
         chatbot.uploaded_avatars?.some(a => a.url === avatar);
 
@@ -639,7 +653,38 @@ exports.updateAnyChatbot = async (req, res) => {
       chatbot.avatar = avatar;
     }
 
-    await chatbot.save();
+    await chatbot.save({ session });
+
+    /* ───────── FLOW ───────── */
+
+    let flow = await Flow.findOne({
+      chatbot_id: chatbot._id,
+      account_id: chatbot.account_id,
+      is_template: false
+    }).session(session);
+
+    // 🔥 Si NO existe flow → crear fallback
+    if (!flow) {
+
+      console.warn("⚠️ Chatbot sin flow (admin update), creando fallback");
+
+      flow = await createFallbackFlow({
+        chatbot_id: chatbot._id,
+        account_id: chatbot.account_id,
+        session,
+        name: chatbot.name
+      });
+
+    }
+    else if (name !== undefined) {
+
+      // 🔥 Si cambió el nombre → actualizar flow
+      flow.name = `Diálogo del chatbot - ${chatbot.name}`;
+      await flow.save({ session });
+
+    }
+
+    /* ---------- AUDIT ---------- */
 
     await auditService.log({
       req,
@@ -650,14 +695,27 @@ exports.updateAnyChatbot = async (req, res) => {
       after: chatbot.toObject()
     });
 
+    await session.commitTransaction();
+
     res.json({
       message: "Chatbot actualizado correctamente (admin)",
       chatbot
     });
 
   } catch (error) {
+
+    await session.abortTransaction();
+
     console.error("ADMIN UPDATE ERROR:", error);
-    res.status(500).json({ message: "Error al actualizar chatbot" });
+
+    res.status(500).json({
+      message: "Error al actualizar chatbot"
+    });
+
+  } finally {
+
+    session.endSession();
+
   }
 };
 
