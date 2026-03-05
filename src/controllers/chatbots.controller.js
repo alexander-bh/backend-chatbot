@@ -106,7 +106,7 @@ exports.createChatbot = async (req, res) => {
       console.log("ℹ️ No existen contactos plantilla, se crea solo el chatbot");
     } else {
       const contactsToInsert = templateContacts.map(template => ({
-        account_id,
+        account_id: req.user.account_id,
         chatbot_id: chatbotDoc._id,
         source: "system",
         name: template.name,
