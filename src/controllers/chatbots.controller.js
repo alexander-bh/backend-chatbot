@@ -574,6 +574,7 @@ exports.duplicateChatbotFull = async (req, res) => {
       const newNode = {
         account_id: req.user.account_id,
         flow_id: newFlow._id,
+        branch_id: node.branch_id ?? null,
         node_type: node.node_type,
         content: node.content,
         order: node.order ?? 0,
@@ -584,6 +585,8 @@ exports.duplicateChatbotFull = async (req, res) => {
         crm_field_key: node.crm_field_key ?? null,
         link_action: node.link_action ?? null,
         options: [],
+        next_node_id: null,
+        end_conversation: node.end_conversation ?? false,
         is_draft: true
       };
 
