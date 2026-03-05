@@ -277,17 +277,25 @@ exports.getChatbotById = async (req, res) => {
 // ACTUALIZAR CHATBOT
 // ═══════════════════════════════════════════════════════════
 exports.updateChatbot = async (req, res) => {
+
+  const session = await mongoose.startSession();
+
   try {
+
+    await session.startTransaction();
+
     if (!req.user?.account_id) {
+      await session.abortTransaction();
       return res.status(401).json({ message: "Usuario no autenticado" });
     }
 
     const chatbot = await Chatbot.findOne({
       _id: req.params.id,
       account_id: req.user.account_id
-    });
+    }).session(session);
 
     if (!chatbot) {
+      await session.abortTransaction();
       return res.status(404).json({ message: "Chatbot no encontrado" });
     }
 
@@ -307,21 +315,26 @@ exports.updateChatbot = async (req, res) => {
       avatar
     } = req.body;
 
-    // ─────────── ACTUALIZAR CAMPOS ───────────
+    /* ───────── ACTUALIZAR CAMPOS ───────── */
+
     if (name !== undefined) {
       if (!name.trim() || name.length > 60) {
+        await session.abortTransaction();
         return res.status(400).json({ message: "Nombre inválido" });
       }
       chatbot.name = name.trim();
     }
 
     if (welcome_message !== undefined) chatbot.welcome_message = welcome_message;
+
     if (welcome_delay !== undefined) {
       if (welcome_delay < 0 || welcome_delay > 10) {
+        await session.abortTransaction();
         return res.status(400).json({ message: "welcome_delay inválido" });
       }
       chatbot.welcome_delay = welcome_delay;
     }
+
     if (show_welcome_on_mobile !== undefined) chatbot.show_welcome_on_mobile = show_welcome_on_mobile;
     if (primary_color !== undefined) chatbot.primary_color = primary_color;
     if (secondary_color !== undefined) chatbot.secondary_color = secondary_color;
@@ -332,8 +345,10 @@ exports.updateChatbot = async (req, res) => {
     if (is_enabled !== undefined) chatbot.is_enabled = is_enabled;
     if (status !== undefined) chatbot.status = status;
 
-    // ─────────── AVATAR POR ARCHIVO (upload) ───────────
+    /* ───────── AVATAR ───────── */
+
     if (req.file) {
+
       const avatarUrl = req.file.path;
       chatbot.avatar = avatarUrl;
 
@@ -347,16 +362,15 @@ exports.updateChatbot = async (req, res) => {
         url: avatarUrl,
         created_at: new Date()
       });
+
     }
 
-    // ─────────── AVATAR POR URL (selección) ───────────
     if (avatar && !req.file) {
 
-      // 🔥 verificar si es avatar del sistema en BD
       const systemAvatar = await Avatar.findOne({
         url: avatar,
         type: "SYSTEM"
-      });
+      }).session(session);
 
       const isUploadedAvatar =
         chatbot.uploaded_avatars?.some(a => a.url === avatar);
@@ -365,6 +379,7 @@ exports.updateChatbot = async (req, res) => {
         try {
           new URL(avatar);
         } catch {
+          await session.abortTransaction();
           return res.status(400).json({
             message: "URL de avatar inválida"
           });
@@ -375,7 +390,9 @@ exports.updateChatbot = async (req, res) => {
     }
 
     if (req.body.allowed_domains !== undefined) {
+
       if (!Array.isArray(req.body.allowed_domains)) {
+        await session.abortTransaction();
         return res.status(400).json({
           message: "allowed_domains debe ser un arreglo"
         });
@@ -385,6 +402,7 @@ exports.updateChatbot = async (req, res) => {
         .map(d => d.trim().toLowerCase())
         .filter(Boolean);
     }
+
     await chatbot.save({ session });
 
     /* ───────── FLOW ───────── */
@@ -395,7 +413,7 @@ exports.updateChatbot = async (req, res) => {
       is_template: false
     }).session(session);
 
-    // 🔥 Si NO existe flow → crear fallback
+    // 🔥 Si no existe flow → crear fallback
     if (!flow) {
 
       console.warn("⚠️ Chatbot sin flow, creando fallback");
@@ -407,9 +425,9 @@ exports.updateChatbot = async (req, res) => {
         name: chatbot.name
       });
 
-    } else if (name !== undefined) {
+    }
+    else if (name !== undefined) {
 
-      // 🔥 Si cambió el nombre → actualizar flow
       flow.name = `Diálogo del chatbot - ${chatbot.name}`;
       await flow.save({ session });
 
@@ -422,9 +440,22 @@ exports.updateChatbot = async (req, res) => {
       chatbot
     });
 
-  } catch (error) {
+  }
+  catch (error) {
+
+    await session.abortTransaction();
+
     console.error("UPDATE CHATBOT ERROR:", error);
-    res.status(500).json({ message: "Error al actualizar chatbot" });
+
+    res.status(500).json({
+      message: "Error al actualizar chatbot"
+    });
+
+  }
+  finally {
+
+    session.endSession();
+
   }
 };
 
