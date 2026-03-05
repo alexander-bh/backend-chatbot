@@ -81,7 +81,7 @@ exports.cloneTemplateToFlow = async (chatbot_id, user_id, session,name) => {
     chatbot_id,
     is_template: false,
     base_flow_id: templateFlow._id,
-    status: "draft",
+    status: "published",
     lock: null,
     version: 1
   }], { session });
