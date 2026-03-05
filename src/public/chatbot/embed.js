@@ -221,7 +221,7 @@
                 chatButton.style.bottom = "20px";
                 chatButton.style.right = "20px";
 
-                chatWindow.style.bottom = "90px";
+                chatWindow.style.bottom = "20px";  // ← antes era "90px"
                 chatWindow.style.right = "20px";
                 break;
 
@@ -229,7 +229,7 @@
                 chatButton.style.bottom = "20px";
                 chatButton.style.left = "20px";
 
-                chatWindow.style.bottom = "90px";
+                chatWindow.style.bottom = "20px";  // ← antes era "90px"
                 chatWindow.style.left = "20px";
                 break;
 
@@ -524,11 +524,16 @@
     el.toggle.onclick = () => {
         isOpen = !isOpen;
         el.widget.classList.toggle("open", isOpen);
+        el.toggle.classList.toggle("active", isOpen);  // ← añade esta línea
         if (isOpen && !started) { started = true; start(); }
         localStorage.setItem(welcomeKey, "1");
     };
 
-    el.close.onclick = el.toggle.onclick;
+    el.close.onclick = () => {
+        isOpen = false;
+        el.widget.classList.remove("open");
+        el.toggle.classList.remove("active");  // ← FAB reaparece al cerrar
+    };
     el.restart.onclick = () => restartConversation();
 
 
