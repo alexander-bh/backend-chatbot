@@ -765,11 +765,16 @@ main::-webkit-scrollbar-thumb:hover {
         width: 56px;
         height: 56px;
         font-size: 24px;
-         z-index: 9998;
+        z-index: 9998;
     }
 
     .chat-fab.active {
-        display: none !important;
+        animation: none;
+        transform: scale(0);
+        opacity: 0;
+        pointer-events: none;
+        visibility: hidden;
+        /* ← añade esta línea */
     }
 
     /* ── Widget: pantalla completa real en móvil ── */
@@ -777,8 +782,8 @@ main::-webkit-scrollbar-thumb:hover {
         position: fixed !important;
         top: 0 !important;
         left: 0 !important;
-        right: 0 !important;
-        bottom: 0 !important;
+        right: 20px !important;
+        bottom: 20px !important;
         width: 100% !important;
         height: 100% !important;
         max-height: 100% !important;
@@ -790,7 +795,6 @@ main::-webkit-scrollbar-thumb:hover {
         /* CRÍTICO: cuando está cerrado, no bloquea el FAB */
         pointer-events: none;
         visibility: hidden;
-         z-index: 10000;
     }
 
     .chat-widget.open {
