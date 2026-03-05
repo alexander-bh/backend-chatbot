@@ -7,7 +7,6 @@ const LOCK_MINUTES = 15;
 exports.acquireFlowLock = async ({
   flow_id,
   user_id,
-  account_id,
   session
 }) => {
 
@@ -17,50 +16,33 @@ exports.acquireFlowLock = async ({
   if (!mongoose.Types.ObjectId.isValid(user_id))
     throw new Error("user_id inválido");
 
-  const flowDoc = await Flow.findById(flow_id).session(session);
+  const now = new Date();
+  const expires = new Date(now.getTime() + 15 * 60000);
+  const userObjectId = new mongoose.Types.ObjectId(user_id);
 
-  if (!flowDoc) {
+  const flow = await Flow.findById(flow_id).session(session);
+
+  if (!flow) {
     throw new Error("Flow no encontrado");
   }
 
-  const isTemplate = flowDoc.is_template === true;
+  const canLock =
+    !flow.lock ||
+    !flow.lock.lock_expires_at ||
+    flow.lock.lock_expires_at < now ||
+    flow.lock.locked_by?.toString() === userObjectId.toString();
 
-  // 🔥 SOLO validar account_id si NO es template
-  if (!isTemplate) {
-    if (!mongoose.Types.ObjectId.isValid(account_id))
-      throw new Error("account_id inválido");
-  }
-
-  const now = new Date();
-  const expires = new Date(now.getTime() + LOCK_MINUTES * 60000);
-
-  const userObjectId = new mongoose.Types.ObjectId(user_id);
-
-  const flow = await Flow.findOneAndUpdate(
-    {
-      _id: flow_id,
-      ...(isTemplate ? {} : { account_id }),
-      $or: [
-        { lock: null },
-        { "lock.lock_expires_at": { $lt: now } },
-        { "lock.locked_by": userObjectId }
-      ]
-    },
-    {
-      $set: {
-        lock: {
-          locked_by: userObjectId,
-          locked_at: now,
-          lock_expires_at: expires
-        }
-      }
-    },
-    { new: true, session }
-  );
-
-  if (!flow) {
+  if (!canLock) {
     throw new Error("Flow bloqueado por otro usuario");
   }
+
+  flow.lock = {
+    locked_by: userObjectId,
+    locked_at: now,
+    lock_expires_at: expires
+  };
+
+  await flow.save({ session });
 
   return flow;
 };

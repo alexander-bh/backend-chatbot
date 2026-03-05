@@ -109,13 +109,10 @@ const FlowNodeSchema = new Schema(
       enum: [
         "text",
         "question",
-        "lastname",
         "email",
         "phone",
         "number",
-        "text_input",
         "options",
-        "jump",
         "policy",
         "link"
       ],

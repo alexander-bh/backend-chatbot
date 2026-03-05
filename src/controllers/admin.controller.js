@@ -836,32 +836,19 @@ exports.getFlowsByChatbot = async (req, res) => {
 exports.getFlowDetail = async (req, res) => {
   try {
 
-    const account_id = req.user.account_id;
-    const isAdmin = req.user.role === "ADMIN";
-
-    let flow;
-
-    /* ================= ADMIN → FLOW GLOBAL ================= */
-
-    if (isAdmin) {
-
-      flow = await Flow.findOne({
-        is_template: true,
-        account_id: null,
-        chatbot_id: null
+    if (req.user.role !== "ADMIN") {
+      return res.json({
+        success: true,
+        flow: null,
+        nodes: []
       });
-
-    } else {
-
-      /* ================= CLIENTE → FLOW DE SU ACCOUNT ================= */
-      flow = await Flow.findOne({
-        account_id,
-        is_template: false
-      });
-
     }
-    
-    /* ================= SI NO EXISTE ================= */
+
+    const flow = await Flow.findOne({
+      is_template: true,
+      account_id: null,
+      chatbot_id: null
+    });
 
     if (!flow) {
       return res.json({
@@ -875,16 +862,17 @@ exports.getFlowDetail = async (req, res) => {
       flow_id: flow._id
     }).sort({ order: 1 });
 
-    return res.json({
+    res.json({
       success: true,
       flow,
       nodes
     });
 
-  } catch (err) {
-    return res.status(500).json({
-      success: false,
-      message: err.message
+  } catch (error) {
+    console.error("GET FLOW DETAIL ERROR:", error);
+
+    res.status(500).json({
+      message: "Error obteniendo flow"
     });
   }
 };

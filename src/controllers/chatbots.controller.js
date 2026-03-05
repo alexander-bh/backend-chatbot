@@ -21,7 +21,6 @@ exports.createChatbot = async (req, res) => {
 
   try {
     session.startTransaction();
-
     const {
       name,
       welcome_message,
@@ -91,7 +90,6 @@ exports.createChatbot = async (req, res) => {
       );
     } catch (err) {
       console.warn("⚠️ No hay flow global, creando flow básico");
-
       flow = await createFallbackFlow({
         chatbot_id: chatbotDoc._id,
         account_id: req.user.account_id,
@@ -99,7 +97,6 @@ exports.createChatbot = async (req, res) => {
         flowName
       });
     }
-
     const templateContacts = await Contact.find({
       is_template: true,
       is_deleted: { $ne: true }
