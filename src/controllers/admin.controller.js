@@ -375,38 +375,6 @@ exports.createChatbotForUser = async (req, res) => {
       });
     }
 
-    const templateContacts = await Contact.find({
-      is_template: true,
-      is_deleted: { $ne: true }
-    }).session(session);
-
-    if (!templateContacts.length) {
-      console.log("ℹ️ No existen contactos plantilla, se crea solo el chatbot");
-    } else {
-      const contactsToInsert = templateContacts.map(template => ({
-        account_id,
-        chatbot_id: chatbotDoc._id,
-        source: "system",
-        name: template.name,
-        email: template.email,
-        phone: template.phone,
-        company: template.company,
-        website: template.website,
-        city: template.city,
-        country: template.country,
-        address: template.address,
-        position: template.position,
-        internal_note: template.internal_note,
-        status: "new",
-        completed: false,
-        conversation: [],
-        variables: {},
-        is_deleted: false
-      }));
-
-      await Contact.insertMany(contactsToInsert, { session });
-    }
-
     await session.commitTransaction();
 
     return res.status(201).json({
