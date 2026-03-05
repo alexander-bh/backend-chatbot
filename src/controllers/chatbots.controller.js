@@ -585,7 +585,7 @@ exports.duplicateChatbotFull = async (req, res) => {
         crm_field_key: node.crm_field_key ?? null,
         link_action: node.link_action ?? null,
         options: [],
-        policy:[],
+        policy: [],
         next_node_id: null,
         end_conversation: node.end_conversation ?? false,
         is_draft: true
@@ -608,33 +608,32 @@ exports.duplicateChatbotFull = async (req, res) => {
 
       let needsUpdate = false;
 
-      /* parent_node_id
-      if (originalNode.parent_node_id) {
-        createdNode.parent_node_id =
-          nodeIdMap.get(String(originalNode.parent_node_id)) || null;
-        needsUpdate = true;
-      }*/
-
       // options
       if (originalNode.options?.length) {
         createdNode.options = originalNode.options.map(opt => ({
           label: opt.label,
-          value: opt.value,
+          value: opt.value ?? opt.label, // fallback por seguridad
+          order: opt.order ?? 0,
           next_node_id: opt.next_node_id
             ? nodeIdMap.get(String(opt.next_node_id))
-            : null
+            : null,
+          next_branch_id: opt.next_branch_id ?? null
         }));
+
         needsUpdate = true;
       }
 
       if (originalNode.policy?.length) {
-        createdNode.options = originalNode.options.map(opt => ({
-          label: opt.label,
-          value: opt.value,
-          next_node_id: opt.next_node_id
-            ? nodeIdMap.get(String(opt.next_node_id))
-            : null
+        createdNode.policy = originalNode.policy.map(pol => ({
+          label: pol.label,
+          value: pol.value,
+          order: pol.order ?? 0,
+          next_node_id: pol.next_node_id
+            ? nodeIdMap.get(String(pol.next_node_id))
+            : null,
+          next_branch_id: pol.next_branch_id ?? null
         }));
+
         needsUpdate = true;
       }
 
