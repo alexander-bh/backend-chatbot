@@ -385,26 +385,43 @@ exports.updateChatbot = async (req, res) => {
         .map(d => d.trim().toLowerCase())
         .filter(Boolean);
     }
+    await chatbot.save({ session });
 
-    await chatbot.save();
+    /* ───────── FLOW ───────── */
 
-    if (name !== undefined) {
-      const flow = await Flow.findOne({
+    let flow = await Flow.findOne({
+      chatbot_id: chatbot._id,
+      account_id: req.user.account_id,
+      is_template: false
+    }).session(session);
+
+    // 🔥 Si NO existe flow → crear fallback
+    if (!flow) {
+
+      console.warn("⚠️ Chatbot sin flow, creando fallback");
+
+      flow = await createFallbackFlow({
         chatbot_id: chatbot._id,
         account_id: req.user.account_id,
-        is_template: false
+        session,
+        name: chatbot.name
       });
 
-      if (flow) {
-        flow.name = `Flujo de chatbot: ${chatbot.name}`;
-        await flow.save();
-      }
+    } else if (name !== undefined) {
+
+      // 🔥 Si cambió el nombre → actualizar flow
+      flow.name = `Diálogo del chatbot - ${chatbot.name}`;
+      await flow.save({ session });
+
     }
+
+    await session.commitTransaction();
 
     res.json({
       message: "Chatbot actualizado correctamente",
       chatbot
     });
+
   } catch (error) {
     console.error("UPDATE CHATBOT ERROR:", error);
     res.status(500).json({ message: "Error al actualizar chatbot" });
