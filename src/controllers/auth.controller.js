@@ -5,6 +5,7 @@ const User = require("../models/User");
 const Token = require("../models/Token");
 const Chatbot = require("../models/Chatbot");
 const Account = require("../models/Account");
+const Contact = require("../models/Contact");
 const PasswordResetToken = require("../models/PasswordResetToken");
 const { generateToken } = require("../utils/jwt");
 const { sendResetPasswordEmail } = require("../services/email.service");
@@ -131,7 +132,7 @@ exports.registerFirst = async (req, res, next) => {
     try {
       flow = await cloneTemplateToFlow(
         chatbotDoc._id,
-        req.user._id,
+        user._id,
         session,
         flowName
       );
@@ -160,6 +161,51 @@ exports.registerFirst = async (req, res, next) => {
       token,
       expires_at: new Date(Date.now() + 86400000)
     }], { session });
+
+    // 🔎 verificar si la cuenta ya tiene contactos del sistema
+    const existingSystemContact = await Contact.findOne({
+      account_id: account._id,
+      source: "system",
+      is_deleted: { $ne: true }
+    }).session(session);
+
+    if (existingSystemContact) {
+
+      console.log("ℹ️ La cuenta ya tiene contactos del sistema");
+
+    } else {
+
+      const templateContacts = await Contact.find({
+        is_template: true,
+        is_deleted: { $ne: true }
+      }).session(session);
+
+      if (templateContacts.length) {
+
+        const contactsToInsert = templateContacts.map(template => ({
+          account_id: account._id,
+          chatbot_id: chatbotDoc._id,
+          source: "system",
+          name: template.name,
+          email: template.email,
+          phone: template.phone,
+          company: template.company,
+          website: template.website,
+          city: template.city,
+          country: template.country,
+          address: template.address,
+          position: template.position,
+          internal_note: template.internal_note,
+          status: "new",
+          completed: false,
+          variables: {},
+          is_deleted: false
+        }));
+
+        await Contact.insertMany(contactsToInsert, { session });
+
+      }
+    }
 
     await session.commitTransaction();
 

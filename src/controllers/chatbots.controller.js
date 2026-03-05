@@ -97,37 +97,51 @@ exports.createChatbot = async (req, res) => {
         name: flowName
       });
     }
-    const templateContacts = await Contact.find({
-      is_template: true,
+
+    //verificar si la cuenta ya tiene contactos del sistema
+    const existingSystemContact = await Contact.findOne({
+      account_id: req.user.account_id,
+      source: "system",
       is_deleted: { $ne: true }
     }).session(session);
 
-    if (!templateContacts.length) {
-      console.log("ℹ️ No existen contactos plantilla, se crea solo el chatbot");
+    if (existingSystemContact) {
+      console.log("ℹ️ La cuenta ya tiene contactos del sistema, no se duplican");
     } else {
-      const contactsToInsert = templateContacts.map(template => ({
-        account_id: req.user.account_id,
-        chatbot_id: chatbotDoc._id,
-        source: "system",
-        name: template.name,
-        email: template.email,
-        phone: template.phone,
-        company: template.company,
-        website: template.website,
-        city: template.city,
-        country: template.country,
-        address: template.address,
-        position: template.position,
-        internal_note: template.internal_note,
-        status: "new",
-        completed: false,
-        variables: {},
-        is_deleted: false
-      }));
 
-      await Contact.insertMany(contactsToInsert, { session });
+      const templateContacts = await Contact.find({
+        is_template: true,
+        is_deleted: { $ne: true }
+      }).session(session);
+
+      if (!templateContacts.length) {
+        console.log("ℹ️ No existen contactos plantilla");
+      } else {
+
+        const contactsToInsert = templateContacts.map(template => ({
+          account_id: req.user.account_id,
+          chatbot_id: chatbotDoc._id,
+          source: "system",
+          name: template.name,
+          email: template.email,
+          phone: template.phone,
+          company: template.company,
+          website: template.website,
+          city: template.city,
+          country: template.country,
+          address: template.address,
+          position: template.position,
+          internal_note: template.internal_note,
+          status: "new",
+          completed: false,
+          variables: {},
+          is_deleted: false
+        }));
+
+        await Contact.insertMany(contactsToInsert, { session });
+      }
     }
-
+    
     await session.commitTransaction();
 
     return res.status(201).json({
