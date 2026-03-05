@@ -585,6 +585,7 @@ exports.duplicateChatbotFull = async (req, res) => {
         crm_field_key: node.crm_field_key ?? null,
         link_action: node.link_action ?? null,
         options: [],
+        policy:[],
         next_node_id: null,
         end_conversation: node.end_conversation ?? false,
         is_draft: true
