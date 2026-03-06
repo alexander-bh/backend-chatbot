@@ -2,10 +2,10 @@
 const Chatbot = require("../models/Chatbot");
 const crypto = require("crypto");
 const { parseOrigin } = require("../utils/origin.utils");
-const { isLocalhost } = require("../utils/domainValidation");
+const { isLocalhost } = require("../utils/isLocalhost");
 const { domainMatches } = require("../utils/domainMatch");
-const { normalizeDomain } = require("../utils/domain.utils");
-const { domainExists } = require("../utils/domain.validator");
+const { normalizeDomain } = require("../utils/normalizeDomain");
+const { domainExists } = require("../validators/domain.validator");
 
 //UTILIDADES
 const escapeHTML = (str = "") =>

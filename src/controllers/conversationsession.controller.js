@@ -7,7 +7,7 @@ const Chatbot = require("../models/Chatbot");
 const upsertContactFromSession = require("../services/upsertContactFromSession.service");
 const renderNode = require("../utils/renderNode");
 const executeNodeNotification = require("../services/executeNodeNotification.service");
-const validateNodeInput = require("../utils/chat/chatbotValidationEngine");
+const validateNodeInput = require("../validators/validateNodeInput");
 
 const ALLOWED_MODES = ["preview", "production"];
 
