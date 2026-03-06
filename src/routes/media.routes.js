@@ -12,3 +12,5 @@ router.post(
   uploadMedia.single("media"),
   chatbotController.saveMediaNode
 );
+
+module.exports = router;
