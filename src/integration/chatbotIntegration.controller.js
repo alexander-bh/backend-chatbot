@@ -4,7 +4,7 @@ const crypto = require("crypto");
 const { parseOrigin } = require("../utils/origin.utils");
 const { isLocalhost } = require("../utils/domainValidation");
 const { domainMatches } = require("../utils/domainMatch");
-const { normalizeDomain } = require("../utils/normalizeDomain");
+const { normalizeDomain } = require("../utils/domain.utils");
 const { domainExists } = require("../utils/domain.validator");
 
 //UTILIDADES
