@@ -5,7 +5,7 @@ const { parseOrigin } = require("../utils/origin.utils");
 const { isLocalhost } = require("../utils/isLocalhost");
 const { domainMatches } = require("../utils/domainMatch");
 const { normalizeDomain } = require("../utils/normalizeDomain");
-const { domainExists } = require("../validators/domain.validator");
+const { domainExists } = require("../utils/domain.validator");
 
 //UTILIDADES
 const escapeHTML = (str = "") =>
