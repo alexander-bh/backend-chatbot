@@ -41,7 +41,6 @@ const ContactSchema = new mongoose.Schema({
 
   ip_address: {
     type: String,
-    index: true
   },
 
   // 👤 Datos personales
@@ -79,13 +78,11 @@ const ContactSchema = new mongoose.Schema({
     type: String,
     enum: ["new", "contacted", "qualified", "lost"],
     default: "new",
-    index: true
   },
 
   is_deleted: {
     type: Boolean,
     default: false,
-    index: true
   },
 
   is_template: {
