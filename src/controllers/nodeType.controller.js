@@ -5,6 +5,7 @@ const NodeType = require("../models/NodeType");
 ========================================= */
 exports.createNodeType = async (req, res) => {
   try {
+
     const {
       key,
       label,
@@ -16,23 +17,33 @@ exports.createNodeType = async (req, res) => {
     } = req.body;
 
     const nodeType = await NodeType.create({
+
       account_id: null,
       key,
       label,
       mode: mode ?? "basic",
       answerUser: answerUser ?? false,
       accordions: accordions ?? [],
+
       defaults: {
+
         content: defaults?.content ?? "",
         typing_time: defaults?.typing_time ?? 2,
-        validation: defaults?.validation,
+        validation: defaults?.validation ?? null,
         options: defaults?.options ?? [],
         link_actions: defaults?.link_actions ?? [],
         variable_key: defaults?.variable_key ?? null,
-        media: defaults?.media ?? null
+
+        /* FIX */
+        media: Array.isArray(defaults?.media)
+          ? defaults.media
+          : []
+
       },
+
       is_system: true,
       is_active: is_active ?? true
+
     });
 
     res.status(201).json({
@@ -41,11 +52,14 @@ exports.createNodeType = async (req, res) => {
     });
 
   } catch (error) {
+
     console.error("createNodeType error:", error);
+
     res.status(500).json({
       success: false,
       message: "Error interno del servidor"
     });
+
   }
 };
 
