@@ -82,7 +82,8 @@ const NodeTypeSchema = new Schema(
         "options",
         "policyOptions",
         "contactOptions",
-        "media"
+        "media",
+        "mediaConfig"
       ],
       default: []
     },
@@ -96,8 +97,8 @@ const NodeTypeSchema = new Schema(
       link_actions: { type: Array, default: [] },
       variable_key: { type: String, default: null },
       media: {
-        type: Object,
-        default: null
+        type: Array,
+        default: []
       }
     },
     // control de sistema
