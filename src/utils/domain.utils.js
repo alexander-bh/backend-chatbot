@@ -14,8 +14,7 @@ function normalizeDomain(input = "") {
 
     let hostname = url.hostname.toLowerCase();
     hostname = hostname.replace(/^www\./, "");
-
-    // ✅ PERMITIR LOCALHOST EXPLÍCITAMENTE
+    
     if (
       hostname === "localhost" ||
       hostname === "127.0.0.1" ||

@@ -1,4 +1,4 @@
-// utils/domainSignature
+// utils/domainSignature Esta ya no lo utlizo
 const crypto = require("crypto");
 
 exports.signDomain = (domain, chatbotId, token, window) => {

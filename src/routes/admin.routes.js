@@ -56,12 +56,7 @@ router.get("/chatbots/:id", role("ADMIN"), adminController.getChatbotDetail);
 router.delete("/chatbots/:id", role("ADMIN"), adminController.deleteAnyChatbot);
 
 // Editar → solo ADMIN
-router.put(
-  "/chatbots/:id",
-  role("ADMIN"),
-  upload.single("avatar"),
-  adminController.updateAnyChatbot
-);
+router.put("/chatbots/:id", role("ADMIN"), upload.single("avatar"),adminController.updateAnyChatbot);
 
 
 /* =========================
@@ -73,35 +68,12 @@ router.delete("/chatbots/:id/deleteAvatar", role("ADMIN"), adminController.delet
 router.patch("/chatbots/:id/toggle", role("ADMIN"), adminController.toggleChatbot);
 router.post("/:publicId/token/regenerate", role("ADMIN"), adminController.regenerateInstallToken);
 
-
-/* =========================
-   FLOWS
-========================= */
-
-router.get("/chatbots/:chatbotId/flows", role("ADMIN"), adminController.getFlowsByChatbot);
-
-
-/* =========================
-   SOPORTE
-========================= */
-
-router.post("/impersonate/:id", role("ADMIN"), adminController.impersonateUser);
-
-
 /* =========================
    AUDITORÍAS
 ========================= */
 
 router.get("/audit", role("ADMIN"), adminController.getAuditLogs);
 router.post("/register", role("ADMIN"), adminController.createUserByAdmin);
-
-
-/* =========================
-   GLOBAL FLOW ADMIN
-========================= */
-
-router.post("/newflows", role("ADMIN"), adminController.createOrReplaceGlobalFlow);
-
 
 /* =========================
    AVATARES GLOBALES
