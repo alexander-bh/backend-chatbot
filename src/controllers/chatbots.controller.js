@@ -7,7 +7,7 @@ const Avatar = require("../models/Avatar");
 const {
   getBaseName,
   generateCopyName
-} = require("../utils/chatbotName.helper");
+} = require("../helper/chatbotName");
 const { cloneTemplateToFlow } = require("../services/flowNode.service");
 const { createFallbackFlow } = require("../services/flowNode.service");
 const formatDateAMPM = require("../utils/formatDate");
