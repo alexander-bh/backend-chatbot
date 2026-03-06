@@ -1,7 +1,7 @@
 exports.saveMediaNode = async (req, res) => {
   try {
 
-    const { title, description, mediaUrl, type } = req.body;
+    const {mediaUrl, type } = req.body;
 
     let url = mediaUrl;
     let publicId = null;
@@ -16,8 +16,6 @@ exports.saveMediaNode = async (req, res) => {
       type: type || "image",
       url,
       public_id: publicId,
-      title: title || "",
-      description: description || ""
     };
 
     res.json({
