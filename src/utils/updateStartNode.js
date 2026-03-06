@@ -1,3 +1,4 @@
+// Esta funcion ya no se utiliza 
 const FlowNode = require("../models/FlowNode");
 const Flow = require("../models/Flow");
 

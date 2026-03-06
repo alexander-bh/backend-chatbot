@@ -1,4 +1,4 @@
-// utils/validateInput.js
+// utils/validateInput.js Esta archivo no se usa
 module.exports = function validateInput(value, rules = []) {
   for (const rule of rules) {
     switch (rule.type) {

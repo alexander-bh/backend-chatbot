@@ -1,5 +1,4 @@
 const AuditLog = require("../models/AuditLog");
-
 exports.log = async ({
   req,
   actorId,

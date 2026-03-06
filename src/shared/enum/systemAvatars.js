@@ -1,3 +1,4 @@
+//Este archivo ya no se usa 
 module.exports = [
   {
     id: "male",

@@ -1,4 +1,4 @@
-// utils/isValidDomain.js
+// utils/isValidDomain.js Este archivo ya no se usa 
 module.exports = function isValidDomain(domain) {
   if (!domain) return false;
 

@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-
 /**
  * Ejecuta una función dentro de una transacción Mongo
  * con retry automático para errores transitorios.
@@ -26,7 +25,6 @@ async function withTransactionRetry(fn, retries = 3) {
         await session.abortTransaction();
       } catch (_) {}
 
-      // 🔁 Mongo espera retry en este caso
       if (
         err?.errorLabels?.includes("TransientTransactionError") &&
         attempt < retries

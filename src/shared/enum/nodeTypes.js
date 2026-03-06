@@ -1,3 +1,4 @@
+//Este archivo ya no lo uso 
 const NODE_TYPES = [
   "text",
   "question",

@@ -231,7 +231,7 @@ exports.registerFirst = async (req, res, next) => {
   }
 };
 
-// Registro de usuario (por subdominio)
+// Registro de usuario (por subdominio) esta funcion ya no se implementa 
 exports.register = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -469,8 +469,13 @@ exports.resetPassword = async (req, res) => {
 // Cerrar sesion
 exports.logout = async (req, res) => {
   try {
-    await Token.deleteMany({ user_id: req.user.id });
+
+    const token = req.headers.authorization?.split(" ")[1];
+
+    await Token.deleteOne({ token });
+
     res.json({ message: "Sesión cerrada correctamente" });
+
   } catch (error) {
     console.error("LOGOUT ERROR:", error);
     res.status(500).json({ message: "Error al cerrar sesión" });

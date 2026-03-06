@@ -1,3 +1,4 @@
+// Este archivo no lo utlizo
 module.exports = (link) => {
   if (!link) return null;
 

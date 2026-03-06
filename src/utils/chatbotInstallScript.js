@@ -1,4 +1,4 @@
-// utils/chatbotInstallScript.js
+// utils/chatbotInstallScript.js Esta ya no la uso 
 module.exports = function getChatbotInstallScript({
   domain,
   publicId,
