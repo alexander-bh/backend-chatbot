@@ -42,6 +42,17 @@ const ContactSchema = new mongoose.Schema({
     index: true
   },
 
+  device: {
+    type: String,
+    enum: ["desktop", "mobile", "tablet", "unknown"],
+    default: "unknown"
+  },
+
+  ip_address: {
+    type: String,
+    index: true
+  },
+
   // 👤 Datos personales
   name: String,
   last_name: String,
@@ -54,13 +65,12 @@ const ContactSchema = new mongoose.Schema({
   company: String,
   website: String,
   company_phone: String,
-  company_extension: String,
   position: String,
-
   city: String,
   country: String,
+  state: String,
+  postal_code: String,
   address: String,
-
   observations: String,
 
   data_processing_consent: {
@@ -95,7 +105,19 @@ const ContactSchema = new mongoose.Schema({
   completed: {
     type: Boolean,
     default: false
-  }
+  },
+
+  completed_goal: {
+    type: Boolean,
+    default: false
+  },
+
+  lead_score: {
+    type: Number,
+    default: 0
+  },
+
+  duration_seconds: Number
 
 }, { timestamps: true });
 
