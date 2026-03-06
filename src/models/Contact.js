@@ -1,6 +1,10 @@
 // models/Contact.js
 const mongoose = require("mongoose");
 
+/* =========================
+   CONTACT SCHEMA
+========================= */
+
 const ContactSchema = new mongoose.Schema({
 
   account_id: {
@@ -9,28 +13,33 @@ const ContactSchema = new mongoose.Schema({
     required: function () {
       return !this.is_template;
     },
+    index: true
   },
 
   chatbot_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Chatbot",
+    index: true
   },
 
   session_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "ConversationSession",
     sparse: true,
+    index: true
   },
 
   source: {
     type: String,
     enum: ["chatbot", "manual", "system"],
     default: "chatbot",
+    index: true
   },
 
   origin_url: {
     type: String,
     default: null,
+    index: true
   },
 
   device: {
@@ -41,6 +50,7 @@ const ContactSchema = new mongoose.Schema({
 
   ip_address: {
     type: String,
+    index: true
   },
 
   // 👤 Datos personales
@@ -78,11 +88,13 @@ const ContactSchema = new mongoose.Schema({
     type: String,
     enum: ["new", "contacted", "qualified", "lost"],
     default: "new",
+    index: true
   },
 
   is_deleted: {
     type: Boolean,
     default: false,
+    index: true
   },
 
   is_template: {

@@ -845,6 +845,96 @@ exports.regenerateInstallToken = async (req, res) => {
 };
 
 /* ─────────────────────────────────────
+   FLOWS
+───────────────────────────────────── */
+exports.getFlowsByChatbot = async (req, res) => {
+  try {
+    const flows = await Flow.find({
+      chatbot_id: req.params.chatbotId
+    });
+
+    res.json(flows);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+exports.getFlowDetail = async (req, res) => {
+  try {
+
+    if (req.user.role !== "ADMIN") {
+      return res.json({
+        success: true,
+        flow: null,
+        nodes: []
+      });
+    }
+
+    const flow = await Flow.findOne({
+      is_template: true,
+      account_id: null,
+      chatbot_id: null
+    });
+
+    if (!flow) {
+      return res.json({
+        success: true,
+        flow: null,
+        nodes: []
+      });
+    }
+
+    const nodes = await FlowNode.find({
+      flow_id: flow._id
+    }).sort({ order: 1 });
+
+    res.json({
+      success: true,
+      flow,
+      nodes
+    });
+
+  } catch (error) {
+    console.error("GET FLOW DETAIL ERROR:", error);
+
+    res.status(500).json({
+      message: "Error obteniendo flow"
+    });
+  }
+};
+
+/* ─────────────────────────────────────
+   IMPERSONATE (SOPORTE)
+───────────────────────────────────── */
+exports.impersonateUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+
+    await auditService.log({
+      req,
+      targetType: "USER",
+      targetId: user._id,
+      action: "IMPERSONATE",
+      before: null,
+      after: null
+    });
+
+    res.json({
+      message: "Impersonación permitida",
+      impersonate: {
+        user_id: user._id,
+        account_id: user.account_id
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+/* ─────────────────────────────────────
    AUDITORIAS
 ───────────────────────────────────── */
 exports.getAuditLogs = async (req, res) => {
@@ -1011,6 +1101,86 @@ exports.createUserByAdmin = async (req, res) => {
   }
 };
 
+/* ──────────────────────────────────
+  CREATE FLOW
+───────────────────────────────────── */
+exports.createOrReplaceGlobalFlow = async (req, res) => {
+  const session = await mongoose.startSession();
+
+  try {
+    session.startTransaction();
+
+    const { name = "Diálogo Global por Defecto" } = req.body;
+
+    /* ───────── VALIDACIÓN ───────── */
+
+    if (req.user.role !== "ADMIN") {
+      return res.status(403).json({ message: "Solo ADMIN" });
+    }
+
+    /* ───────── BUSCAR FLOW GLOBAL EXISTENTE ───────── */
+
+    const existing = await Flow.findOne({
+      is_template: true
+    }).session(session);
+
+    if (existing) {
+      // 🧹 eliminar nodos
+      await FlowNode.deleteMany({
+        flow_id: existing._id
+      }).session(session);
+
+      // 🧹 eliminar flow
+      await Flow.deleteOne({
+        _id: existing._id
+      }).session(session);
+    }
+
+    /* ───────── CREAR FLOW GLOBAL ───────── */
+
+    const [flow] = await Flow.create([{
+      account_id: null,
+      chatbot_id: null,
+      name,
+      is_template: true,
+      status: "draft",
+      version: 1
+    }], { session });
+
+    const [startNode] = await FlowNode.create([{
+      account_id: null,
+      flow_id: flow._id,
+      order: 0,
+      node_type: "text",
+      content: "Hola 👋 ¿en qué puedo ayudarte?",
+      typing_time: 2
+    }], { session });
+
+    flow.start_node_id = startNode._id;
+    flow.status = "published";
+    flow.published_at = new Date();
+
+    await flow.save({ session });
+
+    await session.commitTransaction();
+
+    res.status(201).json({
+      message: existing
+        ? "Flow global reemplazado"
+        : "Flow global creado",
+      flow_id: flow._id
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    console.error("GLOBAL FLOW ERROR:", error);
+    res.status(500).json({
+      message: error.message
+    });
+  } finally {
+    session.endSession();
+  }
+};
 
 /* ─────────────────────────────────────
    GLOBAL FLOW
@@ -1206,7 +1376,6 @@ exports.setDefaultAvatar = async (req, res) => {
     session.endSession();
   }
 };
-
 
 //contactos por predeterminado 
 exports.createDefaultContactTemplate = async (req, res) => {
