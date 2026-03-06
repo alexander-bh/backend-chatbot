@@ -28,9 +28,10 @@ exports.createNodeType = async (req, res) => {
         validation: defaults?.validation,
         options: defaults?.options ?? [],
         link_actions: defaults?.link_actions ?? [],
-        variable_key: defaults?.variable_key ?? null
+        variable_key: defaults?.variable_key ?? null,
+        media: defaults?.media ?? null
       },
-      is_system:true,
+      is_system: true,
       is_active: is_active ?? true
     });
 

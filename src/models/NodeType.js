@@ -81,7 +81,8 @@ const NodeTypeSchema = new Schema(
         "saveField",
         "options",
         "policyOptions",
-        "contactOptions"
+        "contactOptions",
+        "media"
       ],
       default: []
     },
@@ -93,9 +94,12 @@ const NodeTypeSchema = new Schema(
       validation: { type: ValidationSchema, default: undefined },
       options: { type: Array, default: [] },
       link_actions: { type: Array, default: [] },
-      variable_key: { type: String, default: null }
+      variable_key: { type: String, default: null },
+      media: {
+        type: Object,
+        default: null
+      }
     },
-
     // control de sistema
     is_system: {
       type: Boolean,

@@ -8,6 +8,7 @@ const { validateFlow } = require("../validators/flow.validator");
 const { ensureFlowExists } = require("../services/flowNode.service");
 const withTransactionRetry = require("../utils/withTransactionRetry");
 const flowNodeService = require("../services/flowNode.service");
+const { deleteFromCloudinary } = require("../services/cloudinary.service");
 
 //Obtener flow por ID
 exports.getFlowById = async (req, res) => {
@@ -314,6 +315,37 @@ exports.saveFlow = async (req, res) => {
         }
       }
 
+      const oldNodes = await FlowNode.find(
+        {
+          flow_id: flow._id,
+          ...(flow.is_template ? {} : { account_id })
+        },
+        { media: 1 },
+        { session }
+      );
+
+      /* ===== ELIMINAR MEDIA DE CLOUDINARY ===== */
+
+      for (const node of oldNodes) {
+
+        if (node.media && Array.isArray(node.media)) {
+
+          for (const media of node.media) {
+
+            if (media.public_id) {
+              try {
+                await deleteFromCloudinary(media.public_id);
+              } catch (err) {
+                console.log("Cloudinary delete error:", err.message);
+              }
+            }
+
+          }
+
+        }
+
+      }
+
       /* ===== BORRAR NODOS ANTERIORES ===== */
 
       await FlowNode.deleteMany(
@@ -429,13 +461,25 @@ exports.saveFlow = async (req, res) => {
             base.validation = node.validation ?? undefined;
             base.crm_field_key = node.crm_field_key ?? undefined;
           }
-          
+
           /* ===== LINK ===== */
 
           if (node.node_type === "link") {
             base.link_actions = node.link_actions ?? undefined;
           }
 
+          /* ===== MEDIA ===== */
+
+          if (node.node_type === "media") {
+
+            base.media = (node.media ?? []).map(m => ({
+              type: m.type,
+              url: m.url,
+              public_id: m.public_id ?? null,
+              title: m.title ?? "",
+              description: m.description ?? ""
+            }));
+          }
           docs.push(base);
         });
       }

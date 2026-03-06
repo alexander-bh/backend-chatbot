@@ -5,12 +5,6 @@ const auth = require("../middlewares/auth.middleware");
 const role = require("../middlewares/role.middleware");
 const conditionalUpload = require("../middlewares/conditionalUpload.middleware");
 
-console.log({
-  auth: typeof auth,
-  role: typeof role,
-  conditionalUpload: typeof conditionalUpload
-});
-
 //crear chatbot
 router.post("/", auth, role("ADMIN", "CLIENT"), chatbotController.createChatbot);
 //listar chatbots

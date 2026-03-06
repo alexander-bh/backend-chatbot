@@ -34,13 +34,69 @@ module.exports = function renderNode(node, session_id) {
     payload.link_actions = node.link_actions || [];
   }
 
+  module.exports = function renderNode(node, session_id) {
+
+    const payload = {
+      session_id,
+      node_id: node._id,
+      type: node.node_type,
+      content: node.content || null,
+      typing_time: node.typing_time || 0,
+      validation: node.validation || null,
+      completed: false
+    };
+
+    /* ===== OPTIONS ===== */
+    if (node.node_type === "options" && Array.isArray(node.options)) {
+      payload.options = node.options.map((opt, index) => ({
+        index,
+        label: opt.label,
+        value: opt.value ?? opt.label
+      }));
+    }
+
+    /* ===== POLICY ===== */
+    if (node.node_type === "policy" && Array.isArray(node.policy)) {
+      payload.policy = node.policy.map((opt, index) => ({
+        index,
+        label: opt.label,
+        value: opt.value ?? opt.label
+      }));
+    }
+
+    /* ===== LINK ===== */
+    if (node.node_type === "link") {
+      payload.link_actions = node.link_actions || [];
+    }
+
+    /* ===== MEDIA ===== */
+    if (node.node_type === "media" && Array.isArray(node.media)) {
+      payload.media = node.media.map(m => ({
+        type: m.type,
+        url: m.url,
+        title: m.title || null,
+        description: m.description || null
+      }));
+    }
+
+    /* ===== INPUT TYPES ===== */
+    if ([
+      "question",
+      "email",
+      "phone",
+      "number",
+    ].includes(node.node_type)) {
+      payload.input_type = node.node_type;
+    }
+
+    return payload;
+  };
   /* ===== INPUT TYPES ===== */
   if ([
     "question",
     "email",
     "phone",
     "number",
-    "text_input"
   ].includes(node.node_type)) {
     payload.input_type = node.node_type;
   }

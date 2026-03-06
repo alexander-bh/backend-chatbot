@@ -30,7 +30,6 @@
         "email",
         "phone",
         "number",
-        "text_input"
     ];
 
     const SELECTABLE_TYPES = [
@@ -150,6 +149,83 @@
 
         bubble.appendChild(container);
     }
+
+    function renderMediaCarousel(mediaList, bubbleElement) {
+
+        if (!Array.isArray(mediaList) || !bubbleElement) return;
+
+        const carousel = document.createElement("div");
+        carousel.className = "media-carousel";
+
+        mediaList.forEach(media => {
+
+            const item = document.createElement("div");
+            item.className = "media-item";
+
+            if (media.type === "image") {
+
+                const img = document.createElement("img");
+                img.src = media.url;
+                img.loading = "lazy";
+                img.style.cursor = "pointer";
+                img.onclick = () => openImageViewer(media.url);
+                item.appendChild(img);
+            }
+
+            if (media.type === "video") {
+
+                const video = document.createElement("video");
+                video.src = media.url;
+                video.controls = true;
+                video.playsInline = true;
+
+                item.appendChild(video);
+            }
+
+            if (media.title) {
+                const title = document.createElement("div");
+                title.className = "media-title";
+                title.textContent = media.title;
+                item.appendChild(title);
+            }
+
+            carousel.appendChild(item);
+        });
+
+        bubbleElement.appendChild(carousel);
+    }
+
+    const imageViewer = document.createElement("div");
+    imageViewer.className = "chat-image-viewer";
+
+    imageViewer.innerHTML = `
+    <span class="viewer-close">✕</span>
+    <img class="viewer-img" />`;
+
+    document.body.appendChild(imageViewer);
+
+    const viewerImg = imageViewer.querySelector(".viewer-img");
+    const viewerClose = imageViewer.querySelector(".viewer-close");
+
+    function openImageViewer(url) {
+        viewerImg.src = url;
+        imageViewer.classList.add("open");
+    }
+
+    function closeImageViewer() {
+        imageViewer.classList.remove("open");
+        viewerImg.src = "";
+    }
+
+    viewerClose.onclick = closeImageViewer;
+    document.addEventListener("keydown", e => {
+        if (e.key === "Escape") {
+            closeImageViewer();
+        }
+    });
+    imageViewer.onclick = e => {
+        if (e.target === imageViewer) closeImageViewer();
+    };
 
     function message(from, text, error = false) {
         const m = document.createElement("div");
@@ -295,7 +371,8 @@
     }
 
     function expectsTextInput(node) {
-        return TEXT_INPUT_TYPES.includes(node.type);
+        const type = node.input_type || node.type;
+        return TEXT_INPUT_TYPES.includes(type);
     }
 
     function enableInput() {
@@ -324,7 +401,8 @@
         }
 
         if (type === "number") {
-            el.input.type = "number";
+            el.input.type = "text";
+            el.input.inputMode = "numeric";
         }
     }
 
@@ -334,14 +412,21 @@
     async function process(node, depth = 0) {
         if (!node || depth > 20) return;
 
-        const nodeType = node.type;
+        const nodeType = node.input_type || node.type;
 
         /* =========================
            ERRORES DE VALIDACIÓN
         ========================= */
         if (node.validation_error) {
+
             message("bot", node.message, true);
+
+            const inputType = node.input_type || node.type;
+
+            configureInputForNode(inputType);
+
             enableInput();
+
             return;
         }
 
@@ -375,10 +460,19 @@
         /* =========================
            RENDER MENSAJE BOT
         ========================= */
-        let bubbleElement = null;
+        let bubbleElement;
 
         if (node.content) {
             bubbleElement = renderBotMessage(node.content);
+        } else {
+            bubbleElement = renderBotMessage("");
+        }
+
+        /* =========================
+           MEDIA NODE
+        ========================= */
+        if (node.type === "media" && Array.isArray(node.media)) {
+            renderMediaCarousel(node.media, bubbleElement);
         }
 
         /* =========================

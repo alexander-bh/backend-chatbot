@@ -2,6 +2,32 @@ const { Schema, model } = require("mongoose");
 
 /* ================= SUBSCHEMAS ================= */
 
+const MediaSchema = new Schema(
+  {
+    type: {
+      type: String,
+      enum: ["image", "video"],
+      required: true
+    },
+
+    url: {
+      type: String,
+      required: true
+    },
+
+    title: {
+      type: String,
+      default: ""
+    },
+
+    description: {
+      type: String,
+      default: ""
+    }
+  },
+  { _id: false }
+);
+
 const OptionBaseSchema = new Schema(
   {
     label: { type: String, required: true },
@@ -114,7 +140,8 @@ const FlowNodeSchema = new Schema(
         "number",
         "options",
         "policy",
-        "link"
+        "link",
+        "media"
       ],
       required: true
     },
@@ -130,6 +157,11 @@ const FlowNodeSchema = new Schema(
 
     policy: {
       type: [OptionBaseSchema],
+      default: []
+    },
+
+    media: {
+      type: [MediaSchema],
       default: []
     },
 
