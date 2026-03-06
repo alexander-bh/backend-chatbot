@@ -41,7 +41,7 @@ module.exports = function validateNodeInput(node, input) {
                 break;
 
             case "decimal":
-                if (!/^-?\d+\.\d+$/.test(value))
+                if (!/^-?\d+(\.\d+)?$/.test(value))
                     errors.push(rule.message);
                 break;
 
@@ -51,15 +51,41 @@ module.exports = function validateNodeInput(node, input) {
                 break;
 
             case "MinMax": {
-                const len = value.length;
-                if (
-                    (rule.min !== undefined && len < rule.min) ||
-                    (rule.max !== undefined && len > rule.max)
-                ) {
-                    errors.push(rule.message);
+
+                /* ---------- QUESTION: contar palabras ---------- */
+
+                if (node.node_type === "question") {
+
+                    const words = value.split(/\s+/).filter(Boolean).length;
+
+                    if (
+                        (rule.min !== undefined && words < rule.min) ||
+                        (rule.max !== undefined && words > rule.max)
+                    ) {
+                        errors.push(rule.message);
+                    }
+
                 }
+
+                /* ---------- NUMBER: validar rango ---------- */
+
+                if (node.node_type === "number") {
+
+                    const num = Number(value);
+
+                    if (
+                        isNaN(num) ||
+                        (rule.min !== undefined && num < rule.min) ||
+                        (rule.max !== undefined && num > rule.max)
+                    ) {
+                        errors.push(rule.message);
+                    }
+
+                }
+
                 break;
             }
+
         }
 
         if (errors.length) break;

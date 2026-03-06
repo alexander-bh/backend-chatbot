@@ -152,7 +152,6 @@ exports.nextStep = async (req, res) => {
       "email",
       "phone",
       "number",
-      "text_input"
     ];
 
     /* ================= FIRST RENDER (NO INPUT) ================= */

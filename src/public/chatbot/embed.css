@@ -594,6 +594,71 @@ main {
     background: #6366f120;
 }
 
+.media-carousel {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 6px 0;
+    scroll-snap-type: x mandatory;
+}
+
+
+.media-item {
+    flex: 0 0 auto;
+    width: 160px;
+    scroll-snap-align: start;
+}
+
+.media-item img,
+.media-item video {
+    width: 100%;
+    border-radius: 10px;
+}
+
+.media-title {
+    font-size: 12px;
+    margin-top: 4px;
+    text-align: center;
+}
+
+/* =========================
+   IMAGE VIEWER
+========================= */
+
+.chat-image-viewer {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, .85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999999;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity .25s ease;
+}
+
+.chat-image-viewer.open {
+    opacity: 1;
+    visibility: visible;
+}
+
+.chat-image-viewer img {
+    max-width: 90%;
+    max-height: 90%;
+    border-radius: 10px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, .5);
+}
+
+.viewer-close {
+    position: absolute;
+    top: 20px;
+    right: 30px;
+    font-size: 28px;
+    color: white;
+    cursor: pointer;
+}
+
 .bubble.options {
     display: flex;
     flex-direction: column;
