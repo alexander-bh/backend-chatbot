@@ -2,8 +2,6 @@
 const mongoose = require("mongoose");
 const Flow = require("../models/Flow");
 
-const LOCK_MINUTES = 15;
-
 exports.acquireFlowLock = async ({
   flow_id,
   user_id,
