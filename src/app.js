@@ -30,8 +30,6 @@ app.use("/api/admin", require("./routes/admin.routes.js"));
 app.use("/api/chatbots", require("./routes/chatbots.routes.js"));
 app.use("/api/flows", require("./routes/flows.routes.js"));
 app.use("/api/node-types", require("./routes/nodeType.routes"));
-app.use("/api/media", require("./routes/media.routes.js"));
-
 
 app.use("/api/crm-fields", require("./routes/crmfields.routes"));
 app.use("/api/validation-rule",require("./routes/validationRule.routes.js"))

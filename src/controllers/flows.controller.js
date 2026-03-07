@@ -142,26 +142,51 @@ exports.saveFlow = async (req, res) => {
         { session }
       );
 
-      /* ===== ELIMINAR MEDIA DE CLOUDINARY ===== */
+      // Mapa de media que se conservará
+      const newMediaKeys = new Set();
 
-      for (const node of oldNodes) {
-
-        if (node.media && Array.isArray(node.media)) {
-
-          for (const media of node.media) {
-
-            if (media.public_id) {
-              try {
-                await deleteFromCloudinary(media.public_id);
-              } catch (err) {
-                console.log("Cloudinary delete error:", err.message);
-              }
-            }
-
+      // Recorrer nodos y agregar las media existentes que se mantienen
+      allNodes.forEach(node => {
+        if (node.node_type !== "media") return;
+        (node.media ?? []).forEach((m, i) => {
+          // Si es media existente (no se sube) → conservar
+          if (m.source !== "upload" && m.public_id) {
+            newMediaKeys.add(m.public_id);
           }
+        });
+      });
 
+      // Recorremos nodos antiguos
+      for (const oldNode of oldNodes) {
+        if (!oldNode.media || !Array.isArray(oldNode.media)) continue;
+
+        for (const m of oldNode.media) {
+          if (!m.public_id) continue;
+
+          // Si el media antiguo NO está en la lista de la nueva flow → eliminar
+          if (!newMediaKeys.has(m.public_id)) {
+            try {
+              await deleteFromCloudinary(m.public_id);
+            } catch (err) {
+              console.log("Cloudinary delete error:", err.message);
+            }
+          }
         }
+      }
 
+      /* ===== ELIMINAR MEDIA DE CLOUDINARY ===== */
+      const uploadedFilesMap = {};
+      if (req.files && req.files.length) {
+        for (const file of req.files) {
+          // El frontend manda file_key = media_<nodeId>_<i>
+          uploadedFilesMap[file.fieldname] = {
+            url: file.path,       // URL en Cloudinary
+            public_id: file.filename,
+            type: file.mimetype.startsWith("video/") ? "video" : "image",
+            title: file.originalname,
+            description: "",
+          };
+        }
       }
 
       /* ===== BORRAR NODOS ANTERIORES ===== */
@@ -289,14 +314,16 @@ exports.saveFlow = async (req, res) => {
           /* ===== MEDIA ===== */
 
           if (node.node_type === "media") {
-
-            base.media = (node.media ?? []).map(m => ({
-              type: m.type,
-              url: m.url,
-              public_id: m.public_id ?? null,
-              title: m.title ?? "",
-              description: m.description ?? ""
-            }));
+            base.media = (node.media ?? []).map((m, i) => {
+              if (m.source === "upload") {
+                const key = `media_${node._id}_${i}`;
+                if (uploadedFilesMap[key]) {
+                  return { ...uploadedFilesMap[key] };
+                }
+                return null; // opcional: descartar si no se subió
+              }
+              return m; // media existente (URL externa)
+            }).filter(Boolean); // eliminar null
           }
           docs.push(base);
         });

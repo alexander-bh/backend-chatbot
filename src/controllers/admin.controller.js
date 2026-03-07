@@ -12,8 +12,7 @@ const Contact = require("../models/Contact");
 const auditService = require("../services/audit.service");
 const formatDateAMPM = require("../utils/formatDate");
 const { deleteFromCloudinary } = require("../services/cloudinary.service");
-const { cloneTemplateToFlow } = require("../services/flowNode.service");
-const { createFallbackFlow } = require("../services/flowNode.service");
+const { cloneTemplateToFlow, createFallbackFlow } = require("../services/flowNode.service");
 
 // util simple
 const slugify = (text) =>
@@ -25,7 +24,7 @@ const slugify = (text) =>
     .replace(/[^\w-]/g, "");
 
 /* ─────────────────────────────────────
-   DASHBOARD
+   DASHBOAR
 ───────────────────────────────────── */
 exports.getDashboard = async (req, res) => {
   try {
