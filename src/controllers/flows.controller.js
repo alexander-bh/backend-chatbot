@@ -219,8 +219,6 @@ exports.saveFlow = async (req, res) => {
             url: file.path,       // URL en Cloudinary
             public_id: file.filename,
             type: file.mimetype.startsWith("video/") ? "video" : "image",
-            title: file.originalname,
-            description: "",
           };
         }
       }
