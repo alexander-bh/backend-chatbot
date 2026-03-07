@@ -39,6 +39,9 @@ exports.saveFlow = async (req, res) => {
       flowId = null;
     }
 
+    console.log("FILES:", req.files);
+    console.log("BODY:", req.body);
+
     const account_id = req.user.account_id;
     const user_id = req.user._id || req.user.id;
 
