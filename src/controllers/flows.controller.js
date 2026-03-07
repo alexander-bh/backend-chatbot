@@ -37,13 +37,24 @@ exports.saveFlow = async (req, res) => {
       flowId = null;
     }
 
-    const {
-      nodes = [],
-      branches = [],
-      start_node_id,
-      publish = false,
-      chatbot_id
-    } = req.body;
+    let { nodes = [], branches = [], start_node_id, publish = false, chatbot_id } = req.body;
+
+    // Si viene en FormData como string, parsear
+    if (typeof nodes === "string") {
+      try {
+        nodes = JSON.parse(nodes);
+      } catch (err) {
+        throw new Error("nodes inválidos, no se pudo parsear");
+      }
+    }
+
+    if (typeof branches === "string") {
+      try {
+        branches = JSON.parse(branches);
+      } catch (err) {
+        branches = [];
+      }
+    }
 
     const account_id = req.user.account_id;
     const user_id = req.user._id || req.user.id;
