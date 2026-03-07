@@ -3,6 +3,7 @@ const router = express.Router();
 const mediaController = require("../controllers/media.controller");
 const auth = require("../middlewares/auth.middleware");
 const role = require("../middlewares/role.middleware");
+const uploadMedia = require("../middlewares/uploadMedia");
 router.use(auth);
 router.use(role("ADMIN", "CLIENT"));
 router.delete("/delete", mediaController.deleteMedia);
