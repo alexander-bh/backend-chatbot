@@ -37,7 +37,24 @@ exports.saveFlow = async (req, res) => {
       flowId = null;
     }
 
+    const account_id = req.user.account_id;
+    const user_id = req.user._id || req.user.id;
+
     let { nodes = [], branches = [], start_node_id, publish = false, chatbot_id } = req.body;
+
+    if (req.body.data) {
+      try {
+        const parsed = JSON.parse(req.body.data);
+        nodes = parsed.nodes ?? [];
+        branches = parsed.branches ?? [];
+        start_node_id = parsed.start_node_id;
+        publish = parsed.publish ?? false;
+        chatbot_id = parsed.chatbot_id;
+      } catch (err) {
+        throw new Error("Error parseando JSON de FormData");
+      }
+    }
+
 
     // Si viene en FormData como string, parsear
     if (typeof nodes === "string") {
@@ -55,9 +72,6 @@ exports.saveFlow = async (req, res) => {
         branches = [];
       }
     }
-
-    const account_id = req.user.account_id;
-    const user_id = req.user._id || req.user.id;
 
     /* ================= VALIDACIONES BÁSICAS ================= */
 
