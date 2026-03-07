@@ -13,12 +13,11 @@ router.post(
   "/:id/save",
   uploadMedia.any(),
   flowController.saveFlow
-);
+)
 
 // Obtener nodos por flows
 router.get(
   "/:flowId",
-  uploadMedia.any(),
   flowController.getNodesByFlow
 );
 
