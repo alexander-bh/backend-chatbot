@@ -1,5 +1,5 @@
 const { Schema, model } = require("mongoose");
-const { USO_HERRAMIENTA_KEYS, OBJETIVO_KEYS } = require("../shared/enum/onboarding.enums");
+const { USO_HERRAMIENTA_KEYS, OBJETIVO_KEYS } = require("../shared/onboarding.enums");
 
 const OnboardingSchema = new Schema(
   {
