@@ -5,7 +5,7 @@ const { validateFlow } = require("../validators/flow.validator");
 const { ensureFlowExists } = require("../services/flowNode.service");
 const withTransactionRetry = require("../utils/withTransactionRetry");
 const flowNodeService = require("../services/flowNode.service");
-const {isValidUrl} = require("../helper/isValidUrl"); 
+const { isValidUrl, isMediaUrl, getMediaType,isYoutubeUrl } = require("../helper/isValidUrl");
 
 // Obtener nodos por flow
 exports.getNodesByFlow = async (req, res) => {
@@ -306,10 +306,13 @@ exports.saveFlow = async (req, res) => {
 
           /* ===== MEDIA ===== */
           if (node.node_type === "media") {
+
             base.media = (node.media ?? []).map((m, i) => {
 
-              // 1️⃣ Upload nuevo
+              /* 1️⃣ Upload nuevo */
+
               if (m.source === "upload") {
+
                 const key = `media_${node._id}_${i}`;
 
                 if (uploadedFilesMap[key]) {
@@ -323,37 +326,55 @@ exports.saveFlow = async (req, res) => {
                 return null;
               }
 
-              // 2️⃣ URL externa
+
+              /* 2️⃣ URL externa */
+
               if (m.source === "url") {
 
                 if (!isValidUrl(m.url)) {
-                  throw new Error(`URL inválida en media: ${m.url}`);
+                  throw new Error(`URL inválida: ${m.url}`);
+                }
+
+                if (!isMediaUrl(m.url)) {
+                  throw new Error(`La URL no es imagen o video válido: ${m.url}`);
                 }
 
                 return {
                   url: m.url,
                   public_id: null,
-                  type: m.type || "image"
+                  type: getMediaType(m.url)
                 };
               }
 
-              // 3️⃣ Media existente
+
+              /* 3️⃣ Media existente */
+
               if (m.url) {
 
                 if (!isValidUrl(m.url)) {
-                  throw new Error(`URL inválida en media: ${m.url}`);
+                  throw new Error(`URL inválida: ${m.url}`);
                 }
 
                 return {
                   url: m.url,
                   public_id: m.public_id || null,
-                  type: m.type || "image"
+                  type: m.type || getMediaType(m.url)
+                };
+              }
+
+              if (isYoutubeUrl(m.url)) {
+                return {
+                  url: m.url,
+                  youtube_id: getYoutubeId(m.url),
+                  public_id: null,
+                  type: "video"
                 };
               }
 
               return null;
 
             }).filter(Boolean);
+
           }
           docs.push(base);
         });
