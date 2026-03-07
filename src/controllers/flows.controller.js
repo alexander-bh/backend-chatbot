@@ -169,47 +169,6 @@ exports.saveFlow = async (req, res) => {
         }
       }
 
-      const oldNodes = await FlowNode.find(
-        {
-          flow_id: flow._id,
-          ...(flow.is_template ? {} : { account_id })
-        },
-        { media: 1 },
-        { session }
-      );
-
-      // Mapa de media que se conservará
-      const newMediaKeys = new Set();
-
-      // Recorrer nodos y agregar las media existentes que se mantienen
-      allNodes.forEach(node => {
-        if (node.node_type !== "media") return;
-        (node.media ?? []).forEach((m, i) => {
-          // Si es media existente (no se sube) → conservar
-          if (m.source !== "upload" && m.public_id) {
-            newMediaKeys.add(m.public_id);
-          }
-        });
-      });
-
-      // Recorremos nodos antiguos
-      for (const oldNode of oldNodes) {
-        if (!oldNode.media || !Array.isArray(oldNode.media)) continue;
-
-        for (const m of oldNode.media) {
-          if (!m.public_id) continue;
-
-          // Si el media antiguo NO está en la lista de la nueva flow → eliminar
-          if (!newMediaKeys.has(m.public_id)) {
-            try {
-              await deleteFromCloudinary(m.public_id);
-            } catch (err) {
-              console.log("Cloudinary delete error:", err.message);
-            }
-          }
-        }
-      }
-
       /* ===== ELIMINAR MEDIA DE CLOUDINARY ===== */
       const uploadedFilesMap = {};
       if (req.files && req.files.length) {
