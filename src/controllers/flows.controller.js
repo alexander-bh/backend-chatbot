@@ -5,7 +5,7 @@ const { validateFlow } = require("../validators/flow.validator");
 const { ensureFlowExists } = require("../services/flowNode.service");
 const withTransactionRetry = require("../utils/withTransactionRetry");
 const flowNodeService = require("../services/flowNode.service");
-const { deleteFromCloudinary } = require("../services/cloudinary.service");
+const {isValidUrl} = require("../helper/isValidUrl"); 
 
 // Obtener nodos por flow
 exports.getNodesByFlow = async (req, res) => {
@@ -305,18 +305,55 @@ exports.saveFlow = async (req, res) => {
           }
 
           /* ===== MEDIA ===== */
-
           if (node.node_type === "media") {
             base.media = (node.media ?? []).map((m, i) => {
+
+              // 1️⃣ Upload nuevo
               if (m.source === "upload") {
                 const key = `media_${node._id}_${i}`;
+
                 if (uploadedFilesMap[key]) {
-                  return { ...uploadedFilesMap[key] };
+                  return {
+                    url: uploadedFilesMap[key].url,
+                    public_id: uploadedFilesMap[key].public_id,
+                    type: uploadedFilesMap[key].type
+                  };
                 }
-                return null; // opcional: descartar si no se subió
+
+                return null;
               }
-              return m; // media existente (URL externa)
-            }).filter(Boolean); // eliminar null
+
+              // 2️⃣ URL externa
+              if (m.source === "url") {
+
+                if (!isValidUrl(m.url)) {
+                  throw new Error(`URL inválida en media: ${m.url}`);
+                }
+
+                return {
+                  url: m.url,
+                  public_id: null,
+                  type: m.type || "image"
+                };
+              }
+
+              // 3️⃣ Media existente
+              if (m.url) {
+
+                if (!isValidUrl(m.url)) {
+                  throw new Error(`URL inválida en media: ${m.url}`);
+                }
+
+                return {
+                  url: m.url,
+                  public_id: m.public_id || null,
+                  type: m.type || "image"
+                };
+              }
+
+              return null;
+
+            }).filter(Boolean);
           }
           docs.push(base);
         });
