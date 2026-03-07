@@ -33,6 +33,8 @@ exports.saveFlow = async (req, res) => {
   try {
     let flowId = req.params.id;
 
+    console.log("REQ BODY:", req.body);
+
     if (!flowId || flowId === "null" || flowId === "undefined") {
       flowId = null;
     }
@@ -42,19 +44,25 @@ exports.saveFlow = async (req, res) => {
 
     let { nodes = [], branches = [], start_node_id, publish = false, chatbot_id } = req.body;
 
+
     if (req.body.data) {
       try {
         const parsed = JSON.parse(req.body.data);
         nodes = parsed.nodes ?? [];
         branches = parsed.branches ?? [];
-        start_node_id = parsed.start_node_id;
-        publish = parsed.publish ?? false;
-        chatbot_id = parsed.chatbot_id;
+        start_node_id = parsed.start_node_id ?? start_node_id;
+        publish = parsed.publish ?? publish;
+        chatbot_id = parsed.chatbot_id ?? chatbot_id;
       } catch (err) {
         throw new Error("Error parseando JSON de FormData");
       }
     }
 
+    console.log("Parsed nodes:", nodes);
+    // Validación final
+    if (!Array.isArray(nodes) || nodes.length === 0) {
+      throw new Error("nodes requeridos");
+    }
 
     // Si viene en FormData como string, parsear
     if (typeof nodes === "string") {
