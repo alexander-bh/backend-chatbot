@@ -494,10 +494,6 @@ exports.getContactsDetail = async (req, res) => {
     }
 };
 
-/* =============================
-   Helper para completar horas
-============================= */
-
 function fillMissingHours(data) {
     const hours = Array.from({ length: 24 }, (_, i) => i);
 
