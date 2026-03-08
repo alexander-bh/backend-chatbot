@@ -346,9 +346,6 @@ exports.saveFlow = async (req, res) => {
                 };
               }
 
-
-              /* 3️⃣ Media existente */
-
               if (m.url) {
 
                 if (!isValidUrl(m.url)) {

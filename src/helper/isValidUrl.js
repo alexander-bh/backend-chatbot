@@ -1,4 +1,4 @@
-const isValidUrl = (url) => {
+exports.isValidUrl = (url) => {
   try {
     new URL(url);
     return true;
@@ -15,6 +15,6 @@ exports.getMediaType = (url) => {
   return /\.(mp4|mov|webm)$/i.test(url) ? "video" : "image";
 };
 
-const isYoutubeUrl = (url) => {
+exports.isYoutubeUrl = (url) => {
   return /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+$/i.test(url);
 };
