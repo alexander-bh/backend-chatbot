@@ -6,7 +6,7 @@ const MediaSchema = new Schema(
   {
     type: {
       type: String,
-      enum: ["image", "video"],
+      enum: ["image", "video", "youtube"],
       required: true
     },
 
@@ -15,15 +15,10 @@ const MediaSchema = new Schema(
       required: true
     },
 
-    title: {
+    public_id: {
       type: String,
-      default: ""
+      default: null
     },
-
-    description: {
-      type: String,
-      default: ""
-    }
   },
   { _id: false }
 );

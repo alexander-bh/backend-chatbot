@@ -8,4 +8,5 @@ router.use(auth);
 router.use(role("ADMIN", "CLIENT"));
 router.delete("/delete", mediaController.deleteMedia);
 router.post("/replace", uploadMedia.single("file"), mediaController.replaceMedia);
+router.post("/delete-node-media", mediaController.deleteNodeMedia);
 module.exports = router;
