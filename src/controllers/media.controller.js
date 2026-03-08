@@ -80,3 +80,67 @@ exports.replaceMedia = async (req, res) => {
     });
   }
 };
+
+exports.deleteNodeMedia = async (req, res) => {
+  try {
+
+    const { node } = req.body;
+
+    if (!node) {
+      return res.status(400).json({
+        success: false,
+        message: "Nodo requerido"
+      });
+    }
+
+    if (node.node_type !== "media") {
+      return res.json({
+        success: true,
+        message: "El nodo no contiene media"
+      });
+    }
+
+    const mediaList = node.media || [];
+
+    const deleted = [];
+
+    for (const media of mediaList) {
+
+      if (!media.url) continue;
+
+      // Solo borrar si es de Cloudinary
+      if (!media.url.includes("res.cloudinary.com")) continue;
+
+      let publicId = media.public_id;
+
+      // Si no existe public_id lo reconstruimos
+      if (!publicId) {
+        const parts = media.url.split("/");
+        const file = parts[parts.length - 1];
+        publicId = `chatbots/media/${file.split(".")[0]}`;
+      }
+
+      try {
+        await deleteFromCloudinary(publicId);
+        deleted.push(publicId);
+      } catch (err) {
+        console.log("Error eliminando:", publicId, err.message);
+      }
+
+    }
+
+    return res.json({
+      success: true,
+      deleted
+    });
+
+  } catch (error) {
+
+    console.log("Delete node media error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Error eliminando media del nodo"
+    });
+  }
+};
