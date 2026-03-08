@@ -5,7 +5,11 @@ const { validateFlow } = require("../validators/flow.validator");
 const { ensureFlowExists } = require("../services/flowNode.service");
 const withTransactionRetry = require("../utils/withTransactionRetry");
 const flowNodeService = require("../services/flowNode.service");
-const { isValidUrl, isMediaUrl, getMediaType,isYoutubeUrl } = require("../helper/isValidUrl");
+const { isValidUrl,
+  isMediaUrl,
+  getMediaType,
+  isYoutubeUrl,
+  cleanUrl } = require("../helper/isValidUrl");
 
 // Obtener nodos por flow
 exports.getNodesByFlow = async (req, res) => {
@@ -307,71 +311,75 @@ exports.saveFlow = async (req, res) => {
           /* ===== MEDIA ===== */
           if (node.node_type === "media") {
 
-            base.media = (node.media ?? []).map((m, i) => {
+            base.media = (node.media ?? [])
+              .map((m, i) => {
 
-              /* 1️⃣ Upload nuevo */
+                /* 1️⃣ Upload desde Cloudinary */
+                if (m.source === "upload") {
 
-              if (m.source === "upload") {
+                  const key = `media_${node._id}_${i}`;
 
-                const key = `media_${node._id}_${i}`;
+                  if (uploadedFilesMap[key]) {
+                    return {
+                      url: uploadedFilesMap[key].url,
+                      public_id: uploadedFilesMap[key].public_id,
+                      type: uploadedFilesMap[key].type
+                    };
+                  }
 
-                if (uploadedFilesMap[key]) {
+                  return null;
+                }
+
+                /* 2️⃣ URL externa */
+
+                if (m.source === "url") {
+
+                  const url = cleanUrl(m.url);
+
+                  if (!isValidUrl(url)) {
+                    throw new Error(`URL inválida: ${url}`);
+                  }
+
+                  if (isYoutubeUrl(url)) {
+                    return {
+                      url,
+                      public_id: null,
+                      type: "video"
+                    };
+                  }
+
+                  if (!isMediaUrl(url)) {
+                    throw new Error(`La URL no es imagen o video válido: ${url}`);
+                  }
+
                   return {
-                    url: uploadedFilesMap[key].url,
-                    public_id: uploadedFilesMap[key].public_id,
-                    type: uploadedFilesMap[key].type
+                    url,
+                    public_id: null,
+                    type: getMediaType(url)
+                  };
+                }
+
+                /* 3️⃣ Media existente (editar flow) */
+
+                if (m.url) {
+
+                  const url = cleanUrl(m.url);
+
+                  if (!isValidUrl(url)) {
+                    throw new Error(`URL inválida: ${url}`);
+                  }
+
+                  return {
+                    url,
+                    public_id: m.public_id || null,
+                    type: m.type || getMediaType(url)
                   };
                 }
 
                 return null;
-              }
 
-
-              /* 2️⃣ URL externa */
-
-              if (m.source === "url") {
-
-                if (!isValidUrl(m.url)) {
-                  throw new Error(`URL inválida: ${m.url}`);
-                }
-
-                if (!isMediaUrl(m.url)) {
-                  throw new Error(`La URL no es imagen o video válido: ${m.url}`);
-                }
-
-                return {
-                  url: m.url,
-                  public_id: null,
-                  type: getMediaType(m.url)
-                };
-              }
-
-              if (m.url) {
-
-                if (!isValidUrl(m.url)) {
-                  throw new Error(`URL inválida: ${m.url}`);
-                }
-
-                return {
-                  url: m.url,
-                  public_id: m.public_id || null,
-                  type: m.type || getMediaType(m.url)
-                };
-              }
-
-              if (isYoutubeUrl(m.url)) {
-                return {
-                  url: m.url,
-                  youtube_id: getYoutubeId(m.url),
-                  public_id: null,
-                  type: "video"
-                };
-              }
-
-              return null;
-
-            }).filter(Boolean);
-
+              })
+              .filter(Boolean);
           }
           docs.push(base);
         });
