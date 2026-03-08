@@ -7,25 +7,13 @@ const Chatbot = require("../models/Chatbot");
 const Account = require("../models/Account");
 const Contact = require("../models/Contact");
 const PasswordResetToken = require("../models/PasswordResetToken");
+const auditService = require("../services/audit.service");
 const { generateToken } = require("../utils/jwt");
 const { sendResetPasswordEmail } = require("../services/email.service");
-const auditService = require("../services/audit.service");
 const { sendPasswordChangedAlert } = require("../services/password-alert.service");
-const { cloneTemplateToFlow } = require("../services/flowNode.service");
-const { createFallbackFlow } = require("../services/flowNode.service");
-
-const generateOTP = () =>
-  Math.floor(100000 + Math.random() * 900000).toString();
-
-
-// Utils
-const slugify = (text) =>
-  text
-    .toString()
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, "-")
-    .replace(/[^\w-]/g, "");
+const { cloneTemplateToFlow, createFallbackFlow } = require("../services/flowNode.service");
+const { generateOTP } = require("../helper/generateOTP");
+const { slugify } = require("../helper/slugify");
 
 // Primer registro (crea cuenta + chatbot + flow + flow nodes)
 exports.registerFirst = async (req, res, next) => {
@@ -231,126 +219,57 @@ exports.registerFirst = async (req, res, next) => {
   }
 };
 
-// Registro de usuario (por subdominio) esta funcion ya no se implementa 
-exports.register = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
-  try {
-    if (!req.account?._id) {
-      return res.status(400).json({ message: "Cuenta no resuelta" });
-    }
-
-    const accountId = req.account._id;
-    const { name, email, password, role = "CLIENT", onboarding } = req.body;
-
-    // ✅ VALIDACIÓN CORRECTA
-    if (!name || !email || !password || !onboarding?.phone) {
-      return res.status(400).json({
-        message: "Datos obligatorios incompletos"
-      });
-    }
-
-    if (password.length < 6) {
-      return res.status(400).json({
-        message: "La contraseña debe tener al menos 6 caracteres"
-      });
-    }
-
-    const normalizedEmail = email.toLowerCase().trim();
-
-    const userExists = await User.findOne({
-      email: normalizedEmail,
-      account_id: accountId
-    }).session(session);
-
-    if (userExists) {
-      return res.status(409).json({
-        message: "El email ya está registrado en esta cuenta"
-      });
-    }
-
-    const finalPhoneAlt =
-      onboarding.phone_alt && onboarding.phone_alt.trim() !== ""
-        ? onboarding.phone_alt
-        : onboarding.phone;
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const finalOnboarding = {
-      ...onboarding,
-      phone: onboarding.phone,
-      phone_alt: finalPhoneAlt
-    };
-
-    const [user] = await User.create([{
-      account_id: accountId,
-      name,
-      email: normalizedEmail,
-      password: hashedPassword,
-      role,
-      onboarding: finalOnboarding
-    }], { session });
-
-    await session.commitTransaction();
-
-    res.status(201).json({
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role
-    });
-
-  } catch (error) {
-    await session.abortTransaction();
-    console.error("REGISTER ERROR:", error);
-    res.status(500).json({ message: "Error al registrar usuario" });
-  } finally {
-    session.endSession();
-  }
-};
-
 // Login
 exports.login = async (req, res) => {
-  const { email, password } = req.body;
+  try {
+    const { email, password } = req.body;
 
-  const user = await User.findOne({
-    email: email.toLowerCase().trim()
-  }).select("+password");
+    const user = await User.findOne({
+      email: email.toLowerCase().trim()
+    }).select("+password");
 
-  if (!user) {
-    return res.status(401).json({ message: "Credenciales inválidas" });
+    if (!user) {
+      return res.status(401).json({ message: "Credenciales inválidas" });
+    }
+
+    if (user.status === "inactive") {
+      return res.status(403).json({ message: "Usuario inactivo" });
+    }
+
+    const account = await Account.findById(user.account_id);
+
+    if (!account || account.status !== "active") {
+      return res.status(403).json({ message: "Cuenta suspendida" });
+    }
+
+    const valid = await bcrypt.compare(password, user.password);
+
+    if (!valid) {
+      return res.status(401).json({ message: "Credenciales inválidas" });
+    }
+
+    const token = generateToken({
+      id: user._id,
+      name: user.name,
+      role: user.role,
+      account_id: account._id
+    });
+
+    // eliminar tokens anteriores del usuario
+    await Token.deleteMany({ user_id: user._id });
+
+    await Token.create({
+      user_id: user._id,
+      token,
+      expires_at: new Date(Date.now() + 86400000)
+    });
+
+    res.json({ token });
+
+  } catch (error) {
+    console.error("LOGIN ERROR:", error);
+    res.status(500).json({ message: "Error en login" });
   }
-
-  if (user.status === "inactive") {
-    return res.status(403).json({ message: "Usuario inactivo" });
-  }
-
-  const account = await Account.findById(user.account_id);
-
-  if (!account || account.status !== "active") {
-    return res.status(403).json({ message: "Cuenta suspendida" });
-  }
-
-  const valid = await bcrypt.compare(password, user.password);
-  if (!valid) {
-    return res.status(401).json({ message: "Credenciales inválidas" });
-  }
-
-  const token = generateToken({
-    id: user._id,
-    name: user.name,
-    role: user.role,
-    account_id: account._id
-  });
-
-  await Token.create({
-    user_id: user._id,
-    token,
-    expires_at: new Date(Date.now() + 86400000)
-  });
-
-  res.json({ token });
 };
 
 // Recuperacion de contraseña
@@ -469,16 +388,23 @@ exports.resetPassword = async (req, res) => {
 // Cerrar sesion
 exports.logout = async (req, res) => {
   try {
-
     const token = req.headers.authorization?.split(" ")[1];
-
+    if (!token) {
+      return res.status(400).json({
+        message: "Token requerido"
+      });
+    }
     await Token.deleteOne({ token });
-
-    res.json({ message: "Sesión cerrada correctamente" });
+    res.json({
+      message: "Sesión cerrada correctamente"
+    });
 
   } catch (error) {
     console.error("LOGOUT ERROR:", error);
-    res.status(500).json({ message: "Error al cerrar sesión" });
+
+    res.status(500).json({
+      message: "Error al cerrar sesión"
+    });
   }
 };
 
