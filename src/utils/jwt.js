@@ -1,15 +1,11 @@
 const jwt = require("jsonwebtoken");
-const crypto = require("crypto");
 
-const generateToken = (payload) => {
-  return jwt.sign(
-    {
-      ...payload,
-      jti: crypto.randomUUID() // hace el token único
-    },
-    process.env.JWT_SECRET,
-    { expiresIn: "1d" }
-  );
+exports.generateToken = (payload) => {
+  if (!process.env.JWT_SECRET) {
+    throw new Error("JWT_SECRET no definida");
+  }
+
+  return jwt.sign(payload, process.env.JWT_SECRET, {
+    expiresIn: "1d"
+  });
 };
-
-module.exports = generateToken;
