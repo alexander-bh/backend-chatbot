@@ -5,7 +5,7 @@ const { validateFlow } = require("../validators/flow.validator");
 const { ensureFlowExists } = require("../services/flowNode.service");
 const withTransactionRetry = require("../utils/withTransactionRetry");
 const flowNodeService = require("../services/flowNode.service");
-const {   
+const {
   isValidUrl,
   isMediaUrl,
   getMediaType,
@@ -77,7 +77,33 @@ exports.saveFlow = async (req, res) => {
 
     /* ================= MEDIA A ELIMINAR ================= */
 
-    const mediaToDelete = extractMediaToDelete(nodes, branches);
+    const parsedPayload = req.body.data
+      ? JSON.parse(req.body.data)
+      : req.body;
+
+    const { publicIds, nodeIds } = extractMediaToDelete(parsedPayload);
+
+    let nodeMedia = [];
+
+    if (nodeIds.length) {
+
+      const nodesFound = await FlowNode.find({
+        _id: { $in: nodeIds }
+      }).select("media");
+
+      for (const node of nodesFound) {
+        for (const m of node.media || []) {
+          if (m.public_id) {
+            nodeMedia.push(m.public_id);
+          }
+        }
+      }
+
+    }
+
+    const mediaToDelete = [
+      ...new Set([...publicIds, ...nodeMedia])
+    ];
 
     /* ================= UNIFICAR NODOS ================= */
 
@@ -232,36 +258,25 @@ exports.saveFlow = async (req, res) => {
           if (node.node_type === "media") {
 
             base.media = (node.media ?? [])
+              .filter(m => !mediaToDelete.includes(m.public_id))
               .map((m, i) => {
 
                 const key = `media_${node._id}_${i}`;
 
+                if (m.public_id) {
+                  return {
+                    url: cleanUrl(m.url),
+                    public_id: m.public_id,
+                    type: m.type ?? getMediaType(m.url)
+                  };
+                }
+
+                // 🆕 Solo subir si es upload REAL (archivo nuevo)
                 if (m.source === "upload" && uploadedFilesMap[key]) {
                   return uploadedFilesMap[key];
                 }
 
                 if (m.source === "url") {
-
-                  const url = cleanUrl(m.url);
-
-                  if (!isValidUrl(url)) throw new Error(`URL inválida ${url}`);
-
-                  return {
-                    url,
-                    public_id: null,
-                    type: isYoutubeUrl(url) ? "video" : getMediaType(url)
-                  };
-                }
-
-                if (m.url) {
-                  return {
-                    url: cleanUrl(m.url),
-                    public_id: m.public_id ?? null,
-                    type: m.type ?? getMediaType(m.url)
-                  };
-                }
-
-                if(m.source === "url") {
 
                   const url = cleanUrl(m.url);
 
@@ -275,8 +290,16 @@ exports.saveFlow = async (req, res) => {
 
                   return {
                     url,
-                    public_id: null,
+                    public_id: m.public_id ?? null,
                     type: isYoutubeUrl(url) ? "video" : getMediaType(url)
+                  };
+                }
+
+                if (m.url) {
+                  return {
+                    url: cleanUrl(m.url),
+                    public_id: m.public_id ?? null,
+                    type: m.type ?? getMediaType(m.url)
                   };
                 }
 
@@ -285,7 +308,6 @@ exports.saveFlow = async (req, res) => {
               })
               .filter(Boolean);
           }
-
           docs.push(base);
 
         });
@@ -316,7 +338,9 @@ exports.saveFlow = async (req, res) => {
 
     /* ================= BORRAR MEDIA ================= */
 
-    await deleteMediaBatch(mediaToDelete);
+    if (mediaToDelete.length) {
+      await deleteMediaBatch(mediaToDelete);
+    }
 
     return res.json({
       success: true,
@@ -336,3 +360,4 @@ exports.saveFlow = async (req, res) => {
 
   }
 };
+
