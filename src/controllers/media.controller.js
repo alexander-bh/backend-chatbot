@@ -113,6 +113,8 @@ exports.replaceMedia = async (req, res) => {
 
     const newFile = req.file;
 
+    console.log(old_public_id)
+
     if (!newFile) {
       return res.status(400).json({
         success: false,
