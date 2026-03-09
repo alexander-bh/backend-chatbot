@@ -255,8 +255,8 @@ exports.saveFlow = async (req, res) => {
           /* ===== RESOLVER NEXT ===== */
           let nextNodeId = null;
 
-          // intentar usar next enviado
-          if (node.next_node_id && idMap.has(String(node.next_node_id))) {
+          // usar next enviado
+          if (node.next_node_id && validOldIds.has(String(node.next_node_id))) {
             nextNodeId = idMap.get(String(node.next_node_id));
           }
 
@@ -267,6 +267,7 @@ exports.saveFlow = async (req, res) => {
               nextNodeId = idMap.get(next.__old_id);
             }
           }
+
           const base = {
             _id: newId,
             flow_id: flow._id,
