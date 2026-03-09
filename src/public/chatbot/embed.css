@@ -552,6 +552,7 @@ main {
     text-align: left;
 }
 
+
 .bubble-link {
     display: inline-block;
     margin-top: 6px;
@@ -603,6 +604,37 @@ main {
     scrollbar-width: none;
     -ms-overflow-style: none;
     -webkit-overflow-scrolling: touch;
+}
+
+/* Burbuja de media ocupa más ancho */
+.msg.bot.media-msg .msg-content {
+    max-width: calc(100% - 44px);
+    /* avatar + gap */
+}
+
+.msg.bot.media-msg .bubble {
+    padding: 10px;
+    width: 100%;
+}
+
+/* Item ocupa todo el ancho disponible cuando es 1 sola imagen */
+.media-carousel.single-item .media-item {
+    width: 100%;
+}
+
+.media-carousel.single-item .media-item img,
+.media-carousel.single-item .media-item video {
+    height: 180px;
+}
+
+/* Con múltiples items, tamaño fijo para que se vea que hay más */
+.media-carousel.multi-item .media-item {
+    width: 200px;
+}
+
+.media-carousel.multi-item .media-item img,
+.media-carousel.multi-item .media-item video {
+    height: 150px;
 }
 
 .bubble.media-only {
@@ -679,6 +711,7 @@ main {
     border-radius: 3px;
 }
 
+
 /* En móvil, items un poco más pequeños */
 @media (max-width: 480px) {
     .media-item {
@@ -690,6 +723,28 @@ main {
         height: 110px;
     }
 }
+
+@media (max-width: 480px) {
+    .msg.bot.media-msg .msg-content {
+        max-width: calc(100% - 38px);
+    }
+
+    .media-carousel.multi-item .media-item {
+        width: 165px;
+    }
+
+    .media-carousel.multi-item .media-item img,
+    .media-carousel.multi-item .media-item video {
+        height: 125px;
+    }
+
+    .media-carousel.single-item .media-item img,
+    .media-carousel.single-item .media-item video {
+        height: 155px;
+    }
+}
+
+
 
 /* =========================
    IMAGE VIEWER
