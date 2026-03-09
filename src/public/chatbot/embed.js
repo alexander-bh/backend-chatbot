@@ -98,37 +98,6 @@
         return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     }
 
-    function openVideoViewer(url) {
-        viewerImg.style.display = "none";
-
-        let viewerVideo = imageViewer.querySelector(".viewer-video");
-        if (!viewerVideo) {
-            viewerVideo = document.createElement("video");
-            viewerVideo.className = "viewer-video";
-            viewerVideo.controls = true;
-            viewerVideo.playsInline = true;
-            imageViewer.appendChild(viewerVideo);
-        }
-
-        viewerVideo.src = url;
-        viewerVideo.style.display = "block";
-        imageViewer.classList.add("open");
-        viewerVideo.play().catch(() => { });
-    }
-
-    function closeImageViewer() {
-        imageViewer.classList.remove("open");
-        viewerImg.src = "";
-        viewerImg.style.display = "";
-
-        const viewerVideo = imageViewer.querySelector(".viewer-video");
-        if (viewerVideo) {
-            viewerVideo.pause();
-            viewerVideo.src = "";
-            viewerVideo.style.display = "none";
-        }
-    }
-
     function renderLinkActions(actions, bubble) {
         if (!Array.isArray(actions) || !bubble) return;
 
@@ -181,6 +150,29 @@
         bubble.appendChild(container);
     }
 
+    function openImageViewer(url) {
+        const viewerVideo = imageViewer.querySelector(".viewer-video");
+        if (viewerVideo) {
+            viewerVideo.pause();
+            viewerVideo.style.display = "none";
+        }
+        viewerImg.style.display = "";
+        viewerImg.src = url;
+        imageViewer.classList.add("open");
+    }
+
+    function closeImageViewer() {
+        imageViewer.classList.remove("open");
+        viewerImg.src = "";
+        viewerImg.style.display = "";
+        const viewerVideo = imageViewer.querySelector(".viewer-video");
+        if (viewerVideo) {
+            viewerVideo.pause();
+            viewerVideo.src = "";
+            viewerVideo.style.display = "none";
+        }
+    }
+
     function renderMediaCarousel(mediaList, bubbleElement) {
         if (!Array.isArray(mediaList) || !bubbleElement) return;
 
@@ -192,44 +184,10 @@
 
         const MAX_VISIBLE = 4;
         const total = mediaList.length;
-        const visible = total > MAX_VISIBLE ? MAX_VISIBLE : total;
         const extra = total - MAX_VISIBLE;
 
         // Clase de cuadrícula según cantidad
         let countClass = "count-1";
-        if (media.type === "video") {
-            const video = document.createElement("video");
-            video.src = media.url;
-            video.playsInline = true;
-            video.muted = true; // necesario para autoplay en móvil
-
-            if (total === 1) {
-                // 1 solo video: controles directos
-                video.controls = true;
-            } else {
-                // En grid: thumbnail con ícono de play encima
-                video.controls = false;
-
-                // Ícono de play overlay
-                const playOverlay = document.createElement("div");
-                playOverlay.className = "video-play-overlay";
-                playOverlay.innerHTML = `
-            <svg viewBox="0 0 24 24" fill="white" width="36" height="36">
-                <circle cx="12" cy="12" r="12" fill="rgba(0,0,0,0.5)"/>
-                <polygon points="10,8 18,12 10,16" fill="white"/>
-            </svg>`;
-
-                item.appendChild(video);
-                item.appendChild(playOverlay);
-
-                // Click abre el viewer de video
-                item.onclick = () => openVideoViewer(media.url);
-                item.style.cursor = "pointer";
-                return; // ← salir antes de que el código de abajo reintente appendChild
-            }
-
-            item.appendChild(video);
-        }
         if (total === 2) countClass = "count-2";
         else if (total === 3) countClass = "count-3";
         else if (total === 4) countClass = "count-4";
@@ -260,9 +218,29 @@
             if (media.type === "video") {
                 const video = document.createElement("video");
                 video.src = media.url;
-                video.controls = total === 1;
                 video.playsInline = true;
-                item.appendChild(video);
+                video.muted = true;
+
+                if (total === 1) {
+                    // 1 solo video: controles directos
+                    video.controls = true;
+                    item.appendChild(video);
+                } else {
+                    // En grid: thumbnail con ícono de play encima
+                    video.controls = false;
+                    item.appendChild(video);
+
+                    const playOverlay = document.createElement("div");
+                    playOverlay.className = "video-play-overlay";
+                    playOverlay.innerHTML = `
+                    <svg viewBox="0 0 48 48" width="44" height="44">
+                        <circle cx="24" cy="24" r="24" fill="rgba(0,0,0,0.5)"/>
+                        <polygon points="19,14 38,24 19,34" fill="white"/>
+                    </svg>`;
+                    item.appendChild(playOverlay);
+                    item.style.cursor = "pointer";
+                    item.onclick = () => openVideoViewer(media.url);
+                }
             }
 
             grid.appendChild(item);
