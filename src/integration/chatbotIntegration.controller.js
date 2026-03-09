@@ -233,12 +233,13 @@ exports.renderEmbed = async (req, res) => {
       "Content-Security-Policy",
       [
         `default-src 'self'`,
-        `script-src 'self' ${apiOrigin}`,
+        `script-src 'self' ${apiOrigin} https:`,
         `style-src 'self' 'unsafe-inline'`,
         `img-src 'self' data: https:`,
-        `media-src 'self' https:`,
+        `media-src 'self' https: blob:`,
         `connect-src 'self' ${apiOrigin} https: wss:`,
         `font-src 'self' https: data:`,
+        `frame-src 'self'`,
         `frame-ancestors ${frameAncestors}`
       ].join("; ")
     );
