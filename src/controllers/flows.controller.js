@@ -5,7 +5,14 @@ const { validateFlow } = require("../validators/flow.validator");
 const { ensureFlowExists } = require("../services/flowNode.service");
 const withTransactionRetry = require("../utils/withTransactionRetry");
 const flowNodeService = require("../services/flowNode.service");
-const { isValidUrl, isMediaUrl, getMediaType } = require("../helper/isValidUrl");
+const {   
+  isValidUrl,
+  isMediaUrl,
+  getMediaType,
+  isYoutubeUrl,
+  cleanUrl } = require("../helper/isValidUrl");
+const { extractMediaToDelete, groupNodesByBranch, buildUploadedFilesMap } = require("../helper/flow.helpers")
+const { deleteMediaBatch } = require("../helper/media.helpers");
 
 // Obtener nodos por flow
 exports.getNodesByFlow = async (req, res) => {
@@ -31,77 +38,46 @@ exports.getNodesByFlow = async (req, res) => {
 // Guardar los flow
 exports.saveFlow = async (req, res) => {
   try {
+
     let flowId = req.params.id;
-
-    console.log("REQ BODY:", req.body);
-
     if (!flowId || flowId === "null" || flowId === "undefined") {
       flowId = null;
     }
 
-    console.log("FILES:", req.files);
-    console.log("BODY:", req.body);
-
     const account_id = req.user.account_id;
     const user_id = req.user._id || req.user.id;
 
-    let { nodes = [], branches = [], start_node_id, publish = false, chatbot_id } = req.body;
+    let {
+      nodes = [],
+      branches = [],
+      start_node_id,
+      publish = false,
+      chatbot_id
+    } = req.body;
 
+    /* ================= PARSE FORMDATA ================= */
 
     if (req.body.data) {
-      try {
-        const parsed = JSON.parse(req.body.data);
-        nodes = parsed.nodes ?? [];
-        branches = parsed.branches ?? [];
-        start_node_id = parsed.start_node_id ?? start_node_id;
-        publish = parsed.publish ?? publish;
-        chatbot_id = parsed.chatbot_id ?? chatbot_id;
-      } catch (err) {
-        throw new Error("Error parseando JSON de FormData");
-      }
+      const parsed = JSON.parse(req.body.data);
+
+      nodes = parsed.nodes ?? [];
+      branches = parsed.branches ?? [];
+      start_node_id = parsed.start_node_id ?? start_node_id;
+      publish = parsed.publish ?? publish;
+      chatbot_id = parsed.chatbot_id ?? chatbot_id;
     }
 
-    console.log("Parsed nodes:", nodes);
-    // Validación final
-    if (!Array.isArray(nodes) || nodes.length === 0) {
-      throw new Error("nodes requeridos");
-    }
+    if (typeof nodes === "string") nodes = JSON.parse(nodes);
+    if (typeof branches === "string") branches = JSON.parse(branches);
 
-    // Si viene en FormData como string, parsear
-    if (typeof nodes === "string") {
-      try {
-        nodes = JSON.parse(nodes);
-      } catch (err) {
-        throw new Error("nodes inválidos, no se pudo parsear");
-      }
-    }
-
-    if (typeof branches === "string") {
-      try {
-        branches = JSON.parse(branches);
-      } catch (err) {
-        branches = [];
-      }
-    }
-
-    /* ================= VALIDACIONES BÁSICAS ================= */
-
-    const isValidFlowId =
-      flowId && mongoose.Types.ObjectId.isValid(flowId);
-
-    if (flowId && !isValidFlowId) {
-      throw new Error("flowId inválido");
-    }
-
-    if (!Array.isArray(nodes) || nodes.length === 0) {
-      throw new Error("nodes requeridos");
-    }
-
-    if (!start_node_id) {
-      throw new Error("start_node_id requerido");
-    }
+    if (!nodes.length) throw new Error("nodes requeridos");
+    if (!start_node_id) throw new Error("start_node_id requerido");
 
     const isPublishing = publish === true;
+
+    /* ================= MEDIA A ELIMINAR ================= */
+
+    const mediaToDelete = extractMediaToDelete(nodes, branches);
 
     /* ================= UNIFICAR NODOS ================= */
 
@@ -115,12 +91,13 @@ exports.saveFlow = async (req, res) => {
       )
     ];
 
-    /* ================= MAPEO DE IDS ================= */
+    /* ================= MAPEAR IDS ================= */
 
     const idMap = new Map();
     const validOldIds = new Set();
 
-    allNodes.forEach(n => {
+    for (const n of allNodes) {
+
       if (!n._id) throw new Error("Nodo sin _id");
 
       const oldId = String(n._id);
@@ -130,24 +107,28 @@ exports.saveFlow = async (req, res) => {
       }
 
       validOldIds.add(oldId);
-      idMap.set(oldId, new mongoose.Types.ObjectId());
-      n.__old_id = oldId;
-    });
 
-    if (!validOldIds.has(String(start_node_id))) {
-      throw new Error("start_node_id no existe en nodes");
+      const newId = new mongoose.Types.ObjectId();
+
+      idMap.set(oldId, newId);
+
+      n.__old_id = oldId;
     }
 
-    /* ================= VALIDACIÓN ESTRUCTURAL ================= */
+    if (!validOldIds.has(String(start_node_id))) {
+      throw new Error("start_node_id no existe");
+    }
+
+    /* ================= VALIDAR FLOW ================= */
 
     validateFlow(nodes, branches, start_node_id);
 
-    /* ================= TRANSACCIÓN ================= */
+    const uploadedFilesMap = buildUploadedFilesMap(req.files);
 
     await withTransactionRetry(async session => {
 
       const flow = await ensureFlowExists({
-        flowId: isValidFlowId ? flowId : null,
+        flowId,
         chatbot_id,
         account_id,
         user_role: req.user.role,
@@ -161,28 +142,7 @@ exports.saveFlow = async (req, res) => {
         session
       });
 
-      /* ================= VALIDACIÓN CHATBOT ================= */
-
-      if (!flow.is_template && isPublishing) {
-        if (!chatbot_id || !mongoose.Types.ObjectId.isValid(chatbot_id)) {
-          throw new Error("chatbot_id inválido o requerido para publicar");
-        }
-      }
-
-      /* ===== ELIMINAR MEDIA DE CLOUDINARY ===== */
-      const uploadedFilesMap = {};
-      if (req.files && req.files.length) {
-        for (const file of req.files) {
-          // El frontend manda file_key = media_<nodeId>_<i>
-          uploadedFilesMap[file.fieldname] = {
-            url: file.path,       // URL en Cloudinary
-            public_id: file.filename,
-            type: file.mimetype.startsWith("video/") ? "video" : "image",
-          };
-        }
-      }
-
-      /* ===== BORRAR NODOS ANTERIORES ===== */
+      /* ===== BORRAR NODOS ===== */
 
       await FlowNode.deleteMany(
         {
@@ -192,22 +152,9 @@ exports.saveFlow = async (req, res) => {
         { session }
       );
 
-      const INPUT_NODES = [
-        "question",
-        "email",
-        "phone",
-        "number"
-      ];
-
       /* ================= AGRUPAR POR RAMA ================= */
 
-      const groupedByBranch = {};
-
-      allNodes.forEach(node => {
-        const key = node.branch_id || "__main__";
-        if (!groupedByBranch[key]) groupedByBranch[key] = [];
-        groupedByBranch[key].push(node);
-      });
+      const groupedByBranch = groupNodesByBranch(allNodes);
 
       const docs = [];
 
@@ -218,23 +165,17 @@ exports.saveFlow = async (req, res) => {
 
         branchNodes.forEach((node, index) => {
 
-          const oldId = node.__old_id;
-          const newId = idMap.get(oldId);
+          const newId = idMap.get(node.__old_id);
 
           /* ===== RESOLVER NEXT ===== */
 
           let nextNodeId = null;
 
-          if (
-            node.next_node_id &&
-            validOldIds.has(String(node.next_node_id))
-          ) {
+          if (node.next_node_id && validOldIds.has(String(node.next_node_id))) {
             nextNodeId = idMap.get(String(node.next_node_id));
           } else {
-            const nextNode = branchNodes[index + 1];
-            if (nextNode) {
-              nextNodeId = idMap.get(nextNode.__old_id);
-            }
+            const next = branchNodes[index + 1];
+            if (next) nextNodeId = idMap.get(next.__old_id);
           }
 
           const base = {
@@ -252,123 +193,101 @@ exports.saveFlow = async (req, res) => {
             is_draft: !isPublishing
           };
 
-          /* ===== OPTIONS / POLICY ===== */
+          /* ================= OPTIONS ================= */
 
-          if (node.node_type === "options" || node.node_type === "policy") {
+          if (["options", "policy"].includes(node.node_type)) {
 
-            const sourceArray =
-              node.node_type === "options"
-                ? node.options
-                : node.policy;
+            const source = node[node.node_type] ?? [];
 
-            base[node.node_type] = (sourceArray ?? []).map(opt => {
-
-              let mappedNextNodeId = null;
-
-              if (
-                opt.next_node_id &&
-                validOldIds.has(String(opt.next_node_id))
-              ) {
-                mappedNextNodeId = idMap.get(String(opt.next_node_id));
-              }
-
-              return {
-                label: opt.label,
-                value: opt.value,
-                order: opt.order ?? 0,
-                next_node_id: mappedNextNodeId,
-                next_branch_id: opt.next_branch_id ?? null
-              };
-            });
+            base[node.node_type] = source.map(opt => ({
+              label: opt.label,
+              value: opt.value,
+              order: opt.order ?? 0,
+              next_node_id: opt.next_node_id
+                ? idMap.get(String(opt.next_node_id))
+                : null,
+              next_branch_id: opt.next_branch_id ?? null
+            }));
           }
 
-          /* ===== INPUT NODES ===== */
+          /* ================= INPUT ================= */
 
-          if (INPUT_NODES.includes(node.node_type)) {
+          if (["question", "email", "phone", "number"].includes(node.node_type)) {
 
-            let variableKey = node.variable_key?.trim();
+            base.variable_key =
+              node.variable_key?.trim() || node.node_type;
 
-            // Si no viene o viene vacío → auto generar
-            if (!variableKey) {
-              variableKey = `${node.node_type}`;
-            }
-
-            base.variable_key = variableKey;
             base.validation = node.validation ?? undefined;
             base.crm_field_key = node.crm_field_key ?? undefined;
           }
 
-          /* ===== LINK ===== */
+          /* ================= LINK ================= */
 
           if (node.node_type === "link") {
             base.link_actions = node.link_actions ?? undefined;
           }
 
-          /* ===== MEDIA ===== */
+          /* ================= MEDIA ================= */
+
           if (node.node_type === "media") {
 
-            base.media = (node.media ?? []).map((m, i) => {
-
-              /* 1️⃣ Upload nuevo */
-
-              if (m.source === "upload") {
+            base.media = (node.media ?? [])
+              .map((m, i) => {
 
                 const key = `media_${node._id}_${i}`;
 
-                if (uploadedFilesMap[key]) {
+                if (m.source === "upload" && uploadedFilesMap[key]) {
+                  return uploadedFilesMap[key];
+                }
+
+                if (m.source === "url") {
+
+                  const url = cleanUrl(m.url);
+
+                  if (!isValidUrl(url)) throw new Error(`URL inválida ${url}`);
+
                   return {
-                    url: uploadedFilesMap[key].url,
-                    public_id: uploadedFilesMap[key].public_id,
-                    type: uploadedFilesMap[key].type
+                    url,
+                    public_id: null,
+                    type: isYoutubeUrl(url) ? "video" : getMediaType(url)
+                  };
+                }
+
+                if (m.url) {
+                  return {
+                    url: cleanUrl(m.url),
+                    public_id: m.public_id ?? null,
+                    type: m.type ?? getMediaType(m.url)
+                  };
+                }
+
+                if(m.source === "url") {
+
+                  const url = cleanUrl(m.url);
+
+                  if (!isValidUrl(url)) {
+                    throw new Error(`URL inválida ${url}`);
+                  }
+
+                  if (!isMediaUrl(url) && !isYoutubeUrl(url)) {
+                    throw new Error(`La URL no es imagen o video válido`);
+                  }
+
+                  return {
+                    url,
+                    public_id: null,
+                    type: isYoutubeUrl(url) ? "video" : getMediaType(url)
                   };
                 }
 
                 return null;
-              }
 
-
-              /* 2️⃣ URL externa */
-
-              if (m.source === "url") {
-
-                if (!isValidUrl(m.url)) {
-                  throw new Error(`URL inválida: ${m.url}`);
-                }
-
-                if (!isMediaUrl(m.url)) {
-                  throw new Error(`La URL no es imagen o video válido: ${m.url}`);
-                }
-
-                return {
-                  url: m.url,
-                  public_id: null,
-                  type: getMediaType(m.url)
-                };
-              }
-
-
-              /* 3️⃣ Media existente */
-
-              if (m.url) {
-
-                if (!isValidUrl(m.url)) {
-                  throw new Error(`URL inválida: ${m.url}`);
-                }
-
-                return {
-                  url: m.url,
-                  public_id: m.public_id || null,
-                  type: m.type || getMediaType(m.url)
-                };
-              }
-              
-
-              return null;
-
-            }).filter(Boolean);
-
+              })
+              .filter(Boolean);
           }
+
           docs.push(base);
+
         });
       }
 
@@ -378,17 +297,13 @@ exports.saveFlow = async (req, res) => {
 
       const newStartNodeId = idMap.get(String(start_node_id));
 
-      if (!newStartNodeId) {
-        throw new Error("start_node_id inválido después del mapeo");
-      }
+      flow.start_node_id = newStartNodeId;
+      flow.lock = null;
+      flow.status = isPublishing ? "published" : "draft";
 
       if (!flow.is_template && chatbot_id) {
         flow.chatbot_id = chatbot_id;
       }
-
-      flow.start_node_id = newStartNodeId;
-      flow.lock = null;
-      flow.status = isPublishing ? "published" : "draft";
 
       if (isPublishing) {
         flow.version = (flow.version ?? 0) + 1;
@@ -396,7 +311,12 @@ exports.saveFlow = async (req, res) => {
       }
 
       await flow.save({ session });
+
     });
+
+    /* ================= BORRAR MEDIA ================= */
+
+    await deleteMediaBatch(mediaToDelete);
 
     return res.json({
       success: true,
@@ -406,12 +326,13 @@ exports.saveFlow = async (req, res) => {
     });
 
   } catch (error) {
+
     console.log("🔥 FULL ERROR:", error);
-    console.log("🔥 STACK:", error.stack);
 
     return res.status(400).json({
       success: false,
       message: error.message
     });
+
   }
 };
