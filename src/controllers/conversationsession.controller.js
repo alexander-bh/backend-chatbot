@@ -252,6 +252,24 @@ exports.nextStep = async (req, res) => {
 
     let nextNode = resolveNextNode(currentNode);
 
+    while (
+      nextNode &&
+      !["question", "email", "phone", "number", "options", "policy"].includes(nextNode.node_type)
+    ) {
+
+      session.current_node_id = nextNode._id;
+
+      session.history.push({
+        node_id: nextNode._id,
+        question: nextNode.content,
+        node_type: nextNode.node_type
+      });
+
+      if (nextNode.end_conversation) break;
+
+      nextNode = resolveNextNode(nextNode);
+    }
+
     /* ================= SAFE TERMINATION ================= */
 
     if (!nextNode) {
