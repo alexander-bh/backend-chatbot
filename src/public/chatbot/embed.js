@@ -151,19 +151,19 @@
     }
 
     function renderMediaCarousel(mediaList, bubbleElement) {
-
         if (!Array.isArray(mediaList) || !bubbleElement) return;
+
+        const wrapper = document.createElement("div");
+        wrapper.className = "media-carousel-wrapper";
 
         const carousel = document.createElement("div");
         carousel.className = "media-carousel";
 
-        mediaList.forEach(media => {
-
+        mediaList.forEach((media, index) => {
             const item = document.createElement("div");
             item.className = "media-item";
 
             if (media.type === "image") {
-
                 const img = document.createElement("img");
                 img.src = media.url;
                 img.loading = "lazy";
@@ -173,12 +173,10 @@
             }
 
             if (media.type === "video") {
-
                 const video = document.createElement("video");
                 video.src = media.url;
                 video.controls = true;
                 video.playsInline = true;
-
                 item.appendChild(video);
             }
 
@@ -192,7 +190,32 @@
             carousel.appendChild(item);
         });
 
-        bubbleElement.appendChild(carousel);
+        wrapper.appendChild(carousel);
+
+        // Dots solo si hay más de 1 item
+        if (mediaList.length > 1) {
+            const dots = document.createElement("div");
+            dots.className = "media-carousel-dots";
+
+            mediaList.forEach((_, i) => {
+                const dot = document.createElement("span");
+                if (i === 0) dot.classList.add("active");
+                dots.appendChild(dot);
+            });
+
+            // Actualizar dot activo al hacer scroll
+            carousel.addEventListener("scroll", () => {
+                const itemWidth = carousel.querySelector(".media-item")?.offsetWidth + 10 || 190;
+                const activeIndex = Math.round(carousel.scrollLeft / itemWidth);
+                dots.querySelectorAll("span").forEach((d, i) => {
+                    d.classList.toggle("active", i === activeIndex);
+                });
+            });
+
+            wrapper.appendChild(dots);
+        }
+
+        bubbleElement.appendChild(wrapper);
     }
 
     const imageViewer = document.createElement("div");

@@ -596,34 +596,99 @@ main {
 
 .media-carousel {
     display: flex;
-    gap: 8px;
+    gap: 10px;
     overflow-x: auto;
-    padding: 6px 0;
+    padding: 8px 4px 12px 4px;
     scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    -webkit-overflow-scrolling: touch;
 }
 
 .bubble.media-only {
-  padding: 6px;
-  background: transparent;
-  box-shadow: none;
+    padding: 6px;
+    background: transparent;
+    box-shadow: none;
+}
+
+.media-carousel::-webkit-scrollbar {
+    display: none;
 }
 
 .media-item {
     flex: 0 0 auto;
-    width: 160px;
+    width: 180px;
     scroll-snap-align: start;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #f1f5f9;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.media-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
 }
 
 .media-item img,
 .media-item video {
     width: 100%;
-    border-radius: 10px;
+    height: 130px;
+    object-fit: cover;
+    border-radius: 0;
+    display: block;
 }
 
 .media-title {
     font-size: 12px;
-    margin-top: 4px;
-    text-align: center;
+    font-weight: 500;
+    margin: 0;
+    padding: 7px 10px;
+    color: #374151;
+    background: white;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    border-top: 1px solid #f1f5f9;
+}
+
+.media-carousel-wrapper {
+    position: relative;
+}
+
+.media-carousel-dots {
+    display: flex;
+    justify-content: center;
+    gap: 5px;
+    margin-top: 8px;
+}
+
+.media-carousel-dots span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #d1d5db;
+    transition: background 0.2s;
+}
+
+.media-carousel-dots span.active {
+    background: var(--chat-primary);
+    width: 16px;
+    border-radius: 3px;
+}
+
+/* En móvil, items un poco más pequeños */
+@media (max-width: 480px) {
+    .media-item {
+        width: 150px;
+    }
+
+    .media-item img,
+    .media-item video {
+        height: 110px;
+    }
 }
 
 /* =========================
