@@ -11,9 +11,9 @@ router.post("/reset-password", authCtrl.resetPassword);
 // Login
 router.post("/login", authCtrl.login);
 // Crear la primera cuenta 
-router.post("/register-first", role("ADMIN", "CLIENT"), authCtrl.registerFirst);
+router.post("/register-first", authCtrl.registerFirst);
 // Sesión
-router.post("/logout", auth,role("ADMIN", "CLIENT") ,authCtrl.logout);
+router.post("/logout", auth ,authCtrl.logout);
 router.post("/change-password", auth, role("ADMIN", "CLIENT"), authCtrl.changePassword);
 
 module.exports = router;
