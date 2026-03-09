@@ -151,6 +151,7 @@
     }
 
     function openImageViewer(url) {
+        window.open(url, "_blank", "noopener,noreferrer");
         const viewerVideo = imageViewer.querySelector(".viewer-video");
         if (viewerVideo) {
             viewerVideo.pause();
