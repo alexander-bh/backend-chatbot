@@ -2,8 +2,6 @@ const { deleteFromCloudinary } = require("../services/cloudinary.service");
 
 exports.deleteMediaBatch = async (publicIds = []) => {
 
-    console.log("Lista de media",publicIds)
-
   if (!publicIds.length) return;
 
   await Promise.all(
