@@ -209,26 +209,20 @@ exports.saveFlow = async (req, res) => {
           const newId = idMap.get(node.__old_id);
 
           /* ===== RESOLVER NEXT ===== */
-
           let nextNodeId = null;
 
-          if (node.next_node_id && validOldIds.has(String(node.next_node_id))) {
+          // intentar usar next enviado
+          if (node.next_node_id && idMap.has(String(node.next_node_id))) {
             nextNodeId = idMap.get(String(node.next_node_id));
-
-            console.log("NEXT RESOLVED BY ID:", node.next_node_id);
-            console.log("NEXT NEW ID:", nextNodeId?.toString());
-          } else {
-            const next = branchNodes[index + 1];
-            if (next) nextNodeId = idMap.get(next.__old_id);
-            if (next) {
-              nextNodeId = idMap.get(next.__old_id);
-
-              console.log("NEXT AUTO ORDER →", next.__old_id);
-            } else {
-              console.log("NO NEXT NODE");
-            }
           }
 
+          // fallback por orden
+          if (!nextNodeId) {
+            const next = branchNodes[index + 1];
+            if (next) {
+              nextNodeId = idMap.get(next.__old_id);
+            }
+          }
           const base = {
             _id: newId,
             flow_id: flow._id,
