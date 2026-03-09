@@ -1,20 +1,44 @@
-exports.extractMediaToDelete = (nodes = [], branches = []) => {
+const mongoose = require("mongoose");
+
+exports.extractMediaToDelete = (payload = {}) => {
+
   console.log("🔍 ANALIZANDO MEDIA A ELIMINAR");
 
-  const media = [];
+  const nodes = payload.nodes || [];
+  const branches = payload.branches || [];
+
+  const publicIds = [];
+  const nodeIds = [];
+
+  /* ================= ROOT ================= */
+
+  if (Array.isArray(payload.media_delete_items)) {
+
+    console.log("ROOT media_delete_items:", payload.media_delete_items);
+
+    for (const id of payload.media_delete_items) {
+      if (typeof id === "string" && id.includes("/")) {
+        publicIds.push(id);
+      }
+    }
+  }
+
+
+  if (Array.isArray(payload.media_delete_nodes)) {
+
+    console.log("ROOT media_delete_nodes:", payload.media_delete_nodes);
+
+    for (const id of payload.media_delete_nodes) {
+      if (typeof id === "string" && id.includes("/")) {
+        publicIds.push(id); // 🔥 ES PUBLIC_ID, NO NODE_ID
+      }
+    }
+  }
+
+  /* ================= NODES ================= */
 
   const collect = (n, index, type) => {
     console.log(`📦 Revisando nodo (${type}) index=${index}`);
-
-    if (Array.isArray(n.media_delete_nodes)) {
-      console.log("media_delete_nodes:", n.media_delete_nodes);
-      media.push(...n.media_delete_nodes);
-    }
-
-    if (Array.isArray(n.media_delete_items)) {
-      console.log("media_delete_items:", n.media_delete_items);
-      media.push(...n.media_delete_items);
-    }
   };
 
   nodes.forEach((n, i) => collect(n, i, "main"));
@@ -25,9 +49,13 @@ exports.extractMediaToDelete = (nodes = [], branches = []) => {
     });
   });
 
-  console.log("🗑️ MEDIA TO DELETE FINAL:", media);
+  console.log("🗑️ PUBLIC IDS:", publicIds);
+  console.log("🗑️ NODE IDS:", nodeIds);
 
-  return [...new Set(media)]; // evita duplicados
+  return {
+    publicIds: [...new Set(publicIds)],
+    nodeIds: [...new Set(nodeIds)]
+  };
 };
 
 exports.groupNodesByBranch = (allNodes = []) => {
