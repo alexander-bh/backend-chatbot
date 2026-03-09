@@ -150,106 +150,97 @@
         bubble.appendChild(container);
     }
 
-    function openImageViewer(url) {
-        window.open(url, "_blank", "noopener,noreferrer");
-        const viewerVideo = imageViewer.querySelector(".viewer-video");
-        if (viewerVideo) {
-            viewerVideo.pause();
-            viewerVideo.style.display = "none";
+    function openVideoViewer(url) {
+    window.open(url, "_blank", "noopener,noreferrer");
+}
+
+function openImageViewer(url) {
+    viewerImg.src = url;
+    imageViewer.classList.add("open");
+}
+
+function closeImageViewer() {
+    imageViewer.classList.remove("open");
+    viewerImg.src = "";
+}
+
+function renderMediaCarousel(mediaList, bubbleElement) {
+    if (!Array.isArray(mediaList) || !bubbleElement) return;
+
+    const msgEl = bubbleElement.closest(".msg.bot");
+    if (msgEl) msgEl.classList.add("media-msg");
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "media-carousel-wrapper";
+
+    const MAX_VISIBLE = 4;
+    const total = mediaList.length;
+    const extra = total - MAX_VISIBLE;
+
+    let countClass = "count-1";
+    if (total === 2) countClass = "count-2";
+    else if (total === 3) countClass = "count-3";
+    else if (total === 4) countClass = "count-4";
+    else if (total > 4) countClass = "count-more";
+
+    const grid = document.createElement("div");
+    grid.className = `media-grid ${countClass}`;
+
+    mediaList.slice(0, MAX_VISIBLE).forEach((media, index) => {
+        const item = document.createElement("div");
+        item.className = "media-item";
+
+        const isLast = index === MAX_VISIBLE - 1;
+        if (isLast && extra > 0) {
+            item.classList.add("has-more-overlay");
+            item.dataset.more = `+${extra + 1}`;
         }
-        viewerImg.style.display = "";
-        viewerImg.src = url;
-        imageViewer.classList.add("open");
-    }
 
-    function closeImageViewer() {
-        imageViewer.classList.remove("open");
-        viewerImg.src = "";
-        viewerImg.style.display = "";
-        const viewerVideo = imageViewer.querySelector(".viewer-video");
-        if (viewerVideo) {
-            viewerVideo.pause();
-            viewerVideo.src = "";
-            viewerVideo.style.display = "none";
+        if (media.type === "image") {
+            const img = document.createElement("img");
+            img.src = media.url;
+            img.loading = "lazy";
+            item.onclick = () => openImageViewer(media.url);
+            item.appendChild(img);
         }
-    }
 
-    function renderMediaCarousel(mediaList, bubbleElement) {
-        if (!Array.isArray(mediaList) || !bubbleElement) return;
-
-        const msgEl = bubbleElement.closest(".msg.bot");
-        if (msgEl) msgEl.classList.add("media-msg");
-
-        const wrapper = document.createElement("div");
-        wrapper.className = "media-carousel-wrapper";
-
-        const MAX_VISIBLE = 4;
-        const total = mediaList.length;
-        const extra = total - MAX_VISIBLE;
-
-        // Clase de cuadrícula según cantidad
-        let countClass = "count-1";
-        if (total === 2) countClass = "count-2";
-        else if (total === 3) countClass = "count-3";
-        else if (total === 4) countClass = "count-4";
-        else if (total > 4) countClass = "count-more";
-
-        const grid = document.createElement("div");
-        grid.className = `media-grid ${countClass}`;
-
-        mediaList.slice(0, MAX_VISIBLE).forEach((media, index) => {
-            const item = document.createElement("div");
-            item.className = "media-item";
-
-            // Último item visible con más imágenes → overlay +N
-            const isLast = index === MAX_VISIBLE - 1;
-            if (isLast && extra > 0) {
-                item.classList.add("has-more-overlay");
-                item.dataset.more = `+${extra + 1}`;
+        if (media.type === "video") {
+            if (total === 1) {
+                // 1 solo video: usar <a> con link directo para evitar CSP
+                const link = document.createElement("a");
+                link.href = media.url;
+                link.target = "_blank";
+                link.rel = "noopener noreferrer";
+                link.className = "video-link-item";
+                link.innerHTML = `
+                    <div class="video-thumb-placeholder">
+                        <svg viewBox="0 0 48 48" width="52" height="52">
+                            <circle cx="24" cy="24" r="24" fill="rgba(255,255,255,0.15)"/>
+                            <polygon points="19,14 38,24 19,34" fill="white"/>
+                        </svg>
+                        <span>Ver video</span>
+                    </div>`;
+                item.appendChild(link);
+            } else {
+                // En grid: placeholder con ícono, sin cargar el video (evita CSP)
+                item.style.cursor = "pointer";
+                item.onclick = () => openVideoViewer(media.url);
+                item.innerHTML = `
+                    <div class="video-thumb-placeholder">
+                        <svg viewBox="0 0 48 48" width="44" height="44">
+                            <circle cx="24" cy="24" r="24" fill="rgba(0,0,0,0.5)"/>
+                            <polygon points="19,14 38,24 19,34" fill="white"/>
+                        </svg>
+                    </div>`;
             }
+        }
 
-            if (media.type === "image") {
-                const img = document.createElement("img");
-                img.src = media.url;
-                img.loading = "lazy";
-                item.onclick = () => openImageViewer(media.url);
-                item.appendChild(img);
-            }
+        grid.appendChild(item);
+    });
 
-            if (media.type === "video") {
-                const video = document.createElement("video");
-                video.src = media.url;
-                video.playsInline = true;
-                video.muted = true;
-
-                if (total === 1) {
-                    // 1 solo video: controles directos
-                    video.controls = true;
-                    item.appendChild(video);
-                } else {
-                    // En grid: thumbnail con ícono de play encima
-                    video.controls = false;
-                    item.appendChild(video);
-
-                    const playOverlay = document.createElement("div");
-                    playOverlay.className = "video-play-overlay";
-                    playOverlay.innerHTML = `
-                    <svg viewBox="0 0 48 48" width="44" height="44">
-                        <circle cx="24" cy="24" r="24" fill="rgba(0,0,0,0.5)"/>
-                        <polygon points="19,14 38,24 19,34" fill="white"/>
-                    </svg>`;
-                    item.appendChild(playOverlay);
-                    item.style.cursor = "pointer";
-                    item.onclick = () => openVideoViewer(media.url);
-                }
-            }
-
-            grid.appendChild(item);
-        });
-
-        wrapper.appendChild(grid);
-        bubbleElement.appendChild(wrapper);
-    }
+    wrapper.appendChild(grid);
+    bubbleElement.appendChild(wrapper);
+}
 
     const imageViewer = document.createElement("div");
     imageViewer.className = "chat-image-viewer";
