@@ -160,6 +160,16 @@ const FlowNodeSchema = new Schema(
       default: []
     },
 
+    media_delete_items: {
+      type: [String],
+      default: []
+    },
+
+    media_delete_nodes: {
+      type: [String],
+      default: []
+    },
+
     next_node_id: {
       type: Schema.Types.ObjectId,
       ref: "FlowNode",
