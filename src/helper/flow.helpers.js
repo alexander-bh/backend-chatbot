@@ -1,21 +1,23 @@
 exports.extractMediaToDelete = (nodes, branches) => {
   const media = [];
 
-  nodes.forEach(n => {
+  const collect = (n) => {
     if (Array.isArray(n.media_delete_nodes)) {
       media.push(...n.media_delete_nodes);
     }
-  });
+
+    if (Array.isArray(n.media_delete_items)) {
+      media.push(...n.media_delete_items);
+    }
+  };
+
+  nodes.forEach(collect);
 
   branches.forEach(branch => {
-    (branch.nodes || []).forEach(n => {
-      if (Array.isArray(n.media_delete_nodes)) {
-        media.push(...n.media_delete_nodes);
-      }
-    });
+    (branch.nodes || []).forEach(collect);
   });
 
-  return [...new Set(media)];
+  console.log("🗑️ MEDIA TO DELETE:", media);
 };
 
 
