@@ -237,8 +237,9 @@ exports.renderEmbed = async (req, res) => {
         `script-src 'self' ${apiOrigin}`,
         `style-src 'self' 'unsafe-inline'`,
         `img-src 'self' data: https:`,
-        `media-src https:`,
+        `media-src https:`,          // ← AGREGA ESTA LÍNEA
         `connect-src 'self' ${apiOrigin} wss:`,
+        `frame-ancestors ${frameAncestors}`
       ].join("; ")
     );
 
