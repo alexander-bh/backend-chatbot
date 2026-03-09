@@ -153,11 +153,16 @@
     function renderMediaCarousel(mediaList, bubbleElement) {
         if (!Array.isArray(mediaList) || !bubbleElement) return;
 
+        // Marcar el mensaje padre para expandir el ancho
+        const msgEl = bubbleElement.closest(".msg.bot");
+        if (msgEl) msgEl.classList.add("media-msg");
+
         const wrapper = document.createElement("div");
         wrapper.className = "media-carousel-wrapper";
 
         const carousel = document.createElement("div");
-        carousel.className = "media-carousel";
+        // Clase según cantidad de items
+        carousel.className = `media-carousel ${mediaList.length === 1 ? "single-item" : "multi-item"}`;
 
         mediaList.forEach((media, index) => {
             const item = document.createElement("div");
@@ -192,7 +197,6 @@
 
         wrapper.appendChild(carousel);
 
-        // Dots solo si hay más de 1 item
         if (mediaList.length > 1) {
             const dots = document.createElement("div");
             dots.className = "media-carousel-dots";
@@ -203,7 +207,6 @@
                 dots.appendChild(dot);
             });
 
-            // Actualizar dot activo al hacer scroll
             carousel.addEventListener("scroll", () => {
                 const itemWidth = carousel.querySelector(".media-item")?.offsetWidth + 10 || 190;
                 const activeIndex = Math.round(carousel.scrollLeft / itemWidth);
