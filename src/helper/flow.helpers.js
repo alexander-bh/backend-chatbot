@@ -1,5 +1,3 @@
-const mongoose = require("mongoose");
-
 exports.extractMediaToDelete = (payload = {}) => {
 
   console.log("🔍 ANALIZANDO MEDIA A ELIMINAR");
@@ -48,9 +46,6 @@ exports.extractMediaToDelete = (payload = {}) => {
       collect(n, `${bi}-${ni}`, "branch");
     });
   });
-
-  console.log("🗑️ PUBLIC IDS:", publicIds);
-  console.log("🗑️ NODE IDS:", nodeIds);
 
   return {
     publicIds: [...new Set(publicIds)],

@@ -73,6 +73,12 @@ exports.saveFlow = async (req, res) => {
     if (!nodes.length) throw new Error("nodes requeridos");
     if (!start_node_id) throw new Error("start_node_id requerido");
 
+    console.log("======== FLOW PAYLOAD ========");
+    console.log("start_node_id:", start_node_id);
+    console.log("nodes length:", nodes.length);
+    console.log("branches length:", branches.length);
+    console.log("nodes:", JSON.stringify(nodes, null, 2));
+
     const isPublishing = publish === true;
 
     /* ================= MEDIA A ELIMINAR ================= */
@@ -128,6 +134,10 @@ exports.saveFlow = async (req, res) => {
 
       const oldId = String(n._id);
 
+      console.log("MAP NODE ID");
+      console.log("OLD:", oldId);
+      console.log("NEW:", newId.toString());
+
       if (validOldIds.has(oldId)) {
         throw new Error(`_id duplicado: ${oldId}`);
       }
@@ -136,6 +146,12 @@ exports.saveFlow = async (req, res) => {
 
       const newId = new mongoose.Types.ObjectId();
 
+      console.log(
+        Array.from(idMap.entries()).map(([oldId, newId]) => ({
+          oldId,
+          newId: newId.toString()
+        }))
+      );
       idMap.set(oldId, newId);
 
       n.__old_id = oldId;
@@ -190,6 +206,11 @@ exports.saveFlow = async (req, res) => {
           .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
         branchNodes.forEach((node, index) => {
+          console.log("----- PROCESS NODE -----");
+          console.log("NODE:", node.__old_id);
+          console.log("TYPE:", node.node_type);
+          console.log("ORDER:", node.order);
+          console.log("NEXT SENT FROM FRONT:", node.next_node_id);
 
           const newId = idMap.get(node.__old_id);
 
@@ -199,9 +220,19 @@ exports.saveFlow = async (req, res) => {
 
           if (node.next_node_id && validOldIds.has(String(node.next_node_id))) {
             nextNodeId = idMap.get(String(node.next_node_id));
+
+            console.log("NEXT RESOLVED BY ID:", node.next_node_id);
+            console.log("NEXT NEW ID:", nextNodeId?.toString());
           } else {
             const next = branchNodes[index + 1];
             if (next) nextNodeId = idMap.get(next.__old_id);
+            if (next) {
+              nextNodeId = idMap.get(next.__old_id);
+
+              console.log("NEXT AUTO ORDER →", next.__old_id);
+            } else {
+              console.log("NO NEXT NODE");
+            }
           }
 
           const base = {
@@ -308,10 +339,27 @@ exports.saveFlow = async (req, res) => {
               })
               .filter(Boolean);
           }
+          console.log("NODE TO SAVE:");
+          console.log({
+            id: newId.toString(),
+            node_type: node.node_type,
+            next_node_id: nextNodeId?.toString(),
+            order: index
+          });
           docs.push(base);
 
         });
       }
+
+      console.log("======= FINAL DOCS =======");
+      console.log(
+        docs.map(d => ({
+          id: d._id.toString(),
+          type: d.node_type,
+          next: d.next_node_id?.toString(),
+          order: d.order
+        }))
+      );
 
       await FlowNode.insertMany(docs, { session });
 
@@ -341,6 +389,7 @@ exports.saveFlow = async (req, res) => {
     if (mediaToDelete.length) {
       await deleteMediaBatch(mediaToDelete);
     }
+
 
     return res.json({
       success: true,
