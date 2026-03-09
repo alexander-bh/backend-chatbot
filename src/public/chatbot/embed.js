@@ -153,71 +153,58 @@
     function renderMediaCarousel(mediaList, bubbleElement) {
         if (!Array.isArray(mediaList) || !bubbleElement) return;
 
-        // Marcar el mensaje padre para expandir el ancho
         const msgEl = bubbleElement.closest(".msg.bot");
         if (msgEl) msgEl.classList.add("media-msg");
 
         const wrapper = document.createElement("div");
         wrapper.className = "media-carousel-wrapper";
 
-        const carousel = document.createElement("div");
-        // Clase según cantidad de items
-        carousel.className = `media-carousel ${mediaList.length === 1 ? "single-item" : "multi-item"}`;
+        const MAX_VISIBLE = 4;
+        const total = mediaList.length;
+        const visible = total > MAX_VISIBLE ? MAX_VISIBLE : total;
+        const extra = total - MAX_VISIBLE;
 
-        mediaList.forEach((media, index) => {
+        // Clase de cuadrícula según cantidad
+        let countClass = "count-1";
+        if (total === 2) countClass = "count-2";
+        else if (total === 3) countClass = "count-3";
+        else if (total === 4) countClass = "count-4";
+        else if (total > 4) countClass = "count-more";
+
+        const grid = document.createElement("div");
+        grid.className = `media-grid ${countClass}`;
+
+        mediaList.slice(0, MAX_VISIBLE).forEach((media, index) => {
             const item = document.createElement("div");
             item.className = "media-item";
+
+            // Último item visible con más imágenes → overlay +N
+            const isLast = index === MAX_VISIBLE - 1;
+            if (isLast && extra > 0) {
+                item.classList.add("has-more-overlay");
+                item.dataset.more = `+${extra + 1}`;
+            }
 
             if (media.type === "image") {
                 const img = document.createElement("img");
                 img.src = media.url;
                 img.loading = "lazy";
-                img.style.cursor = "pointer";
-                img.onclick = () => openImageViewer(media.url);
+                item.onclick = () => openImageViewer(media.url);
                 item.appendChild(img);
             }
 
             if (media.type === "video") {
                 const video = document.createElement("video");
                 video.src = media.url;
-                video.controls = true;
+                video.controls = total === 1;
                 video.playsInline = true;
                 item.appendChild(video);
             }
 
-            if (media.title) {
-                const title = document.createElement("div");
-                title.className = "media-title";
-                title.textContent = media.title;
-                item.appendChild(title);
-            }
-
-            carousel.appendChild(item);
+            grid.appendChild(item);
         });
 
-        wrapper.appendChild(carousel);
-
-        if (mediaList.length > 1) {
-            const dots = document.createElement("div");
-            dots.className = "media-carousel-dots";
-
-            mediaList.forEach((_, i) => {
-                const dot = document.createElement("span");
-                if (i === 0) dot.classList.add("active");
-                dots.appendChild(dot);
-            });
-
-            carousel.addEventListener("scroll", () => {
-                const itemWidth = carousel.querySelector(".media-item")?.offsetWidth + 10 || 190;
-                const activeIndex = Math.round(carousel.scrollLeft / itemWidth);
-                dots.querySelectorAll("span").forEach((d, i) => {
-                    d.classList.toggle("active", i === activeIndex);
-                });
-            });
-
-            wrapper.appendChild(dots);
-        }
-
+        wrapper.appendChild(grid);
         bubbleElement.appendChild(wrapper);
     }
 
