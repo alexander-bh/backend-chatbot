@@ -620,21 +620,43 @@ main {
 /* Item ocupa todo el ancho disponible cuando es 1 sola imagen */
 .media-carousel.single-item .media-item {
     width: 100%;
+    background: #0f172a;
+    /* fondo oscuro para imágenes con bordes */
 }
 
 .media-carousel.single-item .media-item img,
 .media-carousel.single-item .media-item video {
-    height: 180px;
+    height: auto;
+    /* ← altura automática según la imagen */
+    max-height: 260px;
+    /* ← límite máximo */
+    object-fit: contain;
+    /* ← muestra la imagen completa sin recortar */
 }
 
-/* Con múltiples items, tamaño fijo para que se vea que hay más */
+/* Con múltiples items */
 .media-carousel.multi-item .media-item {
     width: 200px;
+    background: #0f172a;
 }
 
 .media-carousel.multi-item .media-item img,
 .media-carousel.multi-item .media-item video {
-    height: 150px;
+    height: auto;
+    max-height: 200px;
+    object-fit: contain;
+    /* ← también completa en multi */
+}
+
+/* Regla general como fallback */
+.media-item img,
+.media-item video {
+    width: 100%;
+    height: auto;
+    max-height: 220px;
+    object-fit: contain;
+    border-radius: 0;
+    display: block;
 }
 
 .bubble.media-only {
@@ -724,23 +746,16 @@ main {
     }
 }
 
+/* Móvil */
 @media (max-width: 480px) {
-    .msg.bot.media-msg .msg-content {
-        max-width: calc(100% - 38px);
-    }
-
-    .media-carousel.multi-item .media-item {
-        width: 165px;
+    .media-carousel.single-item .media-item img,
+    .media-carousel.single-item .media-item video {
+        max-height: 200px;
     }
 
     .media-carousel.multi-item .media-item img,
     .media-carousel.multi-item .media-item video {
-        height: 125px;
-    }
-
-    .media-carousel.single-item .media-item img,
-    .media-carousel.single-item .media-item video {
-        height: 155px;
+        max-height: 160px;
     }
 }
 
