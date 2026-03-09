@@ -5,17 +5,7 @@ const { validateFlow } = require("../validators/flow.validator");
 const { ensureFlowExists } = require("../services/flowNode.service");
 const withTransactionRetry = require("../utils/withTransactionRetry");
 const flowNodeService = require("../services/flowNode.service");
-const { isValidUrl,
-  isMediaUrl,
-  getMediaType,
-  isYoutubeUrl,
-  cleanUrl } = require("../helper/isValidUrl");
-const {
-  extractMediaToDelete,
-  groupNodesByBranch,
-  buildUploadedFilesMap
-} = require("../helper/flow.helpers");
-const { deleteMediaBatch } = require("../helper/media.helpers");
+const { isValidUrl, isMediaUrl, getMediaType } = require("../helper/isValidUrl");
 
 // Obtener nodos por flow
 exports.getNodesByFlow = async (req, res) => {
@@ -43,11 +33,14 @@ exports.saveFlow = async (req, res) => {
   try {
     let flowId = req.params.id;
 
+    console.log("REQ BODY:", req.body);
+
     if (!flowId || flowId === "null" || flowId === "undefined") {
       flowId = null;
     }
 
     console.log("FILES:", req.files);
+    console.log("BODY:", req.body);
 
     const account_id = req.user.account_id;
     const user_id = req.user._id || req.user.id;
@@ -110,10 +103,6 @@ exports.saveFlow = async (req, res) => {
 
     const isPublishing = publish === true;
 
-    /* ================= MEDIA A ELIMINAR ================= */
-
-    const mediaToDelete = extractMediaToDelete(nodes, branches);
-
     /* ================= UNIFICAR NODOS ================= */
 
     const allNodes = [
@@ -152,7 +141,8 @@ exports.saveFlow = async (req, res) => {
     /* ================= VALIDACIÓN ESTRUCTURAL ================= */
 
     validateFlow(nodes, branches, start_node_id);
-    const uploadedFilesMap = buildUploadedFilesMap(req.files);
+
+    /* ================= TRANSACCIÓN ================= */
 
     await withTransactionRetry(async session => {
 
@@ -179,6 +169,19 @@ exports.saveFlow = async (req, res) => {
         }
       }
 
+      /* ===== ELIMINAR MEDIA DE CLOUDINARY ===== */
+      const uploadedFilesMap = {};
+      if (req.files && req.files.length) {
+        for (const file of req.files) {
+          // El frontend manda file_key = media_<nodeId>_<i>
+          uploadedFilesMap[file.fieldname] = {
+            url: file.path,       // URL en Cloudinary
+            public_id: file.filename,
+            type: file.mimetype.startsWith("video/") ? "video" : "image",
+          };
+        }
+      }
+
       /* ===== BORRAR NODOS ANTERIORES ===== */
 
       await FlowNode.deleteMany(
@@ -197,7 +200,15 @@ exports.saveFlow = async (req, res) => {
       ];
 
       /* ================= AGRUPAR POR RAMA ================= */
-      const groupedByBranch = groupNodesByBranch(allNodes);
+
+      const groupedByBranch = {};
+
+      allNodes.forEach(node => {
+        const key = node.branch_id || "__main__";
+        if (!groupedByBranch[key]) groupedByBranch[key] = [];
+        groupedByBranch[key].push(node);
+      });
+
       const docs = [];
 
       for (const branchKey in groupedByBranch) {
@@ -296,75 +307,66 @@ exports.saveFlow = async (req, res) => {
           /* ===== MEDIA ===== */
           if (node.node_type === "media") {
 
-            base.media = (node.media ?? [])
-              .map((m, i) => {
+            base.media = (node.media ?? []).map((m, i) => {
 
-                /* 1️⃣ Upload desde Cloudinary */
-                if (m.source === "upload") {
+              /* 1️⃣ Upload nuevo */
 
-                  const key = `media_${node._id}_${i}`;
+              if (m.source === "upload") {
 
-                  if (uploadedFilesMap[key]) {
-                    return {
-                      url: uploadedFilesMap[key].url,
-                      public_id: uploadedFilesMap[key].public_id,
-                      type: uploadedFilesMap[key].type
-                    };
-                  }
+                const key = `media_${node._id}_${i}`;
 
-                  return null;
-                }
-
-                /* 2️⃣ URL externa */
-
-                if (m.source === "url") {
-
-                  const url = cleanUrl(m.url);
-
-                  if (!isValidUrl(url)) {
-                    throw new Error(`URL inválida: ${url}`);
-                  }
-
-                  if (isYoutubeUrl(url)) {
-                    return {
-                      url,
-                      public_id: null,
-                      type: "video"
-                    };
-                  }
-
-                  if (!isMediaUrl(url)) {
-                    throw new Error(`La URL no es imagen o video válido: ${url}`);
-                  }
-
+                if (uploadedFilesMap[key]) {
                   return {
-                    url,
-                    public_id: null,
-                    type: getMediaType(url)
-                  };
-                }
-
-                /* 3️⃣ Media existente (editar flow) */
-
-                if (m.url) {
-
-                  const url = cleanUrl(m.url);
-
-                  if (!isValidUrl(url)) {
-                    throw new Error(`URL inválida: ${url}`);
-                  }
-
-                  return {
-                    url,
-                    public_id: m.public_id || null,
-                    type: m.type || getMediaType(url)
+                    url: uploadedFilesMap[key].url,
+                    public_id: uploadedFilesMap[key].public_id,
+                    type: uploadedFilesMap[key].type
                   };
                 }
 
                 return null;
+              }
 
-              })
-              .filter(Boolean);
+
+              /* 2️⃣ URL externa */
+
+              if (m.source === "url") {
+
+                if (!isValidUrl(m.url)) {
+                  throw new Error(`URL inválida: ${m.url}`);
+                }
+
+                if (!isMediaUrl(m.url)) {
+                  throw new Error(`La URL no es imagen o video válido: ${m.url}`);
+                }
+
+                return {
+                  url: m.url,
+                  public_id: null,
+                  type: getMediaType(m.url)
+                };
+              }
+
+
+              /* 3️⃣ Media existente */
+
+              if (m.url) {
+
+                if (!isValidUrl(m.url)) {
+                  throw new Error(`URL inválida: ${m.url}`);
+                }
+
+                return {
+                  url: m.url,
+                  public_id: m.public_id || null,
+                  type: m.type || getMediaType(m.url)
+                };
+              }
+              
+
+              return null;
+
+            }).filter(Boolean);
+
           }
           docs.push(base);
         });
@@ -395,10 +397,6 @@ exports.saveFlow = async (req, res) => {
 
       await flow.save({ session });
     });
-
-    /* ================= CLOUDINARY ================= */
-
-    await deleteMediaBatch(mediaToDelete);
 
     return res.json({
       success: true,
