@@ -10,6 +10,12 @@ const { isValidUrl,
   getMediaType,
   isYoutubeUrl,
   cleanUrl } = require("../helper/isValidUrl");
+const {
+  extractMediaToDelete,
+  groupNodesByBranch,
+  buildUploadedFilesMap
+} = require("../helper/flow.helpers");
+const { deleteMediaBatch } = require("../helper/media.helpers");
 
 // Obtener nodos por flow
 exports.getNodesByFlow = async (req, res) => {
@@ -104,6 +110,10 @@ exports.saveFlow = async (req, res) => {
 
     const isPublishing = publish === true;
 
+    /* ================= MEDIA A ELIMINAR ================= */
+
+    const mediaToDelete = extractMediaToDelete(nodes, branches);
+
     /* ================= UNIFICAR NODOS ================= */
 
     const allNodes = [
@@ -142,8 +152,7 @@ exports.saveFlow = async (req, res) => {
     /* ================= VALIDACIÓN ESTRUCTURAL ================= */
 
     validateFlow(nodes, branches, start_node_id);
-
-    /* ================= TRANSACCIÓN ================= */
+    const uploadedFilesMap = buildUploadedFilesMap(req.files);
 
     await withTransactionRetry(async session => {
 
@@ -170,18 +179,6 @@ exports.saveFlow = async (req, res) => {
         }
       }
 
-      const uploadedFilesMap = {};
-      if (req.files && req.files.length) {
-        for (const file of req.files) {
-          // El frontend manda file_key = media_<nodeId>_<i>
-          uploadedFilesMap[file.fieldname] = {
-            url: file.path,       // URL en Cloudinary
-            public_id: file.filename,
-            type: file.mimetype.startsWith("video/") ? "video" : "image",
-          };
-        }
-      }
-
       /* ===== BORRAR NODOS ANTERIORES ===== */
 
       await FlowNode.deleteMany(
@@ -200,15 +197,8 @@ exports.saveFlow = async (req, res) => {
       ];
 
       /* ================= AGRUPAR POR RAMA ================= */
-
-      const groupedByBranch = {};
-
-      allNodes.forEach(node => {
-        const key = node.branch_id || "__main__";
-        if (!groupedByBranch[key]) groupedByBranch[key] = [];
-        groupedByBranch[key].push(node);
-      });
-
+      const groupedByBranch = groupNodesByBranch(allNodes);
+      
       const docs = [];
 
       for (const branchKey in groupedByBranch) {
@@ -406,6 +396,10 @@ exports.saveFlow = async (req, res) => {
 
       await flow.save({ session });
     });
+
+    /* ================= CLOUDINARY ================= */
+
+    await deleteMediaBatch(mediaToDelete);
 
     return res.json({
       success: true,
