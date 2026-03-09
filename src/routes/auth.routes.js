@@ -2,29 +2,19 @@ const router = require("express").Router();
 const authCtrl = require("../controllers/auth.controller");
 const auth = require("../middlewares/auth.middleware");
 const role = require("../middlewares/role.middleware");
-const { resolveAccount } = require("../middlewares/resolveAccount");
-const rateLimit = require("express-rate-limit");
-
-// Crear la primera cuenta 
-router.post("/register-first", authCtrl.registerFirst);
-
-// Login
-router.post("/login", authCtrl.login);
-
-// Sesión
-router.post("/logout", auth, authCtrl.logout);
-router.post("/change-password", auth, authCtrl.changePassword);
-
-const forgotLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5
-});
+const forgotLimiter = require("../middlewares/publicRateLimit");
 
 // Recuperación de contraseña (SIN auth)
 router.post("/forgot-password", forgotLimiter, authCtrl.forgotPassword);
-
 // Resetear contraseña (SIN auth)
 router.post("/reset-password", authCtrl.resetPassword);
+// Login
+router.post("/login", authCtrl.login);
+// Crear la primera cuenta 
+router.post("/register-first", role("ADMIN", "CLIENT"), authCtrl.registerFirst);
+// Sesión
+router.post("/logout", auth,role("ADMIN", "CLIENT") ,authCtrl.logout);
+router.post("/change-password", auth, role("ADMIN", "CLIENT"), authCtrl.changePassword);
 
 module.exports = router;
 
