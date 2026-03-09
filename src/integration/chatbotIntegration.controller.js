@@ -236,7 +236,7 @@ exports.renderEmbed = async (req, res) => {
         `script-src 'self' ${apiOrigin} https:`,
         `style-src 'self' 'unsafe-inline'`,
         `img-src 'self' data: https:`,
-        `media-src 'self' https: blob:`,
+        `media-src 'self' https://res.cloudinary.com blob:`,
         `connect-src 'self' ${apiOrigin} https: wss:`,
         `font-src 'self' https: data:`,
         `frame-src 'self'`,
