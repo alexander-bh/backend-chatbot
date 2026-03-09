@@ -412,7 +412,7 @@
     async function process(node, depth = 0) {
         if (!node || depth > 20) return;
 
-        const nodeType = node.input_type || node.type;
+        const nodeType = node.input_type || node.type || node.node_type;
 
         /* =========================
            ERRORES DE VALIDACIÓN
@@ -460,18 +460,19 @@
         /* =========================
            RENDER MENSAJE BOT
         ========================= */
-        let bubbleElement;
+        let bubbleElement = null;
 
         if (node.content) {
             bubbleElement = renderBotMessage(node.content);
         } else {
             bubbleElement = renderBotMessage("");
+            bubbleElement.classList.add("media-only");
         }
 
         /* =========================
            MEDIA NODE
         ========================= */
-        if (node.type === "media" && Array.isArray(node.media)) {
+        if (nodeType === "media" && Array.isArray(node.media)) {
             renderMediaCarousel(node.media, bubbleElement);
         }
 

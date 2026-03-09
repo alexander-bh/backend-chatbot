@@ -602,6 +602,11 @@ main {
     scroll-snap-type: x mandatory;
 }
 
+.bubble.media-only {
+  padding: 6px;
+  background: transparent;
+  box-shadow: none;
+}
 
 .media-item {
     flex: 0 0 auto;
