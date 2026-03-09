@@ -1,11 +1,11 @@
 const { deleteFromCloudinary } = require("../services/cloudinary.service");
 
+
 exports.replaceMedia = async (req, res) => {
   try {
     const { old_public_id } = req.body;
 
     const newFile = req.file;
-
 
     if (!newFile) {
       return res.status(400).json({
@@ -38,3 +38,4 @@ exports.replaceMedia = async (req, res) => {
     });
   }
 };
+
