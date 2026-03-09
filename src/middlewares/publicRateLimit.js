@@ -7,3 +7,10 @@ module.exports = rateLimit({
   standardHeaders: true,
   legacyHeaders: false
 });
+
+const forgotLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5
+});
+
+module.exports = forgotLimiter; 

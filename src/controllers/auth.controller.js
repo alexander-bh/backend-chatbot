@@ -388,23 +388,13 @@ exports.resetPassword = async (req, res) => {
 // Cerrar sesion
 exports.logout = async (req, res) => {
   try {
-    const token = req.headers.authorization?.split(" ")[1];
-    if (!token) {
-      return res.status(400).json({
-        message: "Token requerido"
-      });
-    }
-    await Token.deleteOne({ token });
-    res.json({
-      message: "Sesión cerrada correctamente"
-    });
+    await Token.deleteOne({ token: req.token });
+
+    res.json({ message: "Sesión cerrada correctamente" });
 
   } catch (error) {
     console.error("LOGOUT ERROR:", error);
-
-    res.status(500).json({
-      message: "Error al cerrar sesión"
-    });
+    res.status(500).json({ message: "Error al cerrar sesión" });
   }
 };
 
