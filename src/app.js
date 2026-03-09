@@ -4,22 +4,6 @@ const path = require("path");
 const app = express();
 
 // ───────── MIDDLEWARES NORMALES ─────────
-app.use((req, res, next) => {
-  res.setHeader(
-    "Content-Security-Policy",
-    [
-      "default-src 'self'",
-      "script-src 'self' https:",
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: https:",
-      "media-src 'self' https: blob:",
-      "connect-src 'self' https: wss:",
-      "font-src 'self' https: data:"
-    ].join("; ")
-  );
-
-  next();
-});
 app.use(cors());
 app.use(express.json());
 app.set("trust proxy", 1);  
