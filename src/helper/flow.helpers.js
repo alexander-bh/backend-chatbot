@@ -1,41 +1,23 @@
 exports.extractMediaToDelete = (nodes, branches) => {
   const media = [];
 
-
-  console.log("🔍 ANALIZANDO MEDIA A ELIMINAR");
-
-  const collect = (n, index, type) => {
-
-    console.log(`📦 Revisando nodo (${type}) index=${index}`);
-
+  const collect = (n) => {
     if (Array.isArray(n.media_delete_nodes)) {
-      console.log("   media_delete_nodes:", n.media_delete_nodes);
       media.push(...n.media_delete_nodes);
     }
 
     if (Array.isArray(n.media_delete_items)) {
-      console.log("   media_delete_items:", n.media_delete_items);
       media.push(...n.media_delete_items);
-    }
-
-    if (Array.isArray(n.media)) {
-      n.media.forEach((m, i) => {
-        console.log(`   media[${i}] public_id:`, m.public_id);
-      });
     }
   };
 
-  nodes.forEach((n, i) => collect(n, i, "main"));
+  nodes.forEach(collect);
 
-  branches.forEach((branch, bi) => {
-    (branch.nodes || []).forEach((n, ni) =>
-      collect(n, `${bi}-${ni}`, "branch")
-    );
+  branches.forEach(branch => {
+    (branch.nodes || []).forEach(collect);
   });
 
-  console.log("🗑️ MEDIA TO DELETE FINAL:", media);
-
-  return [...new Set(media)];
+  console.log("🗑️ MEDIA TO DELETE:", media);
 };
 
 

@@ -68,25 +68,6 @@ exports.saveFlow = async (req, res) => {
       }
     }
 
-    console.log("🔎 MEDIA RECIBIDA DESDE FRONTEND");
-
-    nodes.forEach((node, ni) => {
-      if (node.node_type === "media") {
-        console.log(`📦 Nodo media [${ni}]`);
-
-        (node.media || []).forEach((m, mi) => {
-          console.log(`   media[${mi}]`, {
-            url: m.url,
-            public_id: m.public_id,
-            source: m.source
-          });
-        });
-
-        console.log("   media_delete_items:", node.media_delete_items);
-        console.log("   media_delete_nodes:", node.media_delete_nodes);
-      }
-    });
-
     console.log("Parsed nodes:", nodes);
     // Validación final
     if (!Array.isArray(nodes) || nodes.length === 0) {
@@ -217,7 +198,6 @@ exports.saveFlow = async (req, res) => {
 
       /* ================= AGRUPAR POR RAMA ================= */
       const groupedByBranch = groupNodesByBranch(allNodes);
-
       const docs = [];
 
       for (const branchKey in groupedByBranch) {
