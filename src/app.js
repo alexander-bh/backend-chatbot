@@ -39,6 +39,22 @@ app.use("/api/crm-fields", require("./routes/crmfields.routes"));
 app.use("/api/validation-rule",require("./routes/validationRule.routes.js"))
 
 
+app.use((req, res, next) => {
+  res.setHeader(
+    "Content-Security-Policy",
+    [
+      "default-src 'self'",
+      "script-src 'self' https:",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: https:",
+      "media-src 'self' https: blob:",
+      "connect-src 'self' https: wss:",
+      "font-src 'self' https: data:"
+    ].join("; ")
+  );
+
+  next();
+});
 app.use("/public", express.static(path.join(__dirname, "public")));
 
 // ───────── ERROR HANDLERS (AL FINAL SIEMPRE) ─────────
