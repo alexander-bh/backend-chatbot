@@ -229,7 +229,6 @@ exports.renderEmbed = async (req, res) => {
     /* =========================
        HEADERS SEGUROS
     ========================= */
-
     res.setHeader(
       "Content-Security-Policy",
       [
@@ -237,8 +236,9 @@ exports.renderEmbed = async (req, res) => {
         `script-src 'self' ${apiOrigin}`,
         `style-src 'self' 'unsafe-inline'`,
         `img-src 'self' data: https:`,
-        `media-src https:`,          // ← AGREGA ESTA LÍNEA
-        `connect-src 'self' ${apiOrigin} wss:`,
+        `media-src 'self' https:`,
+        `connect-src 'self' ${apiOrigin} https: wss:`,
+        `font-src 'self' https: data:`,
         `frame-ancestors ${frameAncestors}`
       ].join("; ")
     );
