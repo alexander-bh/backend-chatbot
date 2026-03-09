@@ -733,6 +733,26 @@ main {
     border-radius: 3px;
 }
 
+/* Play overlay en videos del grid */
+.video-play-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+/* Video en el viewer */
+.viewer-video {
+    max-width: 90%;
+    max-height: 90%;
+    border-radius: 10px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, .5);
+    display: none;
+}
+
+
 @media (max-width: 480px) {
     .msg.bot.media-msg .msg-content {
         max-width: calc(100% - 38px);
