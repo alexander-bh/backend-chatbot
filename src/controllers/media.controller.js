@@ -1,6 +1,5 @@
 const { deleteFromCloudinary } = require("../services/cloudinary.service");
 
-
 exports.replaceMedia = async (req, res) => {
   try {
     const { old_public_id } = req.body;
