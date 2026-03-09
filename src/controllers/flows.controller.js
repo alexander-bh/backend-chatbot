@@ -37,14 +37,11 @@ exports.saveFlow = async (req, res) => {
   try {
     let flowId = req.params.id;
 
-    console.log("REQ BODY:", req.body);
-
     if (!flowId || flowId === "null" || flowId === "undefined") {
       flowId = null;
     }
 
     console.log("FILES:", req.files);
-    console.log("BODY:", req.body);
 
     const account_id = req.user.account_id;
     const user_id = req.user._id || req.user.id;
@@ -173,7 +170,6 @@ exports.saveFlow = async (req, res) => {
         }
       }
 
-      /* ===== ELIMINAR MEDIA DE CLOUDINARY ===== */
       const uploadedFilesMap = {};
       if (req.files && req.files.length) {
         for (const file of req.files) {
