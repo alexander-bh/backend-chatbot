@@ -134,10 +134,6 @@ exports.saveFlow = async (req, res) => {
 
       const oldId = String(n._id);
 
-      console.log("MAP NODE ID");
-      console.log("OLD:", oldId);
-      console.log("NEW:", newId.toString());
-
       if (validOldIds.has(oldId)) {
         throw new Error(`_id duplicado: ${oldId}`);
       }
@@ -146,12 +142,10 @@ exports.saveFlow = async (req, res) => {
 
       const newId = new mongoose.Types.ObjectId();
 
-      console.log(
-        Array.from(idMap.entries()).map(([oldId, newId]) => ({
-          oldId,
-          newId: newId.toString()
-        }))
-      );
+      console.log("MAP NODE ID");
+      console.log("OLD:", oldId);
+      console.log("NEW:", newId.toString());
+
       idMap.set(oldId, newId);
 
       n.__old_id = oldId;
