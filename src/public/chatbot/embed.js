@@ -165,11 +165,7 @@
         imageViewer.classList.add("open");
         viewerVideo.play().catch(() => { });
     }
-    function openImageViewer(url) {
-        viewerImg.src = url;
-        imageViewer.classList.add("open");
-    }
-
+    
     function closeImageViewer() {
         imageViewer.classList.remove("open");
         viewerImg.src = "";
