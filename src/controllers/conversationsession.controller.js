@@ -8,7 +8,6 @@ const upsertContactFromSession = require("../services/upsertContactFromSession.s
 const renderNode = require("../utils/renderNode");
 const executeNodeNotification = require("../services/executeNodeNotification.service");
 const validateNodeInput = require("../validators/validateNodeInput");
-
 const ALLOWED_MODES = ["preview", "production"];
 
 /* --------------------------------------------------
@@ -227,6 +226,11 @@ exports.nextStep = async (req, res) => {
 
         if (match.next_node_id) {
           return nodesMap.get(String(match.next_node_id));
+        }
+
+        /* fallback al next del nodo */
+        if (node.next_node_id) {
+          return nodesMap.get(String(node.next_node_id));
         }
 
         return null;
