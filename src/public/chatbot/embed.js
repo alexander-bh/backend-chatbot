@@ -474,6 +474,7 @@
         ========================= */
         if (nodeType === "media" && Array.isArray(node.media)) {
             renderMediaCarousel(node.media, bubbleElement);
+            return;
         }
 
         /* =========================
