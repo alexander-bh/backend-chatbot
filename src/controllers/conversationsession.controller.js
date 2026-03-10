@@ -116,6 +116,7 @@ exports.startConversation = async (req, res) => {
 -------------------------------------------------- */
 exports.nextStep = async (req, res) => {
   try {
+
     const { id: sessionId } = req.params;
     const { input } = req.body;
 
@@ -124,6 +125,7 @@ exports.nextStep = async (req, res) => {
     }
 
     const session = await ConversationSession.findById(sessionId);
+
     if (!session) {
       return res.status(404).json({ message: "Sesión no encontrada" });
     }
@@ -142,33 +144,45 @@ exports.nextStep = async (req, res) => {
     const nodesMap = new Map(nodes.map(n => [String(n._id), n]));
 
     let currentNode = nodesMap.get(String(session.current_node_id));
+
     if (!currentNode) {
       throw new Error("Nodo actual no encontrado");
     }
 
-    const TEXT_INPUT_NODES = [
+    /* ================= NODE TYPES ================= */
+
+    const INPUT_NODES = [
       "question",
       "email",
       "phone",
-      "number",
+      "number"
     ];
 
-    /* ================= FIRST RENDER (NO INPUT) ================= */
+    const STOP_NODES = [
+      ...INPUT_NODES,
+      "options",
+      "policy",
+      "media"   // 🔥 IMPORTANTE
+    ];
+
+    /* ================= FIRST RENDER ================= */
 
     if (
-      TEXT_INPUT_NODES.includes(currentNode.node_type) &&
+      INPUT_NODES.includes(currentNode.node_type) &&
       input === undefined
     ) {
       return res.json(renderNode(currentNode, session._id));
     }
 
-    /* ================= SAVE INPUT + HISTORY ================= */
+    /* ================= SAVE INPUT ================= */
 
     if (
-      TEXT_INPUT_NODES.includes(currentNode.node_type) &&
+      INPUT_NODES.includes(currentNode.node_type) &&
       input !== undefined
     ) {
+
       const errors = validateNodeInput(currentNode, input);
+
       if (errors.length > 0) {
         return res.json({
           session_id: session._id,
@@ -182,13 +196,11 @@ exports.nextStep = async (req, res) => {
         });
       }
 
-      // Guardar variable
       if (session.mode === "production" && currentNode.variable_key) {
         session.variables[currentNode.variable_key] = String(input);
         session.markModified("variables");
       }
 
-      // 🔥 GUARDAR HISTORIAL
       session.history.push({
         node_id: currentNode._id,
         question: currentNode.content,
@@ -210,6 +222,7 @@ exports.nextStep = async (req, res) => {
         (node.node_type === "options" || node.node_type === "policy") &&
         input !== undefined
       ) {
+
         const sourceArray =
           node.node_type === "options"
             ? node.options
@@ -228,7 +241,6 @@ exports.nextStep = async (req, res) => {
           return nodesMap.get(String(match.next_node_id));
         }
 
-        /* fallback al next del nodo */
         if (node.next_node_id) {
           return nodesMap.get(String(node.next_node_id));
         }
@@ -239,6 +251,7 @@ exports.nextStep = async (req, res) => {
       if (node.next_node_id) {
 
         const candidate = nodesMap.get(String(node.next_node_id));
+
         if (!candidate) return null;
 
         if (candidate.branch_id) {
@@ -256,9 +269,11 @@ exports.nextStep = async (req, res) => {
 
     let nextNode = resolveNextNode(currentNode);
 
+    /* ================= AUTO FLOW ================= */
+
     while (
       nextNode &&
-      !["question", "email", "phone", "number", "options", "policy"].includes(nextNode.node_type)
+      !STOP_NODES.includes(nextNode.node_type)
     ) {
 
       session.current_node_id = nextNode._id;
@@ -303,9 +318,10 @@ exports.nextStep = async (req, res) => {
       session.current_branch_id = null;
     }
 
-    /* ================= SAVE NON-INPUT NODE HISTORY ================= */
+    /* ================= SAVE HISTORY ================= */
 
-    if (!TEXT_INPUT_NODES.includes(nextNode.node_type)) {
+    if (!INPUT_NODES.includes(nextNode.node_type)) {
+
       const lastHistory = session.history[session.history.length - 1];
 
       if (!lastHistory || String(lastHistory.node_id) !== String(nextNode._id)) {
@@ -325,9 +341,10 @@ exports.nextStep = async (req, res) => {
       await executeNodeNotification(nextNode, session);
     }
 
-    /* ================= END FLAG ================= */
+    /* ================= END CONVERSATION ================= */
 
     if (nextNode.end_conversation) {
+
       session.is_completed = true;
       session.current_branch_id = null;
 
@@ -341,7 +358,9 @@ exports.nextStep = async (req, res) => {
     return res.json(renderNode(nextNode, session._id));
 
   } catch (error) {
+
     console.error("nextStep:", error);
+
     return res.status(500).json({
       message: "Error al procesar conversación"
     });
