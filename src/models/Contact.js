@@ -65,6 +65,7 @@ const ContactSchema = new mongoose.Schema({
   company: String,
   website: String,
   company_phone: String,
+  phone_ext: String, // ✅ NUEVO
   position: String,
   city: String,
   country: String,
