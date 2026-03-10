@@ -63,6 +63,7 @@ const ContactSchema = new mongoose.Schema({
 
   // 🏢 Datos empresa
   company: String,
+  job_title:String,
   website: String,
   company_phone: String,
   phone_ext: String, // ✅ NUEVO
