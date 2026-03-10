@@ -118,10 +118,21 @@ exports.getContactsByChatbot = async (req, res) => {
 
 exports.updateStatus = async (req, res) => {
   try {
-
     const { id } = req.params;
     const { status } = req.body;
 
+    /* =========================
+       VALIDAR ID
+    ========================= */
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        message: "ID inválido"
+      });
+    }
+
+    /* =========================
+       VALIDAR STATUS
+    ========================= */
     const allowed = ["new", "contacted", "qualified", "lost"];
 
     if (!allowed.includes(status)) {
@@ -130,6 +141,9 @@ exports.updateStatus = async (req, res) => {
       });
     }
 
+    /* =========================
+       UPDATE
+    ========================= */
     const updated = await Contact.findOneAndUpdate(
       {
         _id: id,
@@ -137,7 +151,7 @@ exports.updateStatus = async (req, res) => {
         is_deleted: false
       },
       { $set: { status } },
-      { new: true }
+      { new: true, runValidators: true }
     );
 
     if (!updated) {

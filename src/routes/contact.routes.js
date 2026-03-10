@@ -14,6 +14,7 @@ router.get("/", auth, contactController.getContacts);
 router.get("/deleted", auth, contactController.getDeletedContacts);
 router.patch("/restore/:id", auth, contactController.restoreContact);
 router.delete("/force/:id", auth, contactController.permanentlyDeleteContact);
+router.patch("/:id/status", auth, contactController.updateStatus);
 
 
 router.get("/:chatbot_id", auth, contactController.getContactsByChatbot);
