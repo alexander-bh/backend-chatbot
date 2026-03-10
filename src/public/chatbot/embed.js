@@ -327,6 +327,7 @@
             typingElement.className = "msg bot typing";
             typingElement.innerHTML = `<div class="bubble"><span class="typing-dots"><span></span><span></span><span></span></span></div>`;
             el.messages.appendChild(typingElement);
+            scrollToBottom(); // ← agregar esto
         }
         if (!show && typingElement) {
             typingElement.remove();
@@ -442,7 +443,7 @@
 
         bubbleElement?.appendChild(optionsContainer);
     }
-
+    
     function expectsTextInput(node) {
         const type = node.input_type || node.type;
         return TEXT_INPUT_TYPES.includes(type);
@@ -506,8 +507,9 @@
         /* =========================
            TYPING
         ========================= */
-        if (node.typing_time) {
+        if (node.typing_time && node.typing_time > 0) {
             typing(true);
+            scrollToBottom();
             await new Promise(r => setTimeout(r, node.typing_time * 1000));
             typing(false);
         }
@@ -658,8 +660,9 @@
                 }
             );
 
+            const nextNode = await r.json();
             typing(false);
-            process(await r.json());
+            process(nextNode);
 
         } catch {
             typing(false);
