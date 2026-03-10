@@ -13,7 +13,7 @@ const auditService = require("../services/audit.service");
 const formatDateAMPM = require("../utils/formatDate");
 const { deleteFromCloudinary } = require("../services/cloudinary.service");
 const { cloneTemplateToFlow, createFallbackFlow } = require("../services/flowNode.service");
-const {slugify} = require("../helper/slugify"); 
+const slugify = require("../helper/slugify"); 
 
 /* ─────────────────────────────────────
    DASHBOAR
