@@ -157,47 +157,48 @@ exports.updateStatus = async (req, res) => {
 
 exports.createManualContact = async (req, res) => {
   try {
+
     const accountId = req.user.account_id;
 
-    const {
-      name,
-      email,
-      phone,
-      company,
-      website,
-      city,
-      country,
-      address,
-      position,
-      internal_note,
-      status
-    } = req.body;
-
-    const contact = await Contact.create({
+    const data = {
       account_id: accountId,
       source: "manual",
-      name,
-      email,
-      phone,
-      company,
-      website,
-      city,
-      country,
-      address,
-      position,
-      internal_note,
-      status: status || "new",
       completed: false,
-      variables: {}
-    });
+      variables: {},
+      status: req.body.status || "new"
+    };
+
+    const allowedFields = [
+      "name",
+      "email",
+      "phone",
+      "company",
+      "website",
+      "city",
+      "country",
+      "address",
+      "position",
+      "internal_note"
+    ];
+
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) {
+        data[field] = req.body[field];
+      }
+    }
+
+    const contact = await Contact.create(data);
 
     res.status(201).json(formatContact(contact));
 
   } catch (error) {
+
     console.error("CREATE MANUAL CONTACT ERROR:", error);
+
     res.status(500).json({
       message: "Error al crear prospecto"
     });
+
   }
 };
 
