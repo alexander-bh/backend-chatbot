@@ -7,14 +7,14 @@ const Chatbot = require("../models/Chatbot");
 const Account = require("../models/Account");
 const Contact = require("../models/Contact");
 const PasswordResetToken = require("../models/PasswordResetToken");
+const Avatar = require("../models/Avatar");
 const auditService = require("../services/audit.service");
-const Avatar = require("../models/Avatar")
 const { generateToken } = require("../utils/jwt");
 const { sendResetPasswordEmail } = require("../services/email.service");
 const { sendPasswordChangedAlert } = require("../services/password-alert.service");
 const { cloneTemplateToFlow, createFallbackFlow } = require("../services/flowNode.service");
 const generateOTP = require("../helper/generateOTP");
-const  slugify  = require("../helper/slugify");
+const slugify = require("../helper/slugify");
 
 // Primer registro (crea cuenta + chatbot + flow + flow nodes)
 exports.registerFirst = async (req, res, next) => {
@@ -59,7 +59,8 @@ exports.registerFirst = async (req, res, next) => {
 
     /* ───────── ACCOUNT ───────── */
 
-    const slug = `${slugify(account_name)}-${crypto.randomUUID().slice(0, 6)}`;
+    const slug =
+      `${slugify(account_name)}-${crypto.randomUUID().slice(0, 6)}`;
 
     const [account] = await Account.create([{
       name: account_name,
@@ -93,13 +94,15 @@ exports.registerFirst = async (req, res, next) => {
     /* ───────── AVATAR DEFAULT ───────── */
 
     const defaultAvatar = await Avatar.findOne({
-      type: "SYSTEM",
-      is_default: true
-    }).session(session);
+      type: "SYSTEM"
+    })
+      .sort({ is_default: -1 })
+      .session(session);
 
-    if (!defaultAvatar) {
-      throw new Error("No existe un avatar default del sistema");
-    }
+    const avatarToUse =
+      defaultAvatar?.url ||
+      process.env.DEFAULT_CHATBOT_AVATAR ||
+      null;
 
     /* ───────── CHATBOT ───────── */
 
@@ -113,7 +116,7 @@ exports.registerFirst = async (req, res, next) => {
       welcome_message: welcomeText,
       welcome_delay: 2,
       status: "active",
-      avatar: defaultAvatar._id,
+      avatar: avatarToUse,
       primary_color: "#2563eb",
       secondary_color: "#111827",
       launcher_text: "¿Te ayudo?",
@@ -126,22 +129,26 @@ exports.registerFirst = async (req, res, next) => {
     /* ───────── CLONAR FLOW TEMPLATE ───────── */
 
     let flow;
-    let flowName = name.trim();
+    const flowName = name.trim();
 
     try {
+
       flow = await cloneTemplateToFlow(
         chatbotDoc._id,
         user._id,
         session,
         flowName
       );
+
     } catch (err) {
 
-      console.warn("⚠️ No hay flow global, creando flow básico");
+      console.warn(
+        "⚠️ No hay flow global, creando flow básico"
+      );
 
       flow = await createFallbackFlow({
         chatbot_id: chatbotDoc._id,
-        account_id: account._id, // 🔧 CORREGIDO
+        account_id: account._id,
         session,
         flowName
       });
@@ -200,13 +207,17 @@ exports.registerFirst = async (req, res, next) => {
           is_deleted: false
         }));
 
-        await Contact.insertMany(contactsToInsert, { session });
+        await Contact.insertMany(
+          contactsToInsert,
+          { session }
+        );
 
       }
 
     } else {
-
-      console.log("ℹ️ La cuenta ya tiene contactos del sistema");
+      console.log(
+        "La cuenta ya tiene contactos del sistema"
+      );
 
     }
 
@@ -239,6 +250,7 @@ exports.registerFirst = async (req, res, next) => {
 
   }
 };
+
 
 // Login
 exports.login = async (req, res) => {
