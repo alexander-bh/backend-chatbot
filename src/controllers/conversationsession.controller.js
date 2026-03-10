@@ -162,7 +162,6 @@ exports.nextStep = async (req, res) => {
       ...INPUT_NODES,
       "options",
       "policy",
-      "media"   // 🔥 IMPORTANTE
     ];
 
     /* ================= FIRST RENDER ================= */
@@ -356,6 +355,18 @@ exports.nextStep = async (req, res) => {
     await session.save();
 
     return res.json(renderNode(nextNode, session._id));
+
+    /* AUTO CONTINUE MEDIA */
+    if (nextNode.node_type === "media" && nextNode.next_node_id) {
+
+      session.current_node_id = nextNode._id;
+      await session.save();
+
+      return res.json({
+        ...response,
+        auto_next: true
+      });
+    }
 
   } catch (error) {
 
