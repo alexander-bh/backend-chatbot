@@ -209,9 +209,24 @@ exports.createManualContact = async (req, res) => {
 
 exports.updateContact = async (req, res) => {
   try {
+
     const { id } = req.params;
     const accountId = req.user.account_id;
     const updates = req.body;
+
+    /* =========================
+       VALIDAR ID
+    ========================= */
+
+    if (!id || id === "null" || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        message: "ID de contacto inválido"
+      });
+    }
+
+    /* =========================
+       BUSCAR CONTACTO
+    ========================= */
 
     const contact = await Contact.findOne({
       _id: id,
@@ -225,6 +240,10 @@ exports.updateContact = async (req, res) => {
       });
     }
 
+    /* =========================
+       VALIDAR STATUS
+    ========================= */
+
     const allowedStatus = ["new", "contacted", "qualified", "lost"];
 
     if (updates.status && !allowedStatus.includes(updates.status)) {
@@ -232,6 +251,10 @@ exports.updateContact = async (req, res) => {
         message: "Estado inválido"
       });
     }
+
+    /* =========================
+       CAMPOS PERMITIDOS
+    ========================= */
 
     const allowedFields = [
       "name",
@@ -259,16 +282,24 @@ exports.updateContact = async (req, res) => {
 
     const safeUpdates = {};
 
-    for (let field of allowedFields) {
+    for (const field of allowedFields) {
       if (updates[field] !== undefined) {
         safeUpdates[field] = updates[field];
       }
     }
 
+    /* =========================
+       CAMPOS PROTEGIDOS
+    ========================= */
+
     delete safeUpdates.account_id;
     delete safeUpdates.source;
     delete safeUpdates.chatbot_id;
     delete safeUpdates.session_id;
+
+    /* =========================
+       UPDATE
+    ========================= */
 
     const updated = await Contact.findOneAndUpdate(
       {
@@ -277,16 +308,22 @@ exports.updateContact = async (req, res) => {
         is_deleted: false
       },
       { $set: safeUpdates },
-      { new: true }
+      {
+        new: true,
+        runValidators: true
+      }
     );
 
-    res.json(formatContact(updated));
+    return res.json(formatContact(updated));
 
   } catch (error) {
+
     console.error("UPDATE CONTACT ERROR:", error);
-    res.status(500).json({
+
+    return res.status(500).json({
       message: "Error al actualizar contacto"
     });
+
   }
 };
 
