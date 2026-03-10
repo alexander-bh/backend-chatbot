@@ -468,27 +468,9 @@ exports.getContacts = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    /* ================= FILTRAR POR SESSION ACTIVA ================= */
+    /* ================= NORMALIZAR ================= */
 
-    const sessionIds = contacts
-      .filter(c => c.session_id)
-      .map(c => c.session_id);
-
-    const activeSessions = await ConversationSession.find({
-      _id: { $in: sessionIds },
-      is_deleted: false
-    }).select("_id").lean();
-
-    const activeSessionSet = new Set(
-      activeSessions.map(s => String(s._id))
-    );
-
-    const filteredContacts = contacts.filter(c => {
-      if (!c.session_id) return true; // manual
-      return activeSessionSet.has(String(c.session_id));
-    });
-
-    const normalized = filteredContacts.map(formatContact);
+    const normalized = contacts.map(formatContact);
 
     /* ================= CONTADORES ================= */
 
