@@ -173,12 +173,6 @@ exports.createManualContact = async (req, res) => {
       status
     } = req.body;
 
-    if (!name) {
-      return res.status(400).json({
-        message: "El nombre es requerido"
-      });
-    }
-
     const contact = await Contact.create({
       account_id: accountId,
       source: "manual",
