@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Contact = require("../models/Contact");
 const formatDateAMPM = require("../utils/formatDate");
 const ConversationSession = require("../models/ConversationSession");
