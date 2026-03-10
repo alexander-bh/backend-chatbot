@@ -13,7 +13,7 @@ const auditService = require("../services/audit.service");
 const formatDateAMPM = require("../utils/formatDate");
 const { deleteFromCloudinary } = require("../services/cloudinary.service");
 const { cloneTemplateToFlow, createFallbackFlow } = require("../services/flowNode.service");
-const slugify = require("../helper/slugify"); 
+const slugify = require("../helper/slugify");
 
 /* ─────────────────────────────────────
    DASHBOAR
@@ -1207,22 +1207,69 @@ exports.setDefaultAvatar = async (req, res) => {
 };
 
 //contactos por predeterminado 
+// controllers/contact.controller.js
 exports.createDefaultContactTemplate = async (req, res) => {
   try {
+    /* =========================
+       PERMISOS
+    ========================= */
     if (req.user.role !== "ADMIN") {
       return res.status(403).json({ message: "Solo ADMIN" });
     }
 
-    const { name, email, phone } = req.body;
-
-    const contact = await Contact.create({
+    /* =========================
+       BASE TEMPLATE
+    ========================= */
+    const data = {
       account_id: null,
       source: "system",
-      name,
-      email,
-      phone,
-      is_template: true
-    });
+      is_template: true,
+      completed: false,
+      variables: {},
+      status: "new"
+    };
+
+    /* =========================
+       CAMPOS PERMITIDOS
+    ========================= */
+    const allowedFields = [
+      // 👤 Personales
+      "name",
+      "last_name",
+      "email",
+      "phone",
+      "birth_date",
+
+      // 🏢 Empresa
+      "company",
+      "website",
+      "company_phone",
+      "phone_ext",
+      "position",
+      "city",
+      "country",
+      "state",
+      "postal_code",
+      "address",
+      "job_title",
+      "privacy",
+      "notes",
+
+      // 📝 Extra
+      "observations",
+      "data_processing_consent"
+    ];
+
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) {
+        data[field] = req.body[field];
+      }
+    }
+
+    /* =========================
+       CREATE
+    ========================= */
+    const contact = await Contact.create(data);
 
     res.status(201).json({
       message: "Contacto plantilla creado",
@@ -1230,7 +1277,113 @@ exports.createDefaultContactTemplate = async (req, res) => {
     });
 
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error("CREATE DEFAULT TEMPLATE ERROR:", error);
+    res.status(500).json({ message: "Error al crear plantilla" });
+  }
+};
+
+// controllers/contact.controller.js
+exports.updateDefaultContactTemplate = async (req, res) => {
+  try {
+    /* =========================
+       PERMISOS
+    ========================= */
+    if (req.user.role !== "ADMIN") {
+      return res.status(403).json({ message: "Solo ADMIN" });
+    }
+
+    const { id } = req.params;
+
+    /* =========================
+       VALIDAR ID
+    ========================= */
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "ID inválido" });
+    }
+
+    /* =========================
+       CAMPOS PERMITIDOS
+    ========================= */
+    const allowedFields = [
+      // 👤 Personales
+      "name",
+      "last_name",
+      "email",
+      "phone",
+      "birth_date",
+
+      // 🏢 Empresa
+      "company",
+      "website",
+      "company_phone",
+      "phone_ext",
+      "position",
+      "city",
+      "country",
+      "state",
+      "postal_code",
+      "address",
+      "job_title",
+      "privacy",
+      "notes",
+
+      // 📝 Extra
+      "observations",
+      "data_processing_consent"
+    ];
+
+    const updates = {};
+    const body = req.body;
+
+    for (const field of allowedFields) {
+      if (body[field] !== undefined) {
+        updates[field] = body[field];
+      }
+    }
+
+    /* =========================
+       MAPEO FRONTEND → SCHEMA
+    ========================= */
+    if (body.privacy !== undefined) {
+      updates.data_processing_consent = body.privacy;
+    }
+
+    if (body.notes !== undefined) {
+      updates.observations = body.notes;
+    }
+
+    /* =========================
+       CAMPOS PROTEGIDOS
+    ========================= */
+    delete updates._id;
+    delete updates.account_id;
+    delete updates.chatbot_id;
+    delete updates.session_id;
+    delete updates.source;
+    delete updates.is_template;
+    delete updates.is_deleted;
+
+    /* =========================
+       UPDATE
+    ========================= */
+    const template = await Contact.findOneAndUpdate(
+      { _id: id, is_template: true },
+      { $set: updates },
+      { new: true, runValidators: true }
+    );
+
+    if (!template) {
+      return res.status(404).json({ message: "Template no encontrado" });
+    }
+
+    res.json({
+      message: "Template actualizado",
+      template
+    });
+
+  } catch (error) {
+    console.error("UPDATE TEMPLATE ERROR:", error);
+    res.status(500).json({ message: "Error al actualizar template" });
   }
 };
 
@@ -1256,35 +1409,6 @@ exports.getDefaultContactTemplates = async (req, res) => {
     res.json({
       total: formattedTemplates.length,
       templates: formattedTemplates
-    });
-
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-exports.updateDefaultContactTemplate = async (req, res) => {
-  try {
-    if (req.user.role !== "ADMIN") {
-      return res.status(403).json({ message: "Solo ADMIN" });
-    }
-
-    const { id } = req.params;
-    const updateData = req.body;
-
-    const template = await Contact.findOneAndUpdate(
-      { _id: id, is_template: true },
-      { $set: updateData },
-      { new: true }
-    );
-
-    if (!template) {
-      return res.status(404).json({ message: "Template no encontrado" });
-    }
-
-    res.json({
-      message: "Template actualizado",
-      template
     });
 
   } catch (error) {
