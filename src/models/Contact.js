@@ -124,7 +124,12 @@ const ContactSchema = new mongoose.Schema({
 ContactSchema.index({ account_id: 1, chatbot_id: 1, createdAt: -1 });
 ContactSchema.index(
   { account_id: 1, chatbot_id: 1, session_id: 1 },
-  { unique: true, sparse: true }
+  {
+    unique: true,
+    partialFilterExpression: {
+      session_id: { $exists: true, $ne: null }
+    }
+  }
 );
 
 module.exports = mongoose.model("Contact", ContactSchema);
