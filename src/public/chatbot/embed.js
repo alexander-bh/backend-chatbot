@@ -165,7 +165,7 @@
         imageViewer.classList.add("open");
         viewerVideo.play().catch(() => { });
     }
-    
+
     function closeImageViewer() {
         imageViewer.classList.remove("open");
         viewerImg.src = "";
@@ -531,6 +531,21 @@
         ========================= */
         if (nodeType === "media" && Array.isArray(node.media)) {
             renderMediaCarousel(node.media, bubbleElement);
+
+            // Continuar al siguiente nodo automáticamente
+            try {
+                const r = await fetch(
+                    `${apiBase}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`,
+                    { method: "POST" }
+                );
+                const nextNode = await r.json();
+                if (!nextNode?.completed) {
+                    return process(nextNode, depth + 1);
+                }
+            } catch (err) {
+                message("bot", "Ocurrió un error al continuar el flujo.", true);
+            }
+
             return;
         }
 
