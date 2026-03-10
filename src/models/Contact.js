@@ -69,6 +69,7 @@ const ContactSchema = new mongoose.Schema({
   address: String,
   observations: String,
   privacy:String,
+  notes:String,
 
   data_processing_consent: {
     type: String,
