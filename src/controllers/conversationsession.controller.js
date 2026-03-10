@@ -158,10 +158,12 @@ exports.nextStep = async (req, res) => {
       "number"
     ];
 
+    // DESPUÉS
     const STOP_NODES = [
       ...INPUT_NODES,
       "options",
       "policy",
+      "media",      // ← agregar esto
     ];
 
     /* ================= FIRST RENDER ================= */
