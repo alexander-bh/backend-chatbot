@@ -251,35 +251,68 @@ exports.registerFirst = async (req, res, next) => {
   }
 };
 
-
 // Login
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    /* ================= VALIDACIONES ================= */
+
+    if (!email || !email.trim()) {
+      return res.status(400).json({
+        message: "El email es obligatorio"
+      });
+    }
+
+    if (!password || !password.trim()) {
+      return res.status(400).json({
+        message: "La contraseña es obligatoria"
+      });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+
+    /* ================= BUSCAR USUARIO ================= */
+
     const user = await User.findOne({
-      email: email.toLowerCase().trim()
+      email: cleanEmail
     }).select("+password");
 
     if (!user) {
-      return res.status(401).json({ message: "Credenciales inválidas" });
+      return res.status(401).json({
+        message: "El usuario o contraseña son incorrectos"
+      });
     }
 
+    /* ================= VALIDAR ESTADO USUARIO ================= */
+
     if (user.status === "inactive") {
-      return res.status(403).json({ message: "Usuario inactivo" });
+      return res.status(403).json({
+        message: "El usuario está inactivo"
+      });
     }
+
+    /* ================= VALIDAR CUENTA ================= */
 
     const account = await Account.findById(user.account_id);
 
     if (!account || account.status !== "active") {
-      return res.status(403).json({ message: "Cuenta suspendida" });
+      return res.status(403).json({
+        message: "La cuenta se encuentra suspendida"
+      });
     }
+
+    /* ================= VALIDAR PASSWORD ================= */
 
     const valid = await bcrypt.compare(password, user.password);
 
     if (!valid) {
-      return res.status(401).json({ message: "Credenciales inválidas" });
+      return res.status(401).json({
+        message: "El usuario o contraseña son incorrectos"
+      });
     }
+
+    /* ================= GENERAR TOKEN ================= */
 
     const token = generateToken({
       id: user._id,
@@ -288,20 +321,31 @@ exports.login = async (req, res) => {
       account_id: account._id
     });
 
-    // eliminar tokens anteriores del usuario
+    /* ================= ELIMINAR TOKENS ANTERIORES ================= */
+
     await Token.deleteMany({ user_id: user._id });
+
+    /* ================= GUARDAR TOKEN ================= */
 
     await Token.create({
       user_id: user._id,
       token,
-      expires_at: new Date(Date.now() + 86400000)
+      expires_at: new Date(Date.now() + 86400000) // 24h
     });
 
-    res.json({ token });
+    /* ================= RESPUESTA ================= */
+
+    res.json({
+      message: "Login exitoso",
+      token
+    });
 
   } catch (error) {
     console.error("LOGIN ERROR:", error);
-    res.status(500).json({ message: "Error en login" });
+
+    res.status(500).json({
+      message: "Error interno del servidor"
+    });
   }
 };
 
