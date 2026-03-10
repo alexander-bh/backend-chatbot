@@ -418,6 +418,13 @@
             const btn = document.createElement("button");
             btn.textContent = o.label;
             btn.onclick = () => {
+                // Deshabilitar TODOS los botones del contenedor
+                optionsContainer.querySelectorAll("button").forEach(b => {
+                    b.disabled = true;
+                    b.style.opacity = "0.5";
+                    b.style.cursor = "not-allowed";
+                    b.style.pointerEvents = "none";
+                });
                 disableInput();
                 send(o.value ?? o.label);
             };
@@ -622,6 +629,7 @@
     async function send(v = null) {
         const text = v ?? el.input.value.trim();
         if (!text || !SESSION_ID) return;
+        if (el.send.disabled && v === null) return;
 
         if (v === null) {
             message("user", text);
