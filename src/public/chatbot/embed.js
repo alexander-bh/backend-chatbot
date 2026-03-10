@@ -558,14 +558,9 @@
 
         if (expectsTextInput(node)) {
             configureInputForNode(nodeType);
-
-            // ✅ Si es el último nodo que espera input, igual habilitamos
-            // pero marcamos que al responder no debe continuar
             enableInput();
             return;
         }
-
-        // ✅ Si es nodo informativo y es el último, no hacer auto-next
         if (node.end_conversation) {
             disableInput();
             return;
