@@ -75,6 +75,14 @@
 
     const mobile = () => matchMedia("(max-width:480px)").matches;
 
+    function scrollToBottom() {
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                el.messages.scrollTop = el.messages.scrollHeight;
+            }, 50);
+        });
+    }
+
     /* =========================
        THEME
     ========================= */
@@ -250,6 +258,7 @@
 
         wrapper.appendChild(grid);
         bubbleElement.appendChild(wrapper);
+        scrollToBottom();
     }
 
     const imageViewer = document.createElement("div");
@@ -309,7 +318,7 @@
         c.append(b, t);
         m.appendChild(c);
         el.messages.appendChild(m);
-        el.messages.scrollTop = el.messages.scrollHeight;
+        scrollToBottom();
     }
 
     function typing(show) {
@@ -403,7 +412,7 @@
         contentWrapper.append(bubble, timeEl);
         m.append(avatarImg, contentWrapper);
         el.messages.appendChild(m);
-        el.messages.scrollTop = el.messages.scrollHeight;
+        scrollToBottom();
 
         return bubble;
     }
