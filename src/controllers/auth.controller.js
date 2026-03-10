@@ -89,19 +89,30 @@ exports.registerFirst = async (req, res, next) => {
       }
     }], { session });
 
+    /* ───────── AVATAR DEFAULT ───────── */
+
+    const defaultAvatar = await Avatar.findOne({
+      type: "SYSTEM",
+      is_default: true
+    }).session(session);
+
+    if (!defaultAvatar) {
+      throw new Error("No existe un avatar default del sistema");
+    }
+
     /* ───────── CHATBOT ───────── */
 
     const welcomeText =
       `Hola 👋 soy el bot de ${name}, ¿en qué puedo ayudarte?`;
 
-    const chatbot = await Chatbot.create([{
+    const [chatbotDoc] = await Chatbot.create([{
       account_id: account._id,
       name: `Bot de ${name}`,
       public_id: crypto.randomUUID(),
       welcome_message: welcomeText,
       welcome_delay: 2,
       status: "active",
-      avatar: process.env.DEFAULT_CHATBOT_AVATAR,
+      avatar: defaultAvatar._id,
       primary_color: "#2563eb",
       secondary_color: "#111827",
       launcher_text: "¿Te ayudo?",
@@ -111,9 +122,8 @@ exports.registerFirst = async (req, res, next) => {
       show_branding: true
     }], { session });
 
-    const chatbotDoc = chatbot[0];
-
     /* ───────── CLONAR FLOW TEMPLATE ───────── */
+
     let flow;
     let flowName = name.trim();
 
@@ -125,14 +135,16 @@ exports.registerFirst = async (req, res, next) => {
         flowName
       );
     } catch (err) {
+
       console.warn("⚠️ No hay flow global, creando flow básico");
 
       flow = await createFallbackFlow({
         chatbot_id: chatbotDoc._id,
-        account_id: req.user.account_id,
+        account_id: account._id, // 🔧 CORREGIDO
         session,
         flowName
       });
+
     }
 
     /* ───────── TOKEN ───────── */
@@ -150,18 +162,15 @@ exports.registerFirst = async (req, res, next) => {
       expires_at: new Date(Date.now() + 86400000)
     }], { session });
 
-    // 🔎 verificar si la cuenta ya tiene contactos del sistema
+    /* ───────── CONTACTOS TEMPLATE ───────── */
+
     const existingSystemContact = await Contact.findOne({
       account_id: account._id,
       source: "system",
       is_deleted: { $ne: true }
     }).session(session);
 
-    if (existingSystemContact) {
-
-      console.log("ℹ️ La cuenta ya tiene contactos del sistema");
-
-    } else {
+    if (!existingSystemContact) {
 
       const templateContacts = await Contact.find({
         is_template: true,
@@ -193,7 +202,14 @@ exports.registerFirst = async (req, res, next) => {
         await Contact.insertMany(contactsToInsert, { session });
 
       }
+
+    } else {
+
+      console.log("ℹ️ La cuenta ya tiene contactos del sistema");
+
     }
+
+    /* ───────── COMMIT ───────── */
 
     await session.commitTransaction();
 
@@ -212,10 +228,14 @@ exports.registerFirst = async (req, res, next) => {
     });
 
   } catch (error) {
+
     await session.abortTransaction();
     next(error);
+
   } finally {
+
     session.endSession();
+
   }
 };
 
