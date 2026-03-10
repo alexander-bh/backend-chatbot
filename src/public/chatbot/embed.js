@@ -443,7 +443,7 @@
 
         bubbleElement?.appendChild(optionsContainer);
     }
-    
+
     function expectsTextInput(node) {
         const type = node.input_type || node.type;
         return TEXT_INPUT_TYPES.includes(type);
@@ -488,25 +488,14 @@
 
         const nodeType = node.input_type || node.type || node.node_type;
 
-        /* =========================
-           ERRORES DE VALIDACIÓN
-        ========================= */
         if (node.validation_error) {
-
             message("bot", node.message, true);
-
             const inputType = node.input_type || node.type;
-
             configureInputForNode(inputType);
-
             enableInput();
-
             return;
         }
 
-        /* =========================
-           TYPING
-        ========================= */
         if (node.typing_time && node.typing_time > 0) {
             typing(true);
             scrollToBottom();
@@ -514,29 +503,19 @@
             typing(false);
         }
 
-        /* =========================
-           LINK NODE (acciones)
-        ========================= */
         if (nodeType === "link") {
             let bubbleElement = null;
-
             if (node.content) {
                 bubbleElement = renderBotMessage(node.content);
             }
-
             if (node.link_actions?.length && bubbleElement) {
                 renderLinkActions(node.link_actions, bubbleElement);
             }
-
             disableInput();
             return;
         }
 
-        /* =========================
-           RENDER MENSAJE BOT
-        ========================= */
         let bubbleElement = null;
-
         if (node.content) {
             bubbleElement = renderBotMessage(node.content);
         } else {
@@ -544,13 +523,15 @@
             bubbleElement.classList.add("media-only");
         }
 
-        /* =========================
-           MEDIA NODE
-        ========================= */
         if (nodeType === "media" && Array.isArray(node.media)) {
             renderMediaCarousel(node.media, bubbleElement);
 
-            // Continuar al siguiente nodo automáticamente
+            // ✅ Si es el último nodo, no continuar
+            if (node.end_conversation) {
+                disableInput();
+                return;
+            }
+
             try {
                 const r = await fetch(
                     `${apiBase}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`,
@@ -563,13 +544,9 @@
             } catch (err) {
                 message("bot", "Ocurrió un error al continuar el flujo.", true);
             }
-
             return;
         }
 
-        /* =========================
-           OPTIONS / POLICY
-        ========================= */
         if (
             (nodeType === "options" && node.options?.length) ||
             (nodeType === "policy" && node.policy?.length)
@@ -579,31 +556,74 @@
             return;
         }
 
-        /* =========================
-           NODOS QUE ESPERAN INPUT
-        ========================= */
         if (expectsTextInput(node)) {
             configureInputForNode(nodeType);
+
+            // ✅ Si es el último nodo que espera input, igual habilitamos
+            // pero marcamos que al responder no debe continuar
             enableInput();
             return;
         }
 
-        /* =========================
-           AUTO-NEXT (informativo)
-        ========================= */
+        // ✅ Si es nodo informativo y es el último, no hacer auto-next
+        if (node.end_conversation) {
+            disableInput();
+            return;
+        }
+
         try {
             const r = await fetch(
                 `${apiBase}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`,
                 { method: "POST" }
             );
-
             const nextNode = await r.json();
             if (!nextNode?.completed) {
                 return process(nextNode, depth + 1);
             }
-
         } catch (err) {
             message("bot", "Ocurrió un error al continuar el flujo.", true);
+        }
+    }
+
+    async function send(v = null) {
+        const text = v ?? el.input.value.trim();
+        if (!text || !SESSION_ID) return;
+        if (el.send.disabled && v === null) return;
+
+        if (v === null) {
+            message("user", text);
+            el.input.value = "";
+        }
+
+        el.input.disabled = el.send.disabled = true;
+        typing(true);
+
+        try {
+            const r = await fetch(
+                `${apiBase}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ input: text })
+                }
+            );
+
+            const nextNode = await r.json();
+            typing(false);
+
+            // ✅ Si el backend indica que la conversación terminó
+            if (nextNode?.completed || nextNode?.end_conversation) {
+                disableInput();
+                return;
+            }
+
+            process(nextNode);
+
+        } catch {
+            typing(false);
+            message("bot", "Error al enviar el mensaje", true);
+            el.input.disabled = false;
+            el.send.disabled = false;
         }
     }
 
