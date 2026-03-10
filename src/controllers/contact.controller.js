@@ -156,9 +156,9 @@ exports.updateStatus = async (req, res) => {
   }
 };
 
+// controllers/contact.controller.js
 exports.createManualContact = async (req, res) => {
   try {
-
     const accountId = req.user.account_id;
 
     const data = {
@@ -170,16 +170,28 @@ exports.createManualContact = async (req, res) => {
     };
 
     const allowedFields = [
+      // 👤 Personales
       "name",
+      "last_name",
       "email",
       "phone",
+      "birth_date",
+
+      // 🏢 Empresa
       "company",
       "website",
+      "company_phone",
+      "phone_ext",
+      "position",
       "city",
       "country",
+      "state",
+      "postal_code",
       "address",
-      "position",
-      "internal_note"
+
+      // 📝 Extra
+      "observations",
+      "data_processing_consent"
     ];
 
     for (const field of allowedFields) {
@@ -193,19 +205,17 @@ exports.createManualContact = async (req, res) => {
     res.status(201).json(formatContact(contact));
 
   } catch (error) {
-
     console.error("CREATE MANUAL CONTACT ERROR:", error);
 
     res.status(500).json({
-      message: "Error al crear prospecto"
+      message: "Error al crear contacto"
     });
-
   }
 };
 
+// controllers/contact.controller.js
 exports.updateContact = async (req, res) => {
   try {
-
     const { id } = req.params;
     const accountId = req.user.account_id;
     const updates = req.body;
@@ -213,7 +223,6 @@ exports.updateContact = async (req, res) => {
     /* =========================
        VALIDAR ID
     ========================= */
-
     if (!id || id === "null" || !mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         message: "ID de contacto inválido"
@@ -223,7 +232,6 @@ exports.updateContact = async (req, res) => {
     /* =========================
        BUSCAR CONTACTO
     ========================= */
-
     const contact = await Contact.findOne({
       _id: id,
       account_id: accountId,
@@ -239,7 +247,6 @@ exports.updateContact = async (req, res) => {
     /* =========================
        VALIDAR STATUS
     ========================= */
-
     const allowedStatus = ["new", "contacted", "qualified", "lost"];
 
     if (updates.status && !allowedStatus.includes(updates.status)) {
@@ -251,26 +258,29 @@ exports.updateContact = async (req, res) => {
     /* =========================
        CAMPOS PERMITIDOS
     ========================= */
-
     const allowedFields = [
+      // 👤 Personales
       "name",
       "last_name",
       "email",
       "phone",
+      "birth_date",
+
+      // 🏢 Empresa
       "company",
       "website",
       "company_phone",
-      "company_extension",
+      "phone_ext",
+      "position",
       "city",
       "country",
+      "state",
+      "postal_code",
       "address",
-      "position",
-      "birth_date",
-      "linkedin",
-      "skype",
+
+      // 📝 Extra
       "observations",
       "data_processing_consent",
-      "internal_note",
       "status",
       "completed",
       "variables"
@@ -287,16 +297,15 @@ exports.updateContact = async (req, res) => {
     /* =========================
        CAMPOS PROTEGIDOS
     ========================= */
-
     delete safeUpdates.account_id;
     delete safeUpdates.source;
     delete safeUpdates.chatbot_id;
     delete safeUpdates.session_id;
+    delete safeUpdates.is_deleted;
 
     /* =========================
        UPDATE
     ========================= */
-
     const updated = await Contact.findOneAndUpdate(
       {
         _id: id,
@@ -313,13 +322,11 @@ exports.updateContact = async (req, res) => {
     return res.json(formatContact(updated));
 
   } catch (error) {
-
     console.error("UPDATE CONTACT ERROR:", error);
 
     return res.status(500).json({
       message: "Error al actualizar contacto"
     });
-
   }
 };
 
