@@ -188,6 +188,7 @@ exports.createManualContact = async (req, res) => {
       "state",
       "postal_code",
       "address",
+      "job_title",
 
       // 📝 Extra
       "observations",
@@ -277,6 +278,7 @@ exports.updateContact = async (req, res) => {
       "state",
       "postal_code",
       "address",
+      "job_title"
 
       // 📝 Extra
       "observations",
