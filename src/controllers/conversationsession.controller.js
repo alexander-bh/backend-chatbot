@@ -256,14 +256,10 @@ exports.nextStep = async (req, res) => {
 
     let nextNode = resolveNextNode(currentNode);
 
-    const messages = [];
-
     while (
       nextNode &&
       !["question", "email", "phone", "number", "options", "policy"].includes(nextNode.node_type)
     ) {
-
-      messages.push(renderNode(nextNode, session._id));
 
       session.current_node_id = nextNode._id;
 
@@ -276,15 +272,6 @@ exports.nextStep = async (req, res) => {
       if (nextNode.end_conversation) break;
 
       nextNode = resolveNextNode(nextNode);
-    }
-
-    if (messages.length > 0) {
-      await session.save();
-
-      return res.json({
-        session_id: session._id,
-        messages
-      });
     }
 
     /* ================= SAFE TERMINATION ================= */
