@@ -142,25 +142,46 @@ exports.updateStatus = async (req, res) => {
     }
 
     /* =========================
-       UPDATE
+       BUSCAR CONTACTO
     ========================= */
-    const updated = await Contact.findOneAndUpdate(
-      {
-        _id: id,
-        account_id: req.user.account_id,
-        is_deleted: false
-      },
-      { $set: { status } },
-      { new: true, runValidators: true }
-    );
+    const contact = await Contact.findById(id);
 
-    if (!updated) {
+    if (!contact || contact.is_deleted) {
       return res.status(404).json({
         message: "Contacto no encontrado"
       });
     }
 
-    res.json(formatContact(updated));
+    /* =========================
+       REGLAS DE PERMISOS
+    ========================= */
+
+    const isAdmin = req.user.role === "ADMIN";
+    const sameAccount =
+      contact.account_id &&
+      contact.account_id.toString() === req.user.account_id?.toString();
+
+    // 🧩 Si es plantilla → solo ADMIN
+    if (contact.is_template && !isAdmin) {
+      return res.status(403).json({
+        message: "Solo ADMIN puede modificar plantillas"
+      });
+    }
+
+    // 👤 Si es contacto normal → dueño o ADMIN
+    if (!contact.is_template && !sameAccount && !isAdmin) {
+      return res.status(403).json({
+        message: "Sin permisos para modificar este contacto"
+      });
+    }
+
+    /* =========================
+       UPDATE
+    ========================= */
+    contact.status = status;
+    await contact.save();
+
+    res.json(formatContact(contact));
 
   } catch (error) {
     console.error("UPDATE STATUS ERROR:", error);
@@ -169,7 +190,6 @@ exports.updateStatus = async (req, res) => {
     });
   }
 };
-
 // controllers/contact.controller.js
 exports.createManualContact = async (req, res) => {
   try {
