@@ -278,7 +278,7 @@ exports.updateContact = async (req, res) => {
       "state",
       "postal_code",
       "address",
-      "job_title"
+      "job_title",
 
       // 📝 Extra
       "observations",
