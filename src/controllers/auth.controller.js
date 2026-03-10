@@ -12,8 +12,8 @@ const { generateToken } = require("../utils/jwt");
 const { sendResetPasswordEmail } = require("../services/email.service");
 const { sendPasswordChangedAlert } = require("../services/password-alert.service");
 const { cloneTemplateToFlow, createFallbackFlow } = require("../services/flowNode.service");
-const { generateOTP } = require("../helper/generateOTP");
-const { slugify } = require("../helper/slugify");
+const generateOTP = require("../helper/generateOTP");
+const  slugify  = require("../helper/slugify");
 
 // Primer registro (crea cuenta + chatbot + flow + flow nodes)
 exports.registerFirst = async (req, res, next) => {
