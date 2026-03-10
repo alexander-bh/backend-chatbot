@@ -8,6 +8,7 @@ const Account = require("../models/Account");
 const Contact = require("../models/Contact");
 const PasswordResetToken = require("../models/PasswordResetToken");
 const auditService = require("../services/audit.service");
+const Avatar = require("../models/Avatar")
 const { generateToken } = require("../utils/jwt");
 const { sendResetPasswordEmail } = require("../services/email.service");
 const { sendPasswordChangedAlert } = require("../services/password-alert.service");
