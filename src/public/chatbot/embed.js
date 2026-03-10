@@ -32,6 +32,11 @@
         "number",
     ];
 
+    const SELECTABLE_TYPES = [
+        "options",
+        "policy"
+    ];
+
     let SESSION_ID = null;
     let started = false;
     let isOpen = false;
@@ -88,6 +93,63 @@
     /* =========================
        UI
     ========================= */
+
+    function isMobileDevice() {
+        return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    }
+
+    function renderLinkActions(actions, bubble) {
+        if (!Array.isArray(actions) || !bubble) return;
+
+        const container = document.createElement("div");
+        container.className = "link-actions";
+
+        actions.forEach(action => {
+            const a = document.createElement("a");
+            a.className = `link-action link-${action.type}`;
+            a.textContent = action.title || action.value;
+
+            switch (action.type) {
+                case "link":
+                    a.href = action.value;
+                    a.target = action.new_tab ? "_blank" : "_self";
+                    break;
+
+                case "email": {
+                    const email = action.value.trim();
+                    const subject = encodeURIComponent("Contacto desde el chatbot");
+                    const body = encodeURIComponent("Hola, quiero más información.");
+
+                    a.href = `mailto:${email}?subject=${subject}&body=${body}`;
+                    a.target = "_self";
+
+                    break;
+                }
+                case "phone":
+                    a.href = `tel:${action.value}`;
+                    a.target = "_self";
+                    break;
+
+                case "whatsapp": {
+                    const phone = action.value.replace(/\D/g, "");
+                    const fullPhone = phone.startsWith("52") ? phone : `52${phone}`;
+
+                    a.href = `https://wa.me/${fullPhone}`;
+                    a.target = "_blank"; // 🔥 obligatorio
+                    a.rel = "noopener noreferrer";
+                    break;
+                }
+
+                default:
+                    return;
+            }
+
+            container.appendChild(a);
+        });
+
+        bubble.appendChild(container);
+    }
+
     function openVideoViewer(url) {
         let viewerVideo = imageViewer.querySelector(".viewer-video");
         if (!viewerVideo) {
@@ -103,7 +165,7 @@
         imageViewer.classList.add("open");
         viewerVideo.play().catch(() => { });
     }
-
+    
     function closeImageViewer() {
         imageViewer.classList.remove("open");
         viewerImg.src = "";
@@ -404,62 +466,30 @@
     /* =========================
        FLOW
     ========================= */
-    async function process(response, depth = 0) {
-
-        if (!response || depth > 20) return;
-
-        /* =========================
-           COMPLETED
-        ========================= */
-
-        if (response.completed) {
-            disableInput();
-            return;
-        }
-
-        /* =========================
-           NODOS AUTOMÁTICOS
-        ========================= */
-
-        if (Array.isArray(response.nodes)) {
-
-            for (const node of response.nodes) {
-                await renderSingleNode(node);
-            }
-
-        }
-
-        /* =========================
-           NEXT NODE (INPUT)
-        ========================= */
-
-        if (response.next) {
-            await renderSingleNode(response.next);
-        }
-    }
-
-    async function renderSingleNode(node) {
+    async function process(node, depth = 0) {
+        if (!node || depth > 20) return;
 
         const nodeType = node.input_type || node.type || node.node_type;
 
         /* =========================
-           VALIDATION ERROR
+           ERRORES DE VALIDACIÓN
         ========================= */
-
         if (node.validation_error) {
 
             message("bot", node.message, true);
 
-            configureInputForNode(node.input_type || node.type);
+            const inputType = node.input_type || node.type;
+
+            configureInputForNode(inputType);
 
             enableInput();
+
             return;
         }
 
         /* =========================
            TYPING
         ========================= */
-
         if (node.typing_time) {
             typing(true);
             await new Promise(r => setTimeout(r, node.typing_time * 1000));
@@ -467,10 +497,27 @@
         }
 
         /* =========================
-           BOT MESSAGE
+           LINK NODE (acciones)
         ========================= */
+        if (nodeType === "link") {
+            let bubbleElement = null;
 
-        let bubbleElement;
+            if (node.content) {
+                bubbleElement = renderBotMessage(node.content);
+            }
+
+            if (node.link_actions?.length && bubbleElement) {
+                renderLinkActions(node.link_actions, bubbleElement);
+            }
+
+            disableInput();
+            return;
+        }
+
+        /* =========================
+           RENDER MENSAJE BOT
+        ========================= */
+        let bubbleElement = null;
 
         if (node.content) {
             bubbleElement = renderBotMessage(node.content);
@@ -480,18 +527,16 @@
         }
 
         /* =========================
-           MEDIA
+           MEDIA NODE
         ========================= */
-
         if (nodeType === "media" && Array.isArray(node.media)) {
             renderMediaCarousel(node.media, bubbleElement);
             return;
         }
 
         /* =========================
-           OPTIONS
+           OPTIONS / POLICY
         ========================= */
-
         if (
             (nodeType === "options" && node.options?.length) ||
             (nodeType === "policy" && node.policy?.length)
@@ -502,13 +547,30 @@
         }
 
         /* =========================
-           INPUT
+           NODOS QUE ESPERAN INPUT
         ========================= */
-
         if (expectsTextInput(node)) {
             configureInputForNode(nodeType);
             enableInput();
             return;
+        }
+
+        /* =========================
+           AUTO-NEXT (informativo)
+        ========================= */
+        try {
+            const r = await fetch(
+                `${apiBase}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`,
+                { method: "POST" }
+            );
+
+            const nextNode = await r.json();
+            if (!nextNode?.completed) {
+                return process(nextNode, depth + 1);
+            }
+
+        } catch (err) {
+            message("bot", "Ocurrió un error al continuar el flujo.", true);
         }
     }
 
