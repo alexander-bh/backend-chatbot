@@ -151,17 +151,17 @@ exports.nextStep = async (req, res) => {
 
     /* ================= NODE TYPES ================= */
 
-    const INPUT_NODES = [
-      "question",
-      "email",
-      "phone",
-      "number"
-    ];
+    const INPUT_NODES = ["question", "email", "phone", "number"];
 
-    const STOP_NODES = [
-      ...INPUT_NODES,
-      "options",
-      "policy",
+    const CHOICE_NODES = ["options", "policy"];
+
+    const STOP_NODES = [...INPUT_NODES, ...CHOICE_NODES];
+
+    const AUTO_NODES = [
+      "text",
+      "media",
+      "notification",
+      "delay"
     ];
 
     /* ================= FIRST RENDER ================= */
@@ -184,14 +184,10 @@ exports.nextStep = async (req, res) => {
 
       if (errors.length > 0) {
         return res.json({
-          session_id: session._id,
-          node_id: currentNode._id,
-          type: currentNode.node_type,
           validation_error: true,
           message: errors[0],
-          input_type: currentNode.node_type,
-          validation: currentNode.validation,
-          completed: false
+          node_id: currentNode._id,
+          type: currentNode.node_type
         });
       }
 
@@ -204,30 +200,23 @@ exports.nextStep = async (req, res) => {
         node_id: currentNode._id,
         question: currentNode.content,
         answer: String(input),
-        node_type: currentNode.node_type,
-        variable_key: currentNode.variable_key
+        node_type: currentNode.node_type
       });
 
       session.markModified("history");
-
-      await session.save();
     }
 
-    /* ================= NEXT NODE RESOLUTION ================= */
+    /* ================= RESOLVE NEXT NODE ================= */
 
     const resolveNextNode = (node) => {
 
-      if (
-        (node.node_type === "options" || node.node_type === "policy") &&
-        input !== undefined
-      ) {
+      if (CHOICE_NODES.includes(node.node_type) && input !== undefined) {
 
-        const sourceArray =
-          node.node_type === "options"
-            ? node.options
-            : node.policy;
+        const arr = node.node_type === "options"
+          ? node.options
+          : node.policy;
 
-        const match = sourceArray.find(opt =>
+        const match = arr.find(opt =>
           String(opt.value) === String(input) ||
           String(opt.label) === String(input)
         );
@@ -268,12 +257,21 @@ exports.nextStep = async (req, res) => {
 
     let nextNode = resolveNextNode(currentNode);
 
+    const autoNodesToRender = [];
+
+    let safety = 0;
+
     /* ================= AUTO FLOW ================= */
 
     while (
       nextNode &&
-      !STOP_NODES.includes(nextNode.node_type)
+      AUTO_NODES.includes(nextNode.node_type) &&
+      safety < 30
     ) {
+
+      safety++;
+
+      autoNodesToRender.push(renderNode(nextNode, session._id));
 
       session.current_node_id = nextNode._id;
 
@@ -283,90 +281,46 @@ exports.nextStep = async (req, res) => {
         node_type: nextNode.node_type
       });
 
-      if (nextNode.end_conversation) break;
+      if (nextNode.meta?.notify?.enabled && session.mode === "production") {
+        await executeNodeNotification(nextNode, session);
+      }
+
+      if (nextNode.end_conversation) {
+        session.is_completed = true;
+        break;
+      }
 
       nextNode = resolveNextNode(nextNode);
     }
 
-    /* ================= SAFE TERMINATION ================= */
+    /* ================= SAVE SESSION ================= */
 
-    if (!nextNode) {
-
-      if (currentNode.end_conversation) {
-
-        session.is_completed = true;
-        session.current_branch_id = null;
-
-        await session.save();
-
-        if (session.mode === "production") {
-          await upsertContactFromSession(session);
-        }
-
-        return res.json({ completed: true });
-      }
-
-      return res.json(renderNode(currentNode, session._id));
-    }
-
-    /* ================= ADVANCE ================= */
-
-    session.current_node_id = nextNode._id;
-
-    if (!nextNode.branch_id) {
-      session.current_branch_id = null;
-    }
-
-    /* ================= SAVE HISTORY ================= */
-
-    if (!INPUT_NODES.includes(nextNode.node_type)) {
-
-      const lastHistory = session.history[session.history.length - 1];
-
-      if (!lastHistory || String(lastHistory.node_id) !== String(nextNode._id)) {
-        session.history.push({
-          node_id: nextNode._id,
-          question: nextNode.content,
-          node_type: nextNode.node_type
-        });
-      }
-
-      session.markModified("history");
-    }
-
-    /* ================= NOTIFICATIONS ================= */
-
-    if (nextNode.meta?.notify?.enabled && session.mode === "production") {
-      await executeNodeNotification(nextNode, session);
-    }
-
-    /* ================= END CONVERSATION ================= */
-
-    if (nextNode.end_conversation) {
-
-      session.is_completed = true;
-      session.current_branch_id = null;
-
-      if (session.mode === "production") {
-        await upsertContactFromSession(session);
-      }
+    if (nextNode) {
+      session.current_node_id = nextNode._id;
     }
 
     await session.save();
 
-    return res.json(renderNode(nextNode, session._id));
+    /* ================= END ================= */
 
-    /* AUTO CONTINUE MEDIA */
-    if (nextNode.node_type === "media" && nextNode.next_node_id) {
-
-      session.current_node_id = nextNode._id;
-      await session.save();
+    if (!nextNode && autoNodesToRender.length > 0) {
 
       return res.json({
-        ...response,
-        auto_next: true
+        session_id: session._id,
+        nodes: autoNodesToRender,
+        completed: session.is_completed
       });
+
     }
+
+    /* ================= RESPONSE ================= */
+
+    return res.json({
+      session_id: session._id,
+      nodes: autoNodesToRender,
+      next: nextNode ? renderNode(nextNode, session._id) : null,
+      completed: session.is_completed
+    });
 
   } catch (error) {
 
