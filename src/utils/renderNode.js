@@ -5,7 +5,7 @@ module.exports = function renderNode(node, session_id) {
   const payload = {
     session_id,
     node_id: node._id,
-    type: node.node_type,
+    node_type: node.node_type,
     content: node.content || null,
     typing_time: node.typing_time || 0,
     validation: node.validation || null,
@@ -36,13 +36,14 @@ module.exports = function renderNode(node, session_id) {
   }
 
   /* ===== MEDIA ===== */
-  if (node.node_type === "media" && Array.isArray(node.media)) {
-    payload.media = node.media.map(m => ({
-      type: m.type,
-      url: m.url
-    }));
+  if (node.node_type === "media") {
+    payload.media = Array.isArray(node.media)
+      ? node.media.map(m => ({
+        type: m.type,
+        url: m.url
+      }))
+      : [];
   }
-
   /* ===== INPUT TYPES ===== */
   if ([
     "question",

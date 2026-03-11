@@ -484,6 +484,7 @@
        FLOW
     ========================= */
     async function process(node, depth = 0) {
+        console.log("📦 node recibido:", node);
         if (!node || depth > 20) return;
 
         const nodeType = node.input_type || node.type || node.node_type;
@@ -649,41 +650,6 @@
             typing(false);
             status("Error");
             message("bot", "No pude conectarme al servidor", true);
-        }
-    }
-
-    async function send(v = null) {
-        const text = v ?? el.input.value.trim();
-        if (!text || !SESSION_ID) return;
-        if (el.send.disabled && v === null) return;
-
-        if (v === null) {
-            message("user", text);
-            el.input.value = "";
-        }
-
-        el.input.disabled = el.send.disabled = true;
-        typing(true);
-
-        try {
-            const r = await fetch(
-                `${apiBase}/api/public-chatbot/chatbot-conversation/${SESSION_ID}/next`,
-                {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ input: text })
-                }
-            );
-
-            const nextNode = await r.json();
-            typing(false);
-            process(nextNode);
-
-        } catch {
-            typing(false);
-            message("bot", "Error al enviar el mensaje", true);
-            el.input.disabled = false;
-            el.send.disabled = false;
         }
     }
 

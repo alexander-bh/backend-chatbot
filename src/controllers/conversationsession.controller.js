@@ -6,7 +6,6 @@ const FlowNode = require("../models/FlowNode");
 const Chatbot = require("../models/Chatbot");
 const upsertContactFromSession = require("../services/upsertContactFromSession.service");
 const renderNode = require("../utils/renderNode");
-const executeNodeNotification = require("../services/executeNodeNotification.service");
 const validateNodeInput = require("../validators/validateNodeInput");
 const ALLOWED_MODES = ["preview", "production"];
 
@@ -18,14 +17,32 @@ exports.startConversation = async (req, res) => {
 
     const { chatbot_id, flow_id, mode = "production", origin_url } = req.body;
 
+    /* ================= VALIDATE INPUT ================= */
+
+    if (!mongoose.Types.ObjectId.isValid(chatbot_id)) {
+      return res.status(400).json({ message: "chatbot_id inválido" });
+    }
+
     if (!ALLOWED_MODES.includes(mode)) {
       return res.status(400).json({ message: "Mode inválido" });
     }
 
-    const chatbot = await Chatbot.findOne({
-      _id: chatbot_id,
-      account_id: req.user.account_id
-    });
+    /* ================= LOAD CHATBOT ================= */
+
+    let chatbot;
+
+    if (req.user?.account_id) {
+
+      chatbot = await Chatbot.findOne({
+        _id: chatbot_id,
+        account_id: req.user.account_id
+      });
+
+    } else {
+
+      chatbot = await Chatbot.findById(chatbot_id);
+
+    }
 
     if (!chatbot) {
       return res.status(404).json({ message: "Chatbot no válido" });
@@ -37,13 +54,19 @@ exports.startConversation = async (req, res) => {
       });
     }
 
+    /* ================= ACCOUNT RESOLUTION ================= */
+
+    const accountId = req.user?.account_id || chatbot.account_id;
+
+    /* ================= LOAD FLOW ================= */
+
     let flow;
 
     if (mode === "production") {
 
       flow = await Flow.findOne({
         chatbot_id,
-        account_id: req.user.account_id,
+        account_id: accountId,
         status: "published"
       }).sort({ version: -1 });
 
@@ -58,8 +81,9 @@ exports.startConversation = async (req, res) => {
       flow = await Flow.findOne({
         _id: flow_id,
         chatbot_id,
-        account_id: req.user.account_id
+        account_id: accountId
       });
+
     }
 
     if (!flow || !flow.start_node_id) {
@@ -71,18 +95,22 @@ exports.startConversation = async (req, res) => {
       });
     }
 
+    /* ================= LOAD START NODE ================= */
+
     const startNode = await FlowNode.findOne({
       _id: flow.start_node_id,
       flow_id: flow._id,
-      account_id: req.user.account_id
+      account_id: accountId
     });
 
     if (!startNode) {
       return res.status(500).json({ message: "Nodo inicial inválido" });
     }
 
+    /* ================= CREATE SESSION ================= */
+
     const session = await ConversationSession.create({
-      account_id: req.user.account_id,
+      account_id: accountId,
       chatbot_id,
       flow_id: flow._id,
       current_node_id: startNode._id,
@@ -90,14 +118,12 @@ exports.startConversation = async (req, res) => {
       origin_url,
       mode,
       is_completed: false,
-      history: [
-        {
-          node_id: startNode._id,
-          question: startNode.content,
-          node_type: startNode.node_type
-        }
-      ]
+      is_abandoned: false,
+      last_activity_at: new Date(),
+      history: []
     });
+
+    /* ================= RESPONSE ================= */
 
     return res.json(renderNode(startNode, session._id));
 
@@ -108,9 +134,9 @@ exports.startConversation = async (req, res) => {
     return res.status(500).json({
       message: "Error al iniciar conversación"
     });
+
   }
 };
-
 /* --------------------------------------------------
    NEXT STEP (ENGINE)
 -------------------------------------------------- */
@@ -134,7 +160,7 @@ exports.nextStep = async (req, res) => {
       return res.json({ completed: true });
     }
 
-    /* ================= LOAD FLOW GRAPH ================= */
+    /* ================= LOAD FLOW ================= */
 
     const nodes = await FlowNode.find({
       flow_id: session.flow_id,
@@ -143,158 +169,138 @@ exports.nextStep = async (req, res) => {
 
     const nodesMap = new Map(nodes.map(n => [String(n._id), n]));
 
-    let currentNode = nodesMap.get(String(session.current_node_id));
+    let node = nodesMap.get(String(session.current_node_id));
 
-    if (!currentNode) {
+    if (!node) {
       throw new Error("Nodo actual no encontrado");
     }
 
     /* ================= NODE TYPES ================= */
 
-    const INPUT_NODES = [
-      "question",
-      "email",
-      "phone",
-      "number"
-    ];
+    const INPUT_NODES = ["question", "email", "phone", "number"];
+    const INTERACTION_NODES = ["options", "policy"];
 
-    // DESPUÉS
-    const STOP_NODES = [
-      ...INPUT_NODES,
-      "options",
-      "policy",
-      "media",      // ← agregar esto
-    ];
+    const isInputNode = n => INPUT_NODES.includes(n.node_type);
+    const isInteractionNode = n => INTERACTION_NODES.includes(n.node_type);
 
-    /* ================= FIRST RENDER ================= */
+    /* ================= HANDLE INPUT ================= */
 
-    if (
-      INPUT_NODES.includes(currentNode.node_type) &&
-      input === undefined
-    ) {
-      return res.json(renderNode(currentNode, session._id));
-    }
+    if (isInputNode(node) && input !== undefined) {
 
-    /* ================= SAVE INPUT ================= */
+      const errors = validateNodeInput(node, input);
 
-    if (
-      INPUT_NODES.includes(currentNode.node_type) &&
-      input !== undefined
-    ) {
+      if (errors.length) {
 
-      const errors = validateNodeInput(currentNode, input);
+        await session.save();
 
-      if (errors.length > 0) {
         return res.json({
           session_id: session._id,
-          node_id: currentNode._id,
-          type: currentNode.node_type,
+          node_id: node._id,
+          node_type: node.node_type,
+          type: node.node_type,
           validation_error: true,
           message: errors[0],
-          input_type: currentNode.node_type,
-          validation: currentNode.validation,
+          input_type: node.node_type,
           completed: false
         });
       }
 
-      if (session.mode === "production" && currentNode.variable_key) {
-        session.variables[currentNode.variable_key] = String(input);
+      session.history.push({
+        node_id: node._id,
+        question: node.content,
+        answer: String(input),
+        node_type: node.node_type,
+        variable_key: node.variable_key
+      });
+
+      if (node.variable_key) {
+        session.variables[node.variable_key] = String(input);
         session.markModified("variables");
       }
 
-      session.history.push({
-        node_id: currentNode._id,
-        question: currentNode.content,
-        answer: String(input),
-        node_type: currentNode.node_type,
-        variable_key: currentNode.variable_key
-      });
-
       session.markModified("history");
-
-      await session.save();
     }
 
-    /* ================= NEXT NODE RESOLUTION ================= */
+    /* ================= RESOLVE NEXT ================= */
 
-    const resolveNextNode = (node) => {
+    const getNextNode = (current) => {
 
-      if (
-        (node.node_type === "options" || node.node_type === "policy") &&
-        input !== undefined
-      ) {
+      if (!current.next_node_id) return null;
 
-        const sourceArray =
-          node.node_type === "options"
-            ? node.options
-            : node.policy;
+      const candidate = nodesMap.get(String(current.next_node_id));
 
-        const match = sourceArray.find(opt =>
-          String(opt.value) === String(input) ||
-          String(opt.label) === String(input)
-        );
+      if (!candidate) return null;
 
-        if (!match) return null;
-
-        session.current_branch_id = match.next_branch_id || null;
-
-        if (match.next_node_id) {
-          return nodesMap.get(String(match.next_node_id));
+      if (candidate.branch_id) {
+        if (candidate.branch_id === session.current_branch_id) {
+          return candidate;
         }
-
-        if (node.next_node_id) {
-          return nodesMap.get(String(node.next_node_id));
-        }
-
         return null;
       }
 
-      if (node.next_node_id) {
-
-        const candidate = nodesMap.get(String(node.next_node_id));
-
-        if (!candidate) return null;
-
-        if (candidate.branch_id) {
-          if (candidate.branch_id === session.current_branch_id) {
-            return candidate;
-          }
-          return null;
-        }
-
-        return candidate;
-      }
-
-      return null;
+      return candidate;
     };
 
-    let nextNode = resolveNextNode(currentNode);
+    /* ================= OPTIONS / POLICY ================= */
+
+    if (isInteractionNode(node) && input !== undefined) {
+
+      const source = node.node_type === "options"
+        ? node.options
+        : node.policy;
+
+      const match = source.find(opt =>
+        String(opt.value) === String(input) ||
+        String(opt.label) === String(input)
+      );
+
+      console.log("MATCH ENCONTRADO:", JSON.stringify(match));
+
+      if (!match) {
+        return res.json(renderNode(node, session._id));
+      }
+
+      session.current_branch_id = match.next_branch_id ?? null;
+
+      if (match.next_node_id) {
+
+        const nextId = String(match.next_node_id);
+
+        console.log("NEXT NODE ID:", nextId);
+        console.log("NODE FOUND:", nodesMap.has(nextId));
+
+        node = nodesMap.get(nextId);
+
+        console.log("NODO RESUELTO:", node?.node_type, node?.branch_id);
+
+      } else {
+        node = getNextNode(node);
+      }
+
+      if (node) {
+        session.current_node_id = node._id;
+      }
+
+    } else {
+
+      if (isInputNode(node) && input === undefined) {
+        return res.json(renderNode(node, session._id));
+      }
+
+      node = getNextNode(node);
+    }
 
     /* ================= AUTO FLOW ================= */
 
-    while (
-      nextNode &&
-      !STOP_NODES.includes(nextNode.node_type)
-    ) {
+    let safety = 0;
 
-      session.current_node_id = nextNode._id;
+    while (node && safety < 20) {
 
-      session.history.push({
-        node_id: nextNode._id,
-        question: nextNode.content,
-        node_type: nextNode.node_type
-      });
+      safety++;
 
-      if (nextNode.end_conversation) break;
+      session.current_node_id = node._id;
 
-      nextNode = resolveNextNode(nextNode);
-    }
-
-    /* ================= SAFE TERMINATION ================= */
-
-    if (!nextNode) {
-
-      if (currentNode.end_conversation) {
+      if (node.end_conversation) {
 
         session.is_completed = true;
         session.current_branch_id = null;
@@ -305,58 +311,47 @@ exports.nextStep = async (req, res) => {
           await upsertContactFromSession(session);
         }
 
-        return res.json({ completed: true });
+        return res.json(renderNode(node, session._id));
       }
 
-      return res.json(renderNode(currentNode, session._id));
-    }
+      if (isInputNode(node) || isInteractionNode(node)) {
 
-    /* ================= ADVANCE ================= */
+        await session.save();
 
-    session.current_node_id = nextNode._id;
+        return res.json(renderNode(node, session._id));
+      }
 
-    if (!nextNode.branch_id) {
-      session.current_branch_id = null;
-    }
+      /* ===== NODOS VISUALES ===== */
 
-    /* ================= SAVE HISTORY ================= */
+      if (node.node_type === "text" || node.node_type === "link") {
 
-    if (!INPUT_NODES.includes(nextNode.node_type)) {
+        await session.save();
 
-      const lastHistory = session.history[session.history.length - 1];
+        return res.json(renderNode(node, session._id));
+      }
 
-      if (!lastHistory || String(lastHistory.node_id) !== String(nextNode._id)) {
-        session.history.push({
-          node_id: nextNode._id,
-          question: nextNode.content,
-          node_type: nextNode.node_type
+      /* ===== MEDIA ===== */
+
+      if (node.node_type === "media") {
+
+        await session.save();
+
+        return res.json({
+          ...renderNode(node, session._id),
+          auto_next: true
         });
       }
 
-      session.markModified("history");
+      node = getNextNode(node);
     }
 
-    /* ================= NOTIFICATIONS ================= */
+    /* ================= FALLBACK ================= */
 
-    if (nextNode.meta?.notify?.enabled && session.mode === "production") {
-      await executeNodeNotification(nextNode, session);
-    }
-
-    /* ================= END CONVERSATION ================= */
-
-    if (nextNode.end_conversation) {
-
-      session.is_completed = true;
-      session.current_branch_id = null;
-
-      if (session.mode === "production") {
-        await upsertContactFromSession(session);
-      }
-    }
+    session.is_completed = true;
 
     await session.save();
 
-    return res.json(renderNode(nextNode, session._id));
+    return res.json({ completed: true });
 
   } catch (error) {
 
@@ -365,5 +360,6 @@ exports.nextStep = async (req, res) => {
     return res.status(500).json({
       message: "Error al procesar conversación"
     });
+
   }
 };

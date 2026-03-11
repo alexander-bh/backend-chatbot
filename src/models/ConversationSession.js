@@ -31,6 +31,12 @@ const ConversationSessionSchema = new mongoose.Schema(
       default: null
     },
 
+    contact_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Contact",
+      default: null
+    },
+
     variables: {
       type: Object,
       default: {}
@@ -41,7 +47,7 @@ const ConversationSessionSchema = new mongoose.Schema(
       default: null,
       index: true
     },
-    
+
     history: [
       {
         node_id: {
@@ -51,7 +57,6 @@ const ConversationSessionSchema = new mongoose.Schema(
 
         question: String,   // mensaje del bot
         answer: String,     // respuesta del usuario
-
         node_type: String,
         variable_key: String,
 
@@ -71,6 +76,15 @@ const ConversationSessionSchema = new mongoose.Schema(
     is_completed: {
       type: Boolean,
       default: false
+    },
+    is_abandoned: {
+      type: Boolean,
+      default: false
+    },
+
+    last_activity_at: {
+      type: Date,
+      default: Date.now
     }
   },
   { timestamps: true }

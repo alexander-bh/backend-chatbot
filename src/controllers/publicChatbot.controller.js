@@ -18,7 +18,6 @@ exports.startConversation = async (req, res) => {
       return res.status(404).json({ message: "Chatbot no disponible" });
     }
 
-    // 🔥 delegar al motor REAL
     const fakeReq = {
       body: {
         chatbot_id: chatbot._id,
@@ -27,7 +26,9 @@ exports.startConversation = async (req, res) => {
       },
       user: {
         account_id: chatbot.account_id
-      }
+      },
+      headers: req.headers,
+      socket: req.socket
     };
 
     return engine.startConversation(fakeReq, res);
