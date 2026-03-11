@@ -4,7 +4,7 @@ module.exports = function validateNodeInput(node, input) {
         return [];
     }
 
-    const value = String(input ?? "").trim();
+    let value = String(input ?? "").trim();
     const errors = [];
 
     for (const rule of node.validation.rules) {
@@ -20,15 +20,28 @@ module.exports = function validateNodeInput(node, input) {
                     errors.push(rule.message);
                 break;
 
-            case "phone":
-                if (!/^\+?\d{7,15}$/.test(value))
-                    errors.push(rule.message);
-                break;
+            case "phone": {
 
-            case "phone_mx":
-                if (!/^\+52\d{10}$/.test(value))
+                // limpiar espacios, guiones, paréntesis
+                const phone = value.replace(/[^\d+]/g, "");
+
+                if (!/^\+?\d{7,15}$/.test(phone)) {
                     errors.push(rule.message);
+                }
+
                 break;
+            }
+
+            case "phone_mx": {
+
+                const phone = value.replace(/[^\d+]/g, "");
+
+                if (!/^\+?52\d{10}$/.test(phone)) {
+                    errors.push(rule.message);
+                }
+
+                break;
+            }
 
             case "phone_country":
                 if (!/^\+\d{1,3}/.test(value))
@@ -52,7 +65,7 @@ module.exports = function validateNodeInput(node, input) {
 
             case "MinMax": {
 
-                /* ---------- QUESTION: contar palabras ---------- */
+                /* QUESTION: contar palabras */
 
                 if (node.node_type === "question") {
 
@@ -64,10 +77,9 @@ module.exports = function validateNodeInput(node, input) {
                     ) {
                         errors.push(rule.message);
                     }
-
                 }
 
-                /* ---------- NUMBER: validar rango ---------- */
+                /* NUMBER: validar rango */
 
                 if (node.node_type === "number") {
 
@@ -80,12 +92,10 @@ module.exports = function validateNodeInput(node, input) {
                     ) {
                         errors.push(rule.message);
                     }
-
                 }
 
                 break;
             }
-
         }
 
         if (errors.length) break;

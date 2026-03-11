@@ -1,70 +1,21 @@
 //chatbotIntegration.controller
 const Chatbot = require("../models/Chatbot");
 const crypto = require("crypto");
-const { parseOrigin } = require("../utils/origin.utils");
-const { isLocalhost } = require("../utils/isLocalhost");
-const { domainMatches } = require("../utils/domainMatch");
+const isDomainAllowed = require("../helper/isDomainAllowed");
 const { normalizeDomain } = require("../utils/normalizeDomain");
+const { isLocalhost } = require("../utils/isLocalhost");
 const { domainExists } = require("../validators/domain.validator");
-
-//UTILIDADES
-const escapeHTML = (str = "") =>
-  str.replace(/[&<>"']/g, m =>
-    ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#39;"
-    })[m]
-  );
 
 const getBaseUrl = () =>
   process.env.APP_BASE_URL || "https://backend-chatbot-omega.vercel.app";
 
-//Extraer dominio y puerto desde Origin
-exports.serveWidget = async (req, res) => {
-  const originHeader = req.headers.origin;
-  const parsed = parseOrigin(originHeader);
+const getWidgetBaseUrl = () =>
+  process.env.WIDGET_BASE_URL ||
+  "https://chatbot-widget-blue-eight.vercel.app";
 
-  if (!parsed) {
-    return res.status(403).json({ error: "Origen inválido" });
-  }
+const WIDGET_BASE_URL = getWidgetBaseUrl();
+const WIDGET_DOMAIN = normalizeDomain(WIDGET_BASE_URL);
 
-  const { hostname, port } = parsed;
-  const originDomain = normalizeDomain(hostname);
-
-  if (!originDomain) {
-    return res.status(403).json({ error: "Dominio inválido" });
-  }
-
-  const chatbot = await Chatbot.findOne({ public_id: req.params.id });
-
-  if (!chatbot) {
-    return res.status(404).json({ error: "Chatbot no encontrado" });
-  }
-
-  const domainAllowed = chatbot.allowed_domains.some(a =>
-    domainMatches(originDomain, a)
-  );
-
-  if (!domainAllowed) {
-    return res.status(403).json({ error: "Dominio no permitido" });
-  }
-
-  // 🔐 Validar puerto SOLO en localhost
-  if (isLocalhost(originDomain)) {
-    const ALLOWED_PORTS = ["3000", "5173"];
-
-    if (port && !ALLOWED_PORTS.includes(port)) {
-      return res.status(403).json({
-        error: "Puerto no permitido"
-      });
-    }
-  }
-
-  res.json({ ok: true });
-};
 
 /* =======================================================
    1) GET INSTALL SCRIPT  → /:public_id/install
@@ -84,7 +35,6 @@ exports.getInstallScript = async (req, res) => {
       return res.status(404).send("// Chatbot no encontrado");
     }
 
-    // VALIDAR TOKEN
     if (!token || token !== chatbot.install_token) {
       return res.status(403).send("// Token inválido");
     }
@@ -94,15 +44,17 @@ exports.getInstallScript = async (req, res) => {
       req.headers.referer ||
       "";
 
-    const domain = normalizeDomain(rawOrigin);
+    let domain = normalizeDomain(rawOrigin);
+
+    if (!domain && process.env.NODE_ENV === "development") {
+      domain = "localhost";
+    }
 
     if (!domain) {
       return res.status(403).send("// Dominio no detectable");
     }
 
-    const allowed =
-      chatbot.allowed_domains.some(d => domainMatches(domain, d)) ||
-      (process.env.NODE_ENV === "development" && isLocalhost(domain));
+    const allowed = isDomainAllowed(chatbot, domain);
 
     if (!allowed) {
       return res.status(403).send("// Dominio no autorizado");
@@ -114,29 +66,82 @@ exports.getInstallScript = async (req, res) => {
     res.type("application/javascript");
     res.setHeader("Cache-Control", "no-store");
 
-    res.send(`(function(){
+res.send(`(function(){
   if (window.__CHATBOT_INSTALLED__) return;
   window.__CHATBOT_INSTALLED__ = true;
 
   var iframe = document.createElement("iframe");
-
   iframe.src = "${baseUrl}/api/chatbot-integration/embed/${public_id}?d=${safeDomain}";
 
-    iframe.style.cssText = [
-      "position:fixed",
-      "bottom:0",
-      "right:0",
-      "width:100%",
-      "height:100%",
-      "border:none",
-      "z-index:2147483647",
-      "background:transparent",
-      "pointer-events:auto"
-    ].join(";");
+  /* Estado inicial: circular como el FAB */
+  iframe.style.cssText = [
+    "position:fixed",
+    "bottom:0",
+    "right:0",
+    "width:80px",
+    "height:80px",
+    "border:none",
+    "z-index:2147483647",
+    "background:transparent",
+    "pointer-events:auto",
+    "overflow:hidden",
+    "border-radius:50%",
+    "transition:width 0.3s ease,height 0.3s ease,border-radius 0.3s ease"
+  ].join(";");
+
   iframe.sandbox = "allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox";
   iframe.setAttribute("allow", "clipboard-write");
 
   document.body.appendChild(iframe);
+
+  /* Expande/contrae el iframe según estado del chatbot */
+  window.addEventListener("message", function(e) {
+    if (!e.data || e.data.type !== "CHATBOT_RESIZE") return;
+
+    if (e.data.open) {
+      /* ── ABIERTO: quitar border-radius, expandir ── */
+      iframe.style.borderRadius = "0";
+      iframe.style.overflow     = "visible";
+
+      var isMobile = window.innerWidth <= 480;
+      if (isMobile) {
+        iframe.style.width  = "100vw";
+        iframe.style.height = "100vh";
+        iframe.style.bottom = "0";
+        iframe.style.right  = "0";
+      } else {
+        var w = Math.min(420, window.innerWidth  - 32);
+        var h = Math.min(680, window.innerHeight - 40);
+        iframe.style.width  = w + "px";
+        iframe.style.height = h + "px";
+        iframe.style.bottom = "0";
+        iframe.style.right  = "0";
+      }
+    } else {
+      /* ── CERRADO: volver a circular ── */
+      iframe.style.width        = "80px";
+      iframe.style.height       = "80px";
+      iframe.style.borderRadius = "50%";
+      iframe.style.overflow     = "hidden";
+    }
+  });
+
+  /* Recalcula al redimensionar ventana si está abierto */
+  window.addEventListener("resize", function() {
+    var currentW = parseInt(iframe.style.width, 10);
+    if (currentW <= 80) return;
+
+    var isMobile = window.innerWidth <= 480;
+    if (isMobile) {
+      iframe.style.width  = "100vw";
+      iframe.style.height = "100vh";
+    } else {
+      var w = Math.min(420, window.innerWidth  - 32);
+      var h = Math.min(680, window.innerHeight - 40);
+      iframe.style.width  = w + "px";
+      iframe.style.height = h + "px";
+    }
+  });
 })();`);
 
   } catch (err) {
@@ -153,8 +158,77 @@ exports.renderEmbed = async (req, res) => {
     const { public_id } = req.params;
     const domain = normalizeDomain(req.query.d || "");
 
+    if (!domain) return res.status(400).send("Dominio inválido");
+
+    const chatbot = await Chatbot.findOne({
+      public_id,
+      status: "active",
+      is_enabled: true
+    }).lean();
+
+    if (!chatbot) return res.status(404).send("Chatbot no encontrado");
+
+    if (!chatbot.allowed_domains?.length && process.env.NODE_ENV === "production") {
+      return res.status(403).send("Chatbot sin dominios configurados");
+    }
+
+    if (!isDomainAllowed(chatbot, domain)) {
+      return res.status(403).send("Dominio no permitido");
+    }
+
+    const config = {
+      ts: Date.now(),
+      apiBase: getBaseUrl(),
+      publicId: public_id,
+      originDomain: domain,
+      name: chatbot.name,
+      avatar: chatbot.avatar || "",
+      primaryColor: chatbot.primary_color || "#2563eb",
+      secondaryColor: chatbot.secondary_color || "#111827",
+      inputPlaceholder: chatbot.input_placeholder || "Escribe tu mensaje...",
+      welcomeMessage: chatbot.welcome_message || "",
+      welcomeDelay: chatbot.welcome_delay ?? 2,
+      showWelcomeOnMobile: chatbot.show_welcome_on_mobile ?? true,
+      position: chatbot.position || "bottom-right"
+    };
+
+    const payload = JSON.stringify(config);
+
+    const signature = crypto
+      .createHmac("sha256", process.env.CONFIG_SECRET)
+      .update(payload)
+      .digest("hex");
+
+    const encoded = encodeURIComponent(
+      Buffer.from(JSON.stringify({ payload, signature })).toString("base64")
+    );
+
+    const widgetUrl = `${WIDGET_BASE_URL}/?config=${encoded}`;
+
+    res.setHeader(
+      "Content-Security-Policy",
+      `frame-ancestors 'self' https://${WIDGET_DOMAIN} http://${domain} https://${domain}`
+    );
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+    res.setHeader("Cache-Control", "no-store");
+
+    return res.redirect(widgetUrl);
+
+  } catch (err) {
+    console.error("RENDER EMBED ERROR:", err);
+    return res.status(500).send("No se pudo cargar el chatbot");
+  }
+};
+
+exports.getWidgetConfig = async (req, res) => {
+  try {
+    const { public_id } = req.params;
+    const domain = normalizeDomain(req.query.d || "");
+
     if (!domain) {
-      return res.status(400).send("Dominio inválido");
+      return res.status(400).json({ error: "Dominio inválido" });
     }
 
     const chatbot = await Chatbot.findOne({
@@ -164,53 +238,14 @@ exports.renderEmbed = async (req, res) => {
     }).lean();
 
     if (!chatbot) {
-      return res.status(404).send("Chatbot no encontrado");
+      return res.status(404).json({ error: "No encontrado" });
     }
 
-    const allowLocalhost = process.env.NODE_ENV === "development";
-
-    const allowed =
-      chatbot.allowed_domains.some(d => domainMatches(domain, d)) ||
-      (allowLocalhost && isLocalhost(domain));
-
-    if (!allowed) {
-      return res.status(403).send("Dominio no permitido");
+    if (!isDomainAllowed(chatbot, domain)) {
+      return res.status(403).json({ error: "No permitido" });
     }
 
-    const apiOrigin = new URL(getBaseUrl()).origin;
-
-    function stripProtocol(domain) {
-      return domain.replace(/^https?:\/\//, "").replace(/\/$/, "");
-    }
-
-    let frameAncestors;
-
-    if (chatbot.allowed_domains.length > 0) {
-      frameAncestors = chatbot.allowed_domains
-        .map(d => {
-          if (isLocalhost(d)) {
-            return "http://localhost:* http://127.0.0.1:* https://localhost:*";
-          }
-
-          const clean = stripProtocol(d);
-          return `https://${clean} https://*.${clean}`;
-        })
-        .join(" ");
-    } else {
-      // En desarrollo permitir localhost
-      if (process.env.NODE_ENV === "development") {
-        frameAncestors = "http://localhost:* http://127.0.0.1:* https://localhost:* https://127.0.0.1:*";
-      }
-      else {
-        frameAncestors = "'none'";
-      }
-    }
-
-    /* =========================
-       CONFIG SEGURA
-    ========================= */
-
-    const safeConfig = {
+    res.json({
       apiBase: getBaseUrl(),
       publicId: public_id,
       originDomain: domain,
@@ -218,104 +253,16 @@ exports.renderEmbed = async (req, res) => {
       avatar: chatbot.avatar || "",
       primaryColor: chatbot.primary_color || "#2563eb",
       secondaryColor: chatbot.secondary_color || "#111827",
-      inputPlaceholder: chatbot.input_placeholder || "Escribe tu mensaje…",
+      inputPlaceholder: chatbot.input_placeholder || "Escribe tu mensaje...",
       welcomeMessage: chatbot.welcome_message || "",
       welcomeDelay: chatbot.welcome_delay ?? 2,
       showWelcomeOnMobile: chatbot.show_welcome_on_mobile ?? true,
       position: chatbot.position || "bottom-right"
-    };
+    });
 
-
-    /* =========================
-       HEADERS SEGUROS
-    ========================= */
-    res.setHeader(
-      "Content-Security-Policy",
-      [
-        `default-src 'self'`,
-        `script-src 'self' ${apiOrigin} https:`,
-        `style-src 'self' 'unsafe-inline'`,
-        `img-src 'self' data: https:`,
-        `media-src 'self' https://res.cloudinary.com blob:`,
-        `connect-src 'self' ${apiOrigin} https: wss:`,
-        `font-src 'self' https: data:`,
-        `frame-src 'self'`,
-        `frame-ancestors ${frameAncestors}`
-      ].join("; ")
-    );
-
-    res.setHeader("X-Content-Type-Options", "nosniff");
-    res.setHeader("Referrer-Policy", "strict-origin");
-    res.setHeader(
-      "Permissions-Policy",
-      "geolocation=(), microphone=(), camera=()"
-    );
-
-    /* =========================
-       HTML SIN INLINE SCRIPT
-    ========================= */
-
-    res.send(`<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>${escapeHTML(chatbot.name)}</title>
-<link rel="stylesheet" href="/public/chatbot/embed.css" />
-</head>
-<body>
-
-<button class="chat-fab" id="chatToggle">
-  <img id="chatAvatarFab" class="chat-avatar-fab" alt="Avatar" />
-</button>
-
-<div class="chat-welcome" id="chatWelcome">
-  <span class="welcome-text"></span>
-</div>
-
-<div class="chat-widget" id="chatWidget">
-  <div class="chat">
-    <header class="chat-header">
-      <img id="chatAvatarHeader" class="chat-avatar" alt="Avatar" />
-      <div class="chat-header-info">
-        <strong id="chatName">${escapeHTML(chatbot.name)}</strong>
-        <div class="chat-status" id="chatStatus">Offline</div>
-      </div>
-      <div class="chat-actions">
-        <button id="chatRestart" class="chat-restart" aria-label="Reiniciar conversación">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M1 4v6h6M23 20v-6h-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
-        <button class="chat-close" id="chatClose" aria-label="Cerrar">×</button>
-      </div>
-    </header>
-
-    <main id="messages"></main>
-
-    <footer>
-      <input id="messageInput" autocomplete="off" />
-      <button id="sendBtn" aria-label="Enviar mensaje">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-          <path d="M22 2L11 13" stroke="white" stroke-width="2"/>
-          <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="white" stroke-width="2"/>
-        </svg>
-      </button>
-    </footer>
-  </div>
-</div>
-
-<script
-  src="/public/chatbot/embed.js"
-  data-config='${escapeHTML(JSON.stringify(safeConfig))}'
-></script>
-
-</body>
-</html>`);
   } catch (err) {
-    console.error("RENDER EMBED ERROR:", err);
-    res.status(500).send("No se pudo cargar el chatbot");
+    console.error("CONFIG ERROR:", err);
+    res.status(500).json({ error: "Error interno" });
   }
 };
 
@@ -506,6 +453,51 @@ exports.regenerateInstallToken = async (req, res) => {
   } catch (err) {
     console.error("REGENERATE TOKEN ERROR:", err);
     res.status(500).json({ message: "Error al regenerar token" });
+  }
+};
+
+exports.verifyConfigSignature = async (req, res) => {
+  try {
+    const { payload, signature } = req.body;
+
+    if (!payload || !signature) {
+      return res.status(400).json({ error: "Datos incompletos" });
+    }
+
+    if (!process.env.CONFIG_SECRET) {
+      return res.status(500).json({ error: "Server misconfig" });
+    }
+
+    const expected = crypto
+      .createHmac("sha256", process.env.CONFIG_SECRET)
+      .update(payload)
+      .digest("hex");
+
+    if (signature.length !== expected.length) {
+      return res.status(403).json({ error: "Firma inválida" });
+    }
+
+    const valid = crypto.timingSafeEqual(
+      Buffer.from(signature, "hex"),
+      Buffer.from(expected, "hex")
+    );
+    if (!valid) {
+      return res.status(403).json({ error: "Firma inválida" });
+    }
+
+    const config = JSON.parse(payload);
+
+    // ⏱️ Anti-replay
+    const MAX_AGE_MS = 5 * 60 * 1000;
+    if (!config.ts || Date.now() - config.ts > MAX_AGE_MS) {
+      return res.status(403).json({ error: "Config expirada" });
+    }
+
+    res.json(config);
+
+  } catch (err) {
+    console.error("VERIFY SIGNATURE:", err);
+    res.status(500).json({ error: "Error interno" });
   }
 };
 

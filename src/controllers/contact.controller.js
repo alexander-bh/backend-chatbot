@@ -16,22 +16,78 @@ const formatContact = (contact) => {
 
 exports.createContact = async (req, res) => {
   try {
+
     const accountId = req.user.account_id;
 
     const {
       chatbot_id,
       session_id,
-      name,
-      email,
-      phone,
       variables,
-      completed
+      completed,
+      visitor_id,
+      origin_url,
+      device,
+      ip_address
     } = req.body;
 
     if (!chatbot_id || !session_id) {
       return res.status(400).json({
         message: "chatbot_id y session_id son requeridos"
       });
+    }
+
+    const allowedFields = [
+      "name",
+      "last_name",
+      "email",
+      "phone",
+      "birth_date",
+      "company",
+      "website",
+      "company_phone",
+      "phone_ext",
+      "position",
+      "city",
+      "country",
+      "state",
+      "postal_code",
+      "address",
+      "job_title",
+      "privacy",
+      "notes",
+      "observations",
+      "data_processing_consent"
+    ];
+
+    const insertData = {
+      account_id: accountId,
+      chatbot_id,
+      session_id,
+      visitor_id,
+      origin_url,
+      device,
+      ip_address,
+      source: "chatbot"
+    };
+
+    const updateData = {};
+
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) {
+        updateData[field] = req.body[field];
+      }
+    }
+
+    if (variables) {
+      updateData.variables = variables;
+    }
+
+    if (visitor_id) {
+      updateData.visitor_id = visitor_id;
+    }
+
+    if (completed !== undefined) {
+      updateData.completed = completed;
     }
 
     const contact = await Contact.findOneAndUpdate(
@@ -41,17 +97,8 @@ exports.createContact = async (req, res) => {
         session_id
       },
       {
-        $setOnInsert: {
-          account_id: accountId,
-          chatbot_id,
-          session_id,
-          source: "chatbot",
-          name,
-          email,
-          phone,
-          variables: variables || {},
-          completed: completed || false
-        }
+        $setOnInsert: insertData,
+        $set: updateData
       },
       {
         new: true,
@@ -62,15 +109,19 @@ exports.createContact = async (req, res) => {
     res.status(200).json(formatContact(contact));
 
   } catch (error) {
+
     console.error("CREATE CONTACT ERROR:", error);
 
     if (error.code === 11000) {
-      return res.status(200).json({ message: "Contacto ya existente" });
+      return res.status(200).json({
+        message: "Contacto ya existente"
+      });
     }
 
     res.status(500).json({
       message: "Error al guardar contacto"
     });
+
   }
 };
 
@@ -190,7 +241,7 @@ exports.updateStatus = async (req, res) => {
     });
   }
 };
-// controllers/contact.controller.js
+
 exports.createManualContact = async (req, res) => {
   try {
     const accountId = req.user.account_id;
@@ -250,7 +301,6 @@ exports.createManualContact = async (req, res) => {
   }
 };
 
-// controllers/contact.controller.js
 exports.updateContact = async (req, res) => {
   try {
     const { id } = req.params;
@@ -515,6 +565,7 @@ exports.getDeletedContacts = async (req, res) => {
   try {
     const accountId = req.user.account_id;
 
+    // Obtener todos los contactos eliminados
     const contacts = await Contact.find({
       account_id: accountId,
       is_deleted: true
@@ -522,25 +573,8 @@ exports.getDeletedContacts = async (req, res) => {
       .sort({ updatedAt: -1 })
       .lean();
 
-    const sessionIds = contacts
-      .filter(c => c.session_id)
-      .map(c => c.session_id);
-
-    const deletedSessions = await ConversationSession.find({
-      _id: { $in: sessionIds },
-      is_deleted: true
-    }).select("_id").lean();
-
-    const deletedSessionSet = new Set(
-      deletedSessions.map(s => String(s._id))
-    );
-
-    const filteredContacts = contacts.filter(c => {
-      if (!c.session_id) return true;
-      return deletedSessionSet.has(String(c.session_id));
-    });
-
-    const formatted = filteredContacts.map(formatContact);
+    // Formatear contactos
+    const formatted = contacts.map(formatContact);
 
     res.json({
       total_deleted: formatted.length,
@@ -584,7 +618,6 @@ exports.restoreContact = async (req, res) => {
         $set: { is_deleted: false }
       }
     );
-
     res.json({
       message: "Contacto restaurado correctamente",
       contact: formatContact(contact)

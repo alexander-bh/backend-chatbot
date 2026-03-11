@@ -48,16 +48,32 @@ const ContactSchema = new mongoose.Schema({
   },
 
   // 👤 Datos personales
-  name: String,
-  last_name: String,
-  email: String,
-  phone: String,
+  name: {
+    type: String,
+    trim: true
+  },
+  last_name: {
+    type: String,
+    trim: true
+  },
+  email: {
+    type: String,
+    lowercase: true,
+    trim: true
+  },
+  phone: {
+    type: String,
+    trim: true
+  },
 
   birth_date: Date,
 
   // 🏢 Datos empresa
-  company: String,
-  job_title:String,
+  company: {
+    type: String,
+    trim: true
+  },
+  job_title: String,
   website: String,
   company_phone: String,
   phone_ext: String, // ✅ NUEVO
@@ -68,8 +84,8 @@ const ContactSchema = new mongoose.Schema({
   postal_code: String,
   address: String,
   observations: String,
-  privacy:String,
-  notes:String,
+  privacy: String,
+  notes: String,
 
   data_processing_consent: {
     type: String,
@@ -77,8 +93,12 @@ const ContactSchema = new mongoose.Schema({
     default: "pending"
   },
 
+  visitor_id: {
+    type: String,
+  },
+
   variables: {
-    type: Object,
+    type: mongoose.Schema.Types.Mixed,
     default: {}
   },
 
@@ -117,13 +137,33 @@ const ContactSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
-ContactSchema.index({ account_id: 1, chatbot_id: 1, createdAt: -1 });
+ContactSchema.index({ account_id: 1, createdAt: -1 });
+ContactSchema.index({ account_id: 1, lead_score: -1 });
+ContactSchema.index({ account_id: 1, visitor_id: 1 });
 ContactSchema.index(
   { account_id: 1, chatbot_id: 1, session_id: 1 },
   {
     unique: true,
     partialFilterExpression: {
       session_id: { $exists: true, $ne: null }
+    }
+  }
+);
+ContactSchema.index(
+  { account_id: 1, email: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      email: { $exists: true, $ne: null }
+    }
+  }
+);
+ContactSchema.index(
+  { account_id: 1, phone: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      phone: { $exists: true, $ne: null }
     }
   }
 );

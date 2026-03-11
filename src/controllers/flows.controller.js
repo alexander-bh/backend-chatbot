@@ -45,8 +45,6 @@ function detectOrphanNodes(nodes, startNodeId) {
 exports.getNodesByFlow = async (req, res) => {
   try {
 
-    console.log("ENTRO A GET NODES");
-
     const flowId = req.params?.flowId || null;
 
     const nodes = await flowNodeService.getNodesByFlow(
@@ -99,12 +97,6 @@ exports.saveFlow = async (req, res) => {
 
     if (!nodes.length) throw new Error("nodes requeridos");
     if (!start_node_id) throw new Error("start_node_id requerido");
-
-    console.log("======== FLOW PAYLOAD ========");
-    console.log("start_node_id:", start_node_id);
-    console.log("nodes length:", nodes.length);
-    console.log("branches length:", branches.length);
-    console.log("nodes:", JSON.stringify(nodes, null, 2));
 
     const isPublishing = publish === true;
 
@@ -169,10 +161,6 @@ exports.saveFlow = async (req, res) => {
 
       const newId = new mongoose.Types.ObjectId();
 
-      console.log("MAP NODE ID");
-      console.log("OLD:", oldId);
-      console.log("NEW:", newId.toString());
-
       idMap.set(oldId, newId);
 
       n.__old_id = oldId;
@@ -191,8 +179,6 @@ exports.saveFlow = async (req, res) => {
     const orphanNodes = detectOrphanNodes(nodes, start_node_id);
 
     if (orphanNodes.length > 0) {
-
-      console.log("⚠️ ORPHAN NODES DETECTED");
 
       orphanNodes.forEach(n => {
         console.log(`Nodo huérfano: ${n._id} (${n.node_type})`);
@@ -244,11 +230,6 @@ exports.saveFlow = async (req, res) => {
           .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
         branchNodes.forEach((node, index) => {
-          console.log("----- PROCESS NODE -----");
-          console.log("NODE:", node.__old_id);
-          console.log("TYPE:", node.node_type);
-          console.log("ORDER:", node.order);
-          console.log("NEXT SENT FROM FRONT:", node.next_node_id);
 
           const newId = idMap.get(node.__old_id);
 
@@ -372,27 +353,11 @@ exports.saveFlow = async (req, res) => {
               })
               .filter(Boolean);
           }
-          console.log("NODE TO SAVE:");
-          console.log({
-            id: newId.toString(),
-            node_type: node.node_type,
-            next_node_id: nextNodeId?.toString(),
-            order: index
-          });
+
           docs.push(base);
 
         });
       }
-
-      console.log("======= FINAL DOCS =======");
-      console.log(
-        docs.map(d => ({
-          id: d._id.toString(),
-          type: d.node_type,
-          next: d.next_node_id?.toString(),
-          order: d.order
-        }))
-      );
 
       await FlowNode.insertMany(docs, { session });
 
