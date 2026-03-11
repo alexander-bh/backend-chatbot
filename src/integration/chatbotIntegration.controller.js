@@ -168,6 +168,8 @@ exports.renderEmbed = async (req, res) => {
 
     if (!chatbot) return res.status(404).send("Chatbot no encontrado");
 
+    console.log("CONFIG_SECRET:", process.env.CONFIG_SECRET);
+
     if (!chatbot.allowed_domains?.length && process.env.NODE_ENV === "production") {
       return res.status(403).send("Chatbot sin dominios configurados");
     }
