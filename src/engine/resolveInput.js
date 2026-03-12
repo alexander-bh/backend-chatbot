@@ -31,7 +31,11 @@ module.exports = async function resolveInput(node, input, session, nodesMap) {
       };
     }
     session.history.push({ node_id: node._id, question: node.content, answer: input });
-    if (node.variable_key) session.variables[node.variable_key] = input;
+
+    if (node.variable_key) {
+      session.variables[node.variable_key] = input;
+      session.markModified("variables");
+    }
     const next = nodesMap.get(String(node.next_node_id));
     return { node: next };
   }
