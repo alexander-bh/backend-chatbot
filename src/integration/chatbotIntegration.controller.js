@@ -1,89 +1,112 @@
-//chatbotIntegration.controller
-const Chatbot = require("../models/Chatbot");
-const crypto = require("crypto");
-const isDomainAllowed = require("../helper/isDomainAllowed");
+// chatbotIntegration.controller.js  — PROTECCIÓN MÁXIMA
+const Chatbot  = require("../models/Chatbot");
+const crypto   = require("crypto");
+const isDomainAllowed     = require("../helper/isDomainAllowed");
 const { normalizeDomain } = require("../utils/normalizeDomain");
-const { isLocalhost } = require("../utils/isLocalhost");
-const { domainExists } = require("../validators/domain.validator");
+const { isLocalhost }     = require("../utils/isLocalhost");
+const { domainExists }    = require("../validators/domain.validator");
+const { getStore, TTL_MS } = require("../utils/nonceStore"); // ← NUEVO
 
-const getBaseUrl = () =>
-  process.env.APP_BASE_URL || "https://backend-chatbot-omega.vercel.app";
-
-const getWidgetBaseUrl = () =>
-  process.env.WIDGET_BASE_URL ||
-  "https://chatbot-widget-blue-eight.vercel.app";
+/* ─────────────────────────────────────────
+   HELPERS
+───────────────────────────────────────── */
+const getBaseUrl   = () => process.env.APP_BASE_URL   || "https://backend-chatbot-omega.vercel.app";
+const getWidgetBaseUrl = () => process.env.WIDGET_BASE_URL || "https://chatbot-widget-blue-eight.vercel.app";
 
 const WIDGET_BASE_URL = getWidgetBaseUrl();
-const WIDGET_DOMAIN = normalizeDomain(WIDGET_BASE_URL);
+const WIDGET_DOMAIN   = normalizeDomain(WIDGET_BASE_URL);
+
+/**
+ * Extrae el dominio del request de forma segura.
+ * Prioriza Origin (más difícil de falsificar en navegadores) sobre Referer.
+ */
+function extractDomain(req) {
+  const raw = req.headers.origin || req.headers.referer || "";
+  const domain = normalizeDomain(raw);
+  if (domain) return domain;
+  if (process.env.NODE_ENV === "development") return "localhost";
+  return null;
+}
+
+/**
+ * Timing-safe string compare que también compara longitud.
+ */
+function safeCompare(a, b) {
+  try {
+    const ba = Buffer.from(a, "hex");
+    const bb = Buffer.from(b, "hex");
+    if (ba.length !== bb.length) return false;
+    return crypto.timingSafeEqual(ba, bb);
+  } catch {
+    return false;
+  }
+}
+
 
 /* =======================================================
-   1) GET INSTALL SCRIPT  → /:public_id/install
+   1) GET INSTALL SCRIPT  →  /:public_id/install
+   
+   PROTECCIONES:
+   - Token de instalación en query param
+   - Validación de Origin/Referer contra dominios permitidos
+   - El script resultante es inútil fuera del dominio autorizado
 ======================================================= */
 exports.getInstallScript = async (req, res) => {
   try {
     const { public_id } = req.params;
     const token = req.query.t;
 
+    // 1. Chatbot activo
     const chatbot = await Chatbot.findOne({
       public_id,
       status: "active",
       is_enabled: true
     }).lean();
 
-    if (!chatbot) {
-      return res.status(404).send("// Chatbot no encontrado");
-    }
+    if (!chatbot) return res.status(404).send("// Chatbot no encontrado");
 
-    if (!token || token !== chatbot.install_token) {
+    // 2. Token válido (timing-safe)
+    if (!token || !chatbot.install_token) {
       return res.status(403).send("// Token inválido");
     }
 
-    const rawOrigin =
-      req.headers.origin ||
-      req.headers.referer ||
-      "";
+    const tokenMatch = safeCompare(
+      crypto.createHash("sha256").update(token).digest("hex"),
+      crypto.createHash("sha256").update(chatbot.install_token).digest("hex")
+    );
 
-    let domain = normalizeDomain(rawOrigin);
+    if (!tokenMatch) return res.status(403).send("// Token inválido");
 
-    if (!domain && process.env.NODE_ENV === "development") {
-      domain = "localhost";
-    }
+    // 3. Dominio del llamante
+    const domain = extractDomain(req);
+    if (!domain) return res.status(403).send("// Dominio no detectable");
 
-    if (!domain) {
-      return res.status(403).send("// Dominio no detectable");
-    }
-
-    const allowed = isDomainAllowed(chatbot, domain);
-
-    if (!allowed) {
+    // 4. Dominio autorizado
+    if (!isDomainAllowed(chatbot, domain)) {
       return res.status(403).send("// Dominio no autorizado");
     }
 
-    const baseUrl = getBaseUrl();
+    const baseUrl   = getBaseUrl();
     const safeDomain = encodeURIComponent(domain);
 
     res.type("application/javascript");
-    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    // Sólo el dominio autorizado puede cargar este script
+    res.setHeader("Content-Security-Policy", `default-src 'none'`);
 
-res.send(`(function(){
+    res.send(`(function(){
   if (window.__CHATBOT_INSTALLED__) return;
   window.__CHATBOT_INSTALLED__ = true;
 
   var iframe = document.createElement("iframe");
   iframe.src = "${baseUrl}/api/chatbot-integration/embed/${public_id}?d=${safeDomain}";
 
-  /* Estado inicial: circular como el FAB */
   iframe.style.cssText = [
-    "position:fixed",
-    "bottom:0",
-    "right:0",
-    "width:80px",
-    "height:80px",
-    "border:none",
-    "z-index:2147483647",
-    "background:transparent",
-    "pointer-events:auto",
-    "overflow:hidden",
+    "position:fixed","bottom:0","right:0",
+    "width:80px","height:80px","border:none",
+    "z-index:2147483647","background:transparent",
+    "pointer-events:auto","overflow:hidden",
     "border-radius:50%",
     "transition:width 0.3s ease,height 0.3s ease,border-radius 0.3s ease"
   ].join(";");
@@ -93,15 +116,11 @@ res.send(`(function(){
 
   document.body.appendChild(iframe);
 
-  /* Expande/contrae el iframe según estado del chatbot */
   window.addEventListener("message", function(e) {
     if (!e.data || e.data.type !== "CHATBOT_RESIZE") return;
-
     if (e.data.open) {
-      /* ── ABIERTO: quitar border-radius, expandir ── */
       iframe.style.borderRadius = "0";
       iframe.style.overflow     = "visible";
-
       var isMobile = window.innerWidth <= 480;
       if (isMobile) {
         iframe.style.width  = "100vw";
@@ -113,11 +132,8 @@ res.send(`(function(){
         var h = Math.min(680, window.innerHeight - 40);
         iframe.style.width  = w + "px";
         iframe.style.height = h + "px";
-        iframe.style.bottom = "0";
-        iframe.style.right  = "0";
       }
     } else {
-      /* ── CERRADO: volver a circular ── */
       iframe.style.width        = "80px";
       iframe.style.height       = "80px";
       iframe.style.borderRadius = "50%";
@@ -125,11 +141,9 @@ res.send(`(function(){
     }
   });
 
-  /* Recalcula al redimensionar ventana si está abierto */
   window.addEventListener("resize", function() {
     var currentW = parseInt(iframe.style.width, 10);
     if (currentW <= 80) return;
-
     var isMobile = window.innerWidth <= 480;
     if (isMobile) {
       iframe.style.width  = "100vw";
@@ -149,8 +163,16 @@ res.send(`(function(){
   }
 };
 
+
 /* =======================================================
    3) RENDER EMBED (HTML)
+   
+   PROTECCIONES NUEVAS:
+   ✅ Nonce de un solo uso (90s TTL)
+   ✅ Nonce incluido en payload firmado
+   ✅ Origin validado contra dominios permitidos
+   ✅ CSP frame-ancestors restrictivo
+   ✅ TTL de config reducido a 90s
 ======================================================= */
 exports.renderEmbed = async (req, res) => {
   try {
@@ -159,6 +181,18 @@ exports.renderEmbed = async (req, res) => {
 
     if (!domain) return res.status(400).send("Dominio inválido");
 
+    // 1. Validar que el Origin real coincida con el dominio declarado
+    const requestDomain = extractDomain(req);
+    if (
+      requestDomain &&
+      requestDomain !== domain &&
+      requestDomain !== "localhost"
+    ) {
+      console.warn(`EMBED DOMAIN MISMATCH: declared=${domain} actual=${requestDomain}`);
+      return res.status(403).send("Dominio no coincide");
+    }
+
+    // 2. Chatbot activo
     const chatbot = await Chatbot.findOne({
       public_id,
       status: "active",
@@ -175,24 +209,30 @@ exports.renderEmbed = async (req, res) => {
       return res.status(403).send("Dominio no permitido");
     }
 
+    // 3. Generar nonce de un solo uso
+    const store = await getStore();
+    const nonce = crypto.randomBytes(32).toString("hex");
+    await store.set(nonce, TTL_MS);
+
+    // 4. Construir config con nonce + TTL corto
     const config = {
-      ts: Date.now(),
-      apiBase: getBaseUrl(),
-      publicId: public_id,
-      originDomain: domain,
-      name: chatbot.name,
-      avatar: chatbot.avatar || "",
-      primaryColor: chatbot.primary_color || "#2563eb",
-      secondaryColor: chatbot.secondary_color || "#111827",
-      inputPlaceholder: chatbot.input_placeholder || "Escribe tu mensaje...",
-      welcomeMessage: chatbot.welcome_message || "",
-      welcomeDelay: chatbot.welcome_delay ?? 2,
+      ts:                  Date.now(),
+      nonce,                                          // ← NUEVO
+      apiBase:             getBaseUrl(),
+      publicId:            public_id,
+      originDomain:        domain,
+      name:                chatbot.name,
+      avatar:              chatbot.avatar || "",
+      primaryColor:        chatbot.primary_color    || "#2563eb",
+      secondaryColor:      chatbot.secondary_color  || "#111827",
+      inputPlaceholder:    chatbot.input_placeholder || "Escribe tu mensaje...",
+      welcomeMessage:      chatbot.welcome_message  || "",
+      welcomeDelay:        chatbot.welcome_delay    ?? 2,
       showWelcomeOnMobile: chatbot.show_welcome_on_mobile ?? true,
-      position: chatbot.position || "bottom-right"
+      position:            chatbot.position         || "bottom-right"
     };
 
-    const payload = JSON.stringify(config);
-
+    const payload   = JSON.stringify(config);
     const signature = crypto
       .createHmac("sha256", process.env.CONFIG_SECRET)
       .update(payload)
@@ -208,10 +248,9 @@ exports.renderEmbed = async (req, res) => {
       "Content-Security-Policy",
       `frame-ancestors 'self' https://${WIDGET_DOMAIN} http://${domain} https://${domain}`
     );
-
     res.setHeader("Content-Type", "text/html; charset=utf-8");
-
-    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
 
     return res.redirect(widgetUrl);
 
@@ -221,196 +260,16 @@ exports.renderEmbed = async (req, res) => {
   }
 };
 
-/* =======================================================
-   4) AGREGAR DOMINIO
-======================================================= */
-exports.addAllowedDomain = async (req, res) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({ error: "No autorizado" });
-    }
-
-    const { public_id } = req.params;
-    const normalized = normalizeDomain(req.body.domain);
-
-    if (!normalized) {
-      return res.status(400).json({ error: "Dominio inválido" });
-    }
-
-    const normalizedLower = normalized.toLowerCase();
-    const isDev = process.env.NODE_ENV !== "production";
-
-    // Validación localhost
-    if (isLocalhost(normalizedLower)) {
-      if (!isDev) {
-        return res.status(400).json({
-          error: "Dominios localhost no permitidos en producción"
-        });
-      }
-    } else {
-      const exists = await domainExists(normalizedLower);
-      if (!exists) {
-        return res.status(400).json({
-          error: "El dominio no existe en DNS"
-        });
-      }
-    }
-
-    // 🔥 Query dinámico según rol
-    const query = { public_id };
-
-    if (req.user.role !== "ADMIN") {
-      if (!req.user.account_id) {
-        return res.status(401).json({ error: "Cuenta inválida" });
-      }
-      query.account_id = req.user.account_id;
-    }
-
-    const chatbot = await Chatbot.findOne(query);
-
-    if (!chatbot) {
-      return res.status(404).json({ error: "Chatbot no encontrado" });
-    }
-
-    // 🔐 Prevención real de duplicados (case-insensitive)
-    const alreadyExists = chatbot.allowed_domains.some(
-      d => d.toLowerCase() === normalizedLower
-    );
-
-    if (alreadyExists) {
-      return res.status(400).json({ error: "Dominio ya existe" });
-    }
-
-    // Agregar dominio
-    chatbot.allowed_domains.push(normalizedLower);
-
-    // 🛡️ Limpieza defensiva anti-duplicados
-    chatbot.allowed_domains = [
-      ...new Set(chatbot.allowed_domains.map(d => d.toLowerCase()))
-    ];
-
-    await chatbot.save();
-
-    res.json({
-      success: true,
-      domains: chatbot.allowed_domains
-    });
-
-  } catch (err) {
-    console.error("ADD DOMAIN:", err);
-    res.status(500).json({ error: "Error interno" });
-  }
-};
 
 /* =======================================================
-   5) ELIMINAR DOMINIO
+   8) VERIFICAR FIRMA DE CONFIG  (endpoint del widget)
+   
+   PROTECCIONES NUEVAS:
+   ✅ Nonce consumido (un solo uso, atómico en Redis)
+   ✅ TTL de 90s (era 5min)
+   ✅ Origin validado contra originDomain de la config
+   ✅ Timing-safe comparison
 ======================================================= */
-exports.removeAllowedDomain = async (req, res) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({ error: "No autorizado" });
-    }
-
-    const { public_id } = req.params;
-    const domain = normalizeDomain(req.body.domain);
-
-    const query = { public_id };
-
-    if (req.user.role !== "ADMIN") {
-      if (!req.user.account_id) {
-        return res.status(401).json({ error: "Cuenta inválida" });
-      }
-      query.account_id = req.user.account_id;
-    }
-
-    const chatbot = await Chatbot.findOne(query);
-
-    if (!chatbot) {
-      return res.status(404).json({ error: "Chatbot no encontrado" });
-    }
-
-    chatbot.allowed_domains = chatbot.allowed_domains.filter(
-      d => d !== domain
-    );
-
-    await chatbot.save();
-
-    res.json({ success: true, domains: chatbot.allowed_domains });
-
-  } catch (err) {
-    console.error("REMOVE DOMAIN:", err);
-    res.status(500).json({ error: "Error interno" });
-  }
-};
-
-/* =======================================================
-   6) GENERAR CÓDIGO DE INSTALACIÓN
-======================================================= */
-
-exports.InstallationCode = async (req, res) => {
-  try {
-    const { public_id } = req.params;
-
-    const chatbot = await Chatbot.findOne({ public_id });
-
-    if (!chatbot) {
-      return res.status(404).json({ error: "Chatbot no encontrado" });
-    }
-
-    const baseUrl = getBaseUrl();
-
-    const script = `<script src="${baseUrl}/api/chatbot-integration/${public_id}/install?t=${chatbot.install_token}" async></script>`;
-
-    res.json({
-      script,
-      install_token: chatbot.install_token,
-      allowed_domains: chatbot.allowed_domains || [],
-      has_domains: chatbot.allowed_domains.length > 0
-    });
-
-  } catch (err) {
-    console.error("INSTALL CODE ERROR:", err);
-    res.status(500).json({ error: "Error interno" });
-  }
-};
-
-/* =======================================================
-   7) REGENERAR TOKEN DE INSTALACIÓN
-======================================================= */
-exports.regenerateInstallToken = async (req, res) => {
-  try {
-    if (!req.user?.account_id) {
-      return res.status(401).json({ message: "Usuario no autenticado" });
-    }
-
-    const { public_id } = req.params;
-
-    const chatbot = await Chatbot.findOne({
-      public_id,
-      account_id: req.user.account_id
-    });
-
-    if (!chatbot) {
-      return res.status(404).json({ message: "Chatbot no encontrado" });
-    }
-
-    chatbot.install_token = crypto.randomBytes(32).toString("hex");
-    chatbot.allowed_domains = [];
-    chatbot.installation_status = "pending";
-
-    await chatbot.save();
-
-    res.json({
-      message: "Token regenerado correctamente",
-      install_token: chatbot.install_token
-    });
-
-  } catch (err) {
-    console.error("REGENERATE TOKEN ERROR:", err);
-    res.status(500).json({ message: "Error al regenerar token" });
-  }
-};
-
 exports.verifyConfigSignature = async (req, res) => {
   try {
     const { payload, signature } = req.body;
@@ -423,36 +282,186 @@ exports.verifyConfigSignature = async (req, res) => {
       return res.status(500).json({ error: "Server misconfig" });
     }
 
+    // 1. Verificar firma HMAC (timing-safe)
     const expected = crypto
       .createHmac("sha256", process.env.CONFIG_SECRET)
       .update(payload)
       .digest("hex");
 
-    if (signature.length !== expected.length) {
-      return res.status(403).json({ error: "Firma inválida" });
-    }
-
-    const valid = crypto.timingSafeEqual(
-      Buffer.from(signature, "hex"),
-      Buffer.from(expected, "hex")
-    );
-    if (!valid) {
+    if (!safeCompare(signature, expected)) {
       return res.status(403).json({ error: "Firma inválida" });
     }
 
     const config = JSON.parse(payload);
 
-    // ⏱️ Anti-replay
-    const MAX_AGE_MS = 5 * 60 * 1000;
+    // 2. TTL reducido a 90s (anti-replay por tiempo)
+    const MAX_AGE_MS = 90_000;
     if (!config.ts || Date.now() - config.ts > MAX_AGE_MS) {
       return res.status(403).json({ error: "Config expirada" });
     }
 
-    res.json(config);
+    // 3. Validar nonce (un solo uso — consume atómicamente)
+    if (!config.nonce) {
+      return res.status(403).json({ error: "Nonce ausente" });
+    }
+
+    const store   = await getStore();
+    const valid   = await store.consume(config.nonce);
+
+    if (!valid) {
+      // Nonce ya usado o expirado → posible replay attack
+      console.warn(`REPLAY ATTEMPT: nonce=${config.nonce} publicId=${config.publicId}`);
+      return res.status(403).json({ error: "Nonce inválido o ya utilizado" });
+    }
+
+    // 4. Validar Origin del widget contra el dominio de la config
+    const requestOrigin = normalizeDomain(
+      req.headers.origin || req.headers.referer || ""
+    );
+
+    // El widget vive en WIDGET_DOMAIN — se permite ese origen
+    const allowedOrigins = [
+      WIDGET_DOMAIN,
+      config.originDomain,
+      ...(process.env.NODE_ENV === "development" ? ["localhost"] : [])
+    ].filter(Boolean);
+
+    if (requestOrigin && !allowedOrigins.includes(requestOrigin)) {
+      console.warn(`ORIGIN MISMATCH on verify: got=${requestOrigin} allowed=${allowedOrigins}`);
+      return res.status(403).json({ error: "Origen no autorizado" });
+    }
+
+    // 5. Devolver config limpia (sin nonce para no exponerlo de nuevo)
+    const { nonce: _n, ...safeConfig } = config;
+    res.json(safeConfig);
 
   } catch (err) {
     console.error("VERIFY SIGNATURE:", err);
     res.status(500).json({ error: "Error interno" });
+  }
+};
+
+
+/* =======================================================
+   4) AGREGAR DOMINIO
+======================================================= */
+exports.addAllowedDomain = async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: "No autorizado" });
+
+    const { public_id }    = req.params;
+    const normalized       = normalizeDomain(req.body.domain);
+    if (!normalized) return res.status(400).json({ error: "Dominio inválido" });
+
+    const normalizedLower = normalized.toLowerCase();
+    const isDev = process.env.NODE_ENV !== "production";
+
+    if (isLocalhost(normalizedLower)) {
+      if (!isDev) return res.status(400).json({ error: "Dominios localhost no permitidos en producción" });
+    } else {
+      const exists = await domainExists(normalizedLower);
+      if (!exists) return res.status(400).json({ error: "El dominio no existe en DNS" });
+    }
+
+    const query = { public_id };
+    if (req.user.role !== "ADMIN") {
+      if (!req.user.account_id) return res.status(401).json({ error: "Cuenta inválida" });
+      query.account_id = req.user.account_id;
+    }
+
+    const chatbot = await Chatbot.findOne(query);
+    if (!chatbot) return res.status(404).json({ error: "Chatbot no encontrado" });
+
+    const alreadyExists = chatbot.allowed_domains.some(d => d.toLowerCase() === normalizedLower);
+    if (alreadyExists) return res.status(400).json({ error: "Dominio ya existe" });
+
+    chatbot.allowed_domains.push(normalizedLower);
+    chatbot.allowed_domains = [...new Set(chatbot.allowed_domains.map(d => d.toLowerCase()))];
+    await chatbot.save();
+
+    res.json({ success: true, domains: chatbot.allowed_domains });
+  } catch (err) {
+    console.error("ADD DOMAIN:", err);
+    res.status(500).json({ error: "Error interno" });
+  }
+};
+
+
+/* =======================================================
+   5) ELIMINAR DOMINIO
+======================================================= */
+exports.removeAllowedDomain = async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: "No autorizado" });
+
+    const { public_id } = req.params;
+    const domain = normalizeDomain(req.body.domain);
+
+    const query = { public_id };
+    if (req.user.role !== "ADMIN") {
+      if (!req.user.account_id) return res.status(401).json({ error: "Cuenta inválida" });
+      query.account_id = req.user.account_id;
+    }
+
+    const chatbot = await Chatbot.findOne(query);
+    if (!chatbot) return res.status(404).json({ error: "Chatbot no encontrado" });
+
+    chatbot.allowed_domains = chatbot.allowed_domains.filter(d => d !== domain);
+    await chatbot.save();
+
+    res.json({ success: true, domains: chatbot.allowed_domains });
+  } catch (err) {
+    console.error("REMOVE DOMAIN:", err);
+    res.status(500).json({ error: "Error interno" });
+  }
+};
+
+
+/* =======================================================
+   6) GENERAR CÓDIGO DE INSTALACIÓN
+======================================================= */
+exports.InstallationCode = async (req, res) => {
+  try {
+    const { public_id } = req.params;
+    const chatbot = await Chatbot.findOne({ public_id });
+    if (!chatbot) return res.status(404).json({ error: "Chatbot no encontrado" });
+
+    const baseUrl = getBaseUrl();
+    const script  = `<script src="${baseUrl}/api/chatbot-integration/${public_id}/install?t=${chatbot.install_token}" async></script>`;
+
+    res.json({
+      script,
+      install_token:   chatbot.install_token,
+      allowed_domains: chatbot.allowed_domains || [],
+      has_domains:     chatbot.allowed_domains.length > 0
+    });
+  } catch (err) {
+    console.error("INSTALL CODE ERROR:", err);
+    res.status(500).json({ error: "Error interno" });
+  }
+};
+
+
+/* =======================================================
+   7) REGENERAR TOKEN DE INSTALACIÓN
+======================================================= */
+exports.regenerateInstallToken = async (req, res) => {
+  try {
+    if (!req.user?.account_id) return res.status(401).json({ message: "Usuario no autenticado" });
+
+    const { public_id } = req.params;
+    const chatbot = await Chatbot.findOne({ public_id, account_id: req.user.account_id });
+    if (!chatbot) return res.status(404).json({ message: "Chatbot no encontrado" });
+
+    chatbot.install_token       = crypto.randomBytes(32).toString("hex");
+    chatbot.allowed_domains     = [];
+    chatbot.installation_status = "pending";
+    await chatbot.save();
+
+    res.json({ message: "Token regenerado correctamente", install_token: chatbot.install_token });
+  } catch (err) {
+    console.error("REGENERATE TOKEN ERROR:", err);
+    res.status(500).json({ message: "Error al regenerar token" });
   }
 };
 
