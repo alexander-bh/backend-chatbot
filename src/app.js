@@ -9,6 +9,7 @@ app.set("trust proxy", 1);
 
 // favicon
 app.get("/favicon.ico", (req, res) => res.status(204).end());
+app.get("/favicon.png", (req, res) => res.status(204).end());
 
 // root
 app.get("/", (req, res) => {
