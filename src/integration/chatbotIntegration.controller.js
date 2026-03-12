@@ -107,14 +107,16 @@ exports.getInstallScript = async (req, res) => {
     res.setHeader("Pragma", "no-cache");
     res.setHeader("Content-Security-Policy", `default-src 'none'`);
 
-res.send(`(function(){ 
+
+    res.send(`(function(){ 
   if (window.__CHATBOT_INSTALLED__) return;
   window.__CHATBOT_INSTALLED__ = true;
 
   var POSITION = "${position}";
 
-  /* ── Welcome bubble (renderizada en el padre) ── */
+  /* ── Welcome bubble ── */
   var welcomeEl = null;
+  var pendingWelcome = null;
 
   function createWelcome(message) {
     var el = document.createElement("div");
@@ -140,12 +142,10 @@ res.send(`(function(){
       "transition:opacity 0.35s ease,transform 0.35s ease",
       "bottom:110px",
       isLeft ? "left:20px" : "right:20px",
-      isLeft
-        ? "transform:translateX(-10px) scale(0.97)"
-        : "transform:translateX(10px) scale(0.97)"
+      isLeft ? "transform:translateX(-10px) scale(0.97)"
+             : "transform:translateX(10px) scale(0.97)"
     ].join(";");
 
-    // Flecha apuntando al FAB
     var arrow = document.createElement("div");
     arrow.style.cssText = [
       "position:absolute",
@@ -158,11 +158,9 @@ res.send(`(function(){
     ].join(";");
 
     el.appendChild(arrow);
-
     var text = document.createElement("span");
     text.textContent = message;
     el.appendChild(text);
-
     document.body.appendChild(el);
     return el;
   }
@@ -174,9 +172,7 @@ res.send(`(function(){
       requestAnimationFrame(function() {
         if (!welcomeEl) return;
         welcomeEl.style.opacity = "1";
-        welcomeEl.style.transform = (POSITION === "bottom-left")
-          ? "translateX(0) scale(1)"
-          : "translateX(0) scale(1)";
+        welcomeEl.style.transform = "translateX(0) scale(1)";
       });
     });
   }
@@ -190,7 +186,7 @@ res.send(`(function(){
     setTimeout(function() { if (el.parentNode) el.remove(); }, 400);
   }
 
-  /* ── iframe ── */
+  /* ── iframe — declarado ANTES de usarlo ── */
   var iframe = document.createElement("iframe");
   iframe.src = "${baseUrl}/api/chatbot-integration/embed/${public_id}?d=${safeDomain}";
   iframe.style.cssText = [
@@ -209,6 +205,16 @@ res.send(`(function(){
 
   iframe.sandbox = "allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation";
   iframe.setAttribute("allow", "clipboard-write");
+
+  /* ── load: despachar welcome pendiente DESPUÉS de que iframe cargó ── */
+  iframe.addEventListener("load", function() {
+    if (pendingWelcome) {
+      var msg = pendingWelcome;
+      pendingWelcome = null;
+      setTimeout(function() { showWelcome(msg); }, 300);
+    }
+  });
+
   document.body.appendChild(iframe);
 
   /* ── Listener único para todos los mensajes ── */
@@ -218,7 +224,11 @@ res.send(`(function(){
     /* Welcome */
     if (e.data.type === "CHATBOT_WELCOME") {
       if (e.data.visible && e.data.message) {
-        showWelcome(e.data.message);
+        if (!iframe.contentDocument || iframe.contentDocument.readyState !== "complete") {
+          pendingWelcome = e.data.message;
+        } else {
+          showWelcome(e.data.message);
+        }
       } else {
         hideWelcome();
       }
@@ -241,7 +251,7 @@ res.send(`(function(){
           iframe.style.bottom = "auto";
           iframe.style.right  = "auto";
         } else {
-          var w = Math.min(420, window.innerWidth  - 40);
+          var w = Math.min(420, window.innerWidth - 40);
           var h = Math.min(680, window.innerHeight - 60);
           iframe.style.width  = w + "px";
           iframe.style.height = h + "px";
@@ -295,6 +305,9 @@ res.send(`(function(){
   });
 
 })();`);
+
+
+
   } catch (err) {
     console.error("INSTALL SCRIPT ERROR:", err);
     res.status(500).send("// Error interno");
