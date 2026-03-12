@@ -1,6 +1,8 @@
-//chatbotIntegration.controller
+// chatbotIntegration.controller.js
+
 const Chatbot = require("../models/Chatbot");
 const crypto = require("crypto");
+
 const isDomainAllowed = require("../helper/isDomainAllowed");
 const { normalizeDomain } = require("../utils/normalizeDomain");
 const { isLocalhost } = require("../utils/isLocalhost");
@@ -13,15 +15,53 @@ const getWidgetBaseUrl = () =>
   process.env.WIDGET_BASE_URL ||
   "https://chatbot-widget-blue-eight.vercel.app";
 
+const CONFIG_SECRET = process.env.CONFIG_SECRET;
+
 const WIDGET_BASE_URL = getWidgetBaseUrl();
 const WIDGET_DOMAIN = normalizeDomain(WIDGET_BASE_URL);
 
+/* =======================================================
+   HELPERS
+======================================================= */
+
+function getRequestDomain(req) {
+
+  const raw =
+    req.headers.origin ||
+    req.headers.referer ||
+    "";
+
+  return normalizeDomain(raw);
+}
+
+function signDomain(domain, ts) {
+
+  return crypto
+    .createHmac("sha256", CONFIG_SECRET)
+    .update(domain + ":" + ts)
+    .digest("hex");
+}
+
+function verifyDomainSignature(domain, ts, sig) {
+
+  const expected = signDomain(domain, ts);
+
+  if (sig.length !== expected.length) return false;
+
+  return crypto.timingSafeEqual(
+    Buffer.from(sig),
+    Buffer.from(expected)
+  );
+}
 
 /* =======================================================
-   1) GET INSTALL SCRIPT  → /:public_id/install
+   1) INSTALL SCRIPT
 ======================================================= */
+
 exports.getInstallScript = async (req, res) => {
+
   try {
+
     const { public_id } = req.params;
     const token = req.query.t;
 
@@ -39,41 +79,36 @@ exports.getInstallScript = async (req, res) => {
       return res.status(403).send("// Token inválido");
     }
 
-    const rawOrigin =
-      req.headers.origin ||
-      req.headers.referer ||
-      "";
-
-    let domain = normalizeDomain(rawOrigin);
-
-    if (!domain && process.env.NODE_ENV === "development") {
-      domain = "localhost";
-    }
+    const domain = getRequestDomain(req);
 
     if (!domain) {
       return res.status(403).send("// Dominio no detectable");
     }
 
-    const allowed = isDomainAllowed(chatbot, domain);
-
-    if (!allowed) {
+    if (!isDomainAllowed(chatbot, domain)) {
       return res.status(403).send("// Dominio no autorizado");
     }
 
+    const ts = Date.now();
+
+    const sig = signDomain(domain, ts);
+
     const baseUrl = getBaseUrl();
-    const safeDomain = encodeURIComponent(domain);
 
     res.type("application/javascript");
+
     res.setHeader("Cache-Control", "no-store");
 
-res.send(`(function(){
+    res.send(`(function(){
+
   if (window.__CHATBOT_INSTALLED__) return;
   window.__CHATBOT_INSTALLED__ = true;
 
   var iframe = document.createElement("iframe");
-  iframe.src = "${baseUrl}/api/chatbot-integration/embed/${public_id}?d=${safeDomain}";
 
-  /* Estado inicial: circular como el FAB */
+  iframe.src =
+  "${baseUrl}/api/chatbot-integration/embed/${public_id}?d=${encodeURIComponent(domain)}&ts=${ts}&sig=${sig}";
+
   iframe.style.cssText = [
     "position:fixed",
     "bottom:0",
@@ -83,82 +118,69 @@ res.send(`(function(){
     "border:none",
     "z-index:2147483647",
     "background:transparent",
-    "pointer-events:auto",
-    "overflow:hidden",
-    "border-radius:50%",
-    "transition:width 0.3s ease,height 0.3s ease,border-radius 0.3s ease"
+    "border-radius:50%"
   ].join(";");
 
-  iframe.sandbox = "allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation";
-  iframe.setAttribute("allow", "clipboard-write");
+  iframe.sandbox =
+  "allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox";
 
   document.body.appendChild(iframe);
 
-  /* Expande/contrae el iframe según estado del chatbot */
-  window.addEventListener("message", function(e) {
-    if (!e.data || e.data.type !== "CHATBOT_RESIZE") return;
-
-    if (e.data.open) {
-      /* ── ABIERTO: quitar border-radius, expandir ── */
-      iframe.style.borderRadius = "0";
-      iframe.style.overflow     = "visible";
-
-      var isMobile = window.innerWidth <= 480;
-      if (isMobile) {
-        iframe.style.width  = "100vw";
-        iframe.style.height = "100vh";
-        iframe.style.bottom = "0";
-        iframe.style.right  = "0";
-      } else {
-        var w = Math.min(420, window.innerWidth  - 32);
-        var h = Math.min(680, window.innerHeight - 40);
-        iframe.style.width  = w + "px";
-        iframe.style.height = h + "px";
-        iframe.style.bottom = "0";
-        iframe.style.right  = "0";
-      }
-    } else {
-      /* ── CERRADO: volver a circular ── */
-      iframe.style.width        = "80px";
-      iframe.style.height       = "80px";
-      iframe.style.borderRadius = "50%";
-      iframe.style.overflow     = "hidden";
-    }
-  });
-
-  /* Recalcula al redimensionar ventana si está abierto */
-  window.addEventListener("resize", function() {
-    var currentW = parseInt(iframe.style.width, 10);
-    if (currentW <= 80) return;
-
-    var isMobile = window.innerWidth <= 480;
-    if (isMobile) {
-      iframe.style.width  = "100vw";
-      iframe.style.height = "100vh";
-    } else {
-      var w = Math.min(420, window.innerWidth  - 32);
-      var h = Math.min(680, window.innerHeight - 40);
-      iframe.style.width  = w + "px";
-      iframe.style.height = h + "px";
-    }
-  });
 })();`);
 
   } catch (err) {
+
     console.error("INSTALL SCRIPT ERROR:", err);
+
     res.status(500).send("// Error interno");
+
   }
 };
 
-/* =======================================================
-   3) RENDER EMBED (HTML)
-======================================================= */
-exports.renderEmbed = async (req, res) => {
-  try {
-    const { public_id } = req.params;
-    const domain = normalizeDomain(req.query.d || "");
 
-    if (!domain) return res.status(400).send("Dominio inválido");
+/* =======================================================
+   2) EMBED HTML
+======================================================= */
+
+exports.renderEmbed = async (req, res) => {
+
+  try {
+
+    const { public_id } = req.params;
+
+    const domain = normalizeDomain(req.query.d);
+    const ts = parseInt(req.query.ts);
+    const sig = req.query.sig;
+
+    if (!domain || !ts || !sig) {
+      return res.status(400).send("Parámetros inválidos");
+    }
+
+    const realDomain = getRequestDomain(req);
+
+    if (!realDomain) {
+      return res.status(403).send("Dominio no detectable");
+    }
+
+    /* ===== VALIDAR DOMINIO REAL ===== */
+
+    if (realDomain !== domain) {
+      return res.status(403).send("Dominio manipulado");
+    }
+
+    /* ===== VALIDAR FIRMA ===== */
+
+    if (!verifyDomainSignature(domain, ts, sig)) {
+      return res.status(403).send("Firma inválida");
+    }
+
+    /* ===== ANTI REPLAY ===== */
+
+    const MAX_AGE = 5 * 60 * 1000;
+
+    if (Date.now() - ts > MAX_AGE) {
+      return res.status(403).send("Script expirado");
+    }
 
     const chatbot = await Chatbot.findOne({
       public_id,
@@ -166,10 +188,8 @@ exports.renderEmbed = async (req, res) => {
       is_enabled: true
     }).lean();
 
-    if (!chatbot) return res.status(404).send("Chatbot no encontrado");
-
-    if (!chatbot.allowed_domains?.length && process.env.NODE_ENV === "production") {
-      return res.status(403).send("Chatbot sin dominios configurados");
+    if (!chatbot) {
+      return res.status(404).send("Chatbot no encontrado");
     }
 
     if (!isDomainAllowed(chatbot, domain)) {
@@ -187,15 +207,13 @@ exports.renderEmbed = async (req, res) => {
       secondaryColor: chatbot.secondary_color || "#111827",
       inputPlaceholder: chatbot.input_placeholder || "Escribe tu mensaje...",
       welcomeMessage: chatbot.welcome_message || "",
-      welcomeDelay: chatbot.welcome_delay ?? 2,
-      showWelcomeOnMobile: chatbot.show_welcome_on_mobile ?? true,
-      position: chatbot.position || "bottom-right"
+      welcomeDelay: chatbot.welcome_delay ?? 2
     };
 
     const payload = JSON.stringify(config);
 
     const signature = crypto
-      .createHmac("sha256", process.env.CONFIG_SECRET)
+      .createHmac("sha256", CONFIG_SECRET)
       .update(payload)
       .digest("hex");
 
@@ -207,62 +225,19 @@ exports.renderEmbed = async (req, res) => {
 
     res.setHeader(
       "Content-Security-Policy",
-      `frame-ancestors 'self' https://${WIDGET_DOMAIN} http://${domain} https://${domain}`
+      `frame-ancestors https://${domain}`
     );
-
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
 
     res.setHeader("Cache-Control", "no-store");
 
     return res.redirect(widgetUrl);
 
   } catch (err) {
+
     console.error("RENDER EMBED ERROR:", err);
+
     return res.status(500).send("No se pudo cargar el chatbot");
-  }
-};
 
-exports.getWidgetConfig = async (req, res) => {
-  try {
-    const { public_id } = req.params;
-    const domain = normalizeDomain(req.query.d || "");
-
-    if (!domain) {
-      return res.status(400).json({ error: "Dominio inválido" });
-    }
-
-    const chatbot = await Chatbot.findOne({
-      public_id,
-      status: "active",
-      is_enabled: true
-    }).lean();
-
-    if (!chatbot) {
-      return res.status(404).json({ error: "No encontrado" });
-    }
-
-    if (!isDomainAllowed(chatbot, domain)) {
-      return res.status(403).json({ error: "No permitido" });
-    }
-
-    res.json({
-      apiBase: getBaseUrl(),
-      publicId: public_id,
-      originDomain: domain,
-      name: chatbot.name,
-      avatar: chatbot.avatar || "",
-      primaryColor: chatbot.primary_color || "#2563eb",
-      secondaryColor: chatbot.secondary_color || "#111827",
-      inputPlaceholder: chatbot.input_placeholder || "Escribe tu mensaje...",
-      welcomeMessage: chatbot.welcome_message || "",
-      welcomeDelay: chatbot.welcome_delay ?? 2,
-      showWelcomeOnMobile: chatbot.show_welcome_on_mobile ?? true,
-      position: chatbot.position || "bottom-right"
-    });
-
-  } catch (err) {
-    console.error("CONFIG ERROR:", err);
-    res.status(500).json({ error: "Error interno" });
   }
 };
 
