@@ -22,6 +22,4 @@ const CRMFieldSchema = new Schema(
   { timestamps: true }
 );
 
-CRMFieldSchema.index({ key: 1 }, { unique: true });
-
 module.exports = model("CRMField", CRMFieldSchema);
