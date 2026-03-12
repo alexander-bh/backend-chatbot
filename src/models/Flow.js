@@ -7,7 +7,6 @@ const FlowSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: "Account",
       default: null,
-      index: true
     },
 
     // 🔹 SOLO null cuando es template
@@ -15,14 +14,12 @@ const FlowSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: "Chatbot",
       default: null,
-      index: true
     },
 
     // 🔥 CLAVE
     is_template: {
       type: Boolean,
       default: false,
-      index: true
     },
 
     name: {
