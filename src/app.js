@@ -11,25 +11,16 @@ app.get("/ping", (req, res) => {
   res.json({ ok: true });
 });
 
-const allowedOrigins = [
-  "https://chatbot-widget-blue-eight.vercel.app",
-  "https://backend-chatbot-omega.vercel.app"
-];
+const cors = require("cors");
 
 app.use(cors({
-  origin: function (origin, callback) {
-
-    // permitir requests sin origin (server → server)
-    if (!origin) return callback(null, true);
-
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-
-    return callback(new Error("CORS bloqueado"));
+  origin: (origin, callback) => {
+    callback(null, true);
   },
   credentials: true
 }));
+
+app.options("*", cors());
 
 app.options("*", cors());
 
