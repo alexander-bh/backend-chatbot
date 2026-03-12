@@ -82,6 +82,17 @@ const ConversationSessionSchema = new mongoose.Schema(
       default: false
     },
 
+    abandoned_at: {
+      type: Date,
+      default: null
+    },
+
+    visitor_id: {
+      type: String,
+      default: null,
+      index: true
+    },
+
     last_activity_at: {
       type: Date,
       default: Date.now
@@ -92,7 +103,13 @@ const ConversationSessionSchema = new mongoose.Schema(
 
 ConversationSessionSchema.index({ flow_id: 1, account_id: 1, mode: 1 });
 ConversationSessionSchema.index({ "history.node_id": 1 });
-ConversationSessionSchema.index({ is_completed: 1 });
+ConversationSessionSchema.index({
+  visitor_id: 1,        
+  is_completed: 1,
+  is_abandoned: 1,
+  last_activity_at: 1
+});
+
 
 module.exports = mongoose.model(
   "ConversationSession",

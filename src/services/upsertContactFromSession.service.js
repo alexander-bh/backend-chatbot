@@ -67,7 +67,6 @@ module.exports = async function upsertContactFromSession(session) {
 
     let existingContact = null;
 
-    // 1️⃣ Prioridad absoluta: session.contact_id
     if (session.contact_id) {
       existingContact = await Contact.findById(session.contact_id);
     }
@@ -83,7 +82,7 @@ module.exports = async function upsertContactFromSession(session) {
 
     }
 
-    // 3️⃣ Buscar por phone
+
     if (!existingContact && phone) {
 
       existingContact = await Contact.findOne({
@@ -94,7 +93,6 @@ module.exports = async function upsertContactFromSession(session) {
 
     }
 
-    // 4️⃣ Buscar por visitor_id
     if (!existingContact && session.visitor_id) {
 
       existingContact = await Contact.findOne({
@@ -252,17 +250,6 @@ module.exports = async function upsertContactFromSession(session) {
     else {
 
       contact = await Contact.create(contactData);
-
-    }
-
-    /* ===============================
-       LINK SESSION → CONTACT
-    =============================== */
-
-    if (!session.contact_id && contact) {
-
-      session.contact_id = contact._id;
-      await session.save();
 
     }
 

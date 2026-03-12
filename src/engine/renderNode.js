@@ -1,6 +1,8 @@
-// utils/renderNode.js
-
 module.exports = function renderNode(node, session_id) {
+
+  if (!node) {
+    return { session_id, completed: true };
+  }
 
   const payload = {
     session_id,
@@ -9,6 +11,7 @@ module.exports = function renderNode(node, session_id) {
     content: node.content || null,
     typing_time: node.typing_time || 0,
     validation: node.validation || null,
+    end_conversation: node.end_conversation || false,
     completed: false
   };
 

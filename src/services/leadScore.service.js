@@ -15,8 +15,8 @@ function calculateLeadScore(session) {
   for (const field in SCORE_RULES) {
 
     if (field === "completed_conversation") continue;
-
-    if (variables[field]) {
+    const value = variables[field];
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
       score += SCORE_RULES[field];
     }
   }
