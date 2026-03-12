@@ -8,28 +8,19 @@ module.exports = async function resolveInput(node, input, session, nodesMap) {
   const isInputNode = INPUT_NODES.includes(node.node_type);
   const isInteractionNode = INTERACTION_NODES.includes(node.node_type);
 
-  /* ─────────────────────────────
-     SIN INPUT
-  ───────────────────────────── */
-
+  // ✅ Sin input: solo avanzar si el nodo no requiere interacción
   if (!input) {
-
     if (isInputNode || isInteractionNode) {
-      return node; // quedarse esperando input
+      return { node }; // estos sí necesitan input, quedarse
     }
-
+    // text / media / link: avanzar al siguiente
     const next = nodesMap.get(String(node.next_node_id));
-    return next ?? node;
+    return { node: next ?? node };
   }
 
-  /* ─────────────────────────────
-     INPUT NODES
-  ───────────────────────────── */
-
+  /* INPUT NODES */
   if (isInputNode) {
-
     const errors = validateNodeInput(node, input);
-
     if (errors.length) {
       return {
         validation_error: true,
@@ -39,82 +30,29 @@ module.exports = async function resolveInput(node, input, session, nodesMap) {
         input_type: node.node_type
       };
     }
-
-    session.history.push({
-      node_id: node._id,
-      question: node.content,
-      answer: input
-    });
+    session.history.push({ node_id: node._id, question: node.content, answer: input });
 
     if (node.variable_key) {
       session.variables[node.variable_key] = input;
       session.markModified("variables");
     }
-
     const next = nodesMap.get(String(node.next_node_id));
-
-    return next ?? node;
+    return { node: next };
   }
 
-  /* ─────────────────────────────
-     OPTIONS / POLICY
-  ───────────────────────────── */
-
+  /* OPTIONS / POLICY */
   if (isInteractionNode) {
-
-    const source =
-      node.node_type === "options"
-        ? node.options
-        : node.policy;
-
-    if (!Array.isArray(source) || source.length === 0) {
-      return {
-        validation_error: true,
-        node_id: node._id,
-        node_type: node.node_type,
-        message: "No hay opciones disponibles"
-      };
-    }
-
-    const normalize = v =>
-      String(v ?? "")
-        .trim()
-        .toLowerCase();
-
-    const inputNorm = normalize(input);
-
-    const match = source.find(o =>
-      normalize(o.value) === inputNorm ||
-      normalize(o.label) === inputNorm
+    const source = node.node_type === "options" ? node.options : node.policy;
+    const match = source.find(
+      o => String(o.value) === String(input) || String(o.label) === String(input)
     );
-
-    if (!match) {
-      return {
-        validation_error: true,
-        node_id: node._id,
-        node_type: node.node_type,
-        message: "Opción inválida"
-      };
-    }
-
-    session.history.push({
-      node_id: node._id,
-      question: node.content,
-      answer: match.label
-    });
-
+    if (!match) return { node };
     session.current_branch_id = match.next_branch_id ?? null;
-
     const next = nodesMap.get(String(match.next_node_id));
-
-    return next ?? node;
+    return { node: next };
   }
 
-  /* ─────────────────────────────
-     TEXT / MEDIA / LINK
-  ───────────────────────────── */
-
+  /* text / media / link con input ignorado */
   const next = nodesMap.get(String(node.next_node_id));
-
-  return next ?? node;
+  return { node: next ?? node };
 };
