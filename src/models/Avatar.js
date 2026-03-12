@@ -20,7 +20,6 @@ const AvatarSchema = new mongoose.Schema({
     default: "CUSTOM"
   },
 
-  // 🔥 NUEVO
   is_default: {
     type: Boolean,
     default: false
