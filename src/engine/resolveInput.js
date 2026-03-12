@@ -52,6 +52,9 @@ module.exports = async function resolveInput(node, input, session, nodesMap) {
     return { node: next };
   }
 
+  console.log("OPTION MATCH:", match);
+  console.log("NEXT NODE:", nodesMap.get(String(match.next_node_id)));
+
   /* text / media / link con input ignorado */
   const next = nodesMap.get(String(node.next_node_id));
   return { node: next ?? node };

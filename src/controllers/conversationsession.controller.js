@@ -163,6 +163,7 @@ exports.nextStep = async (req, res) => {
     }).lean();
 
     const nodesMap = new Map(nodes.map(n => [String(n._id), n]));
+    console.log("NEXT NODE:", nodesMap.get(String(match.next_node_id)));
 
     let node = nodesMap.get(String(session.current_node_id));
 
