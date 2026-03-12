@@ -8,19 +8,28 @@ module.exports = async function resolveInput(node, input, session, nodesMap) {
   const isInputNode = INPUT_NODES.includes(node.node_type);
   const isInteractionNode = INTERACTION_NODES.includes(node.node_type);
 
-  // ✅ Sin input: solo avanzar si el nodo no requiere interacción
+  /* ─────────────────────────────
+     SIN INPUT
+  ───────────────────────────── */
+
   if (!input) {
+
     if (isInputNode || isInteractionNode) {
-      return { node }; // estos sí necesitan input, quedarse
+      return node; // quedarse esperando input
     }
-    // text / media / link: avanzar al siguiente
+
     const next = nodesMap.get(String(node.next_node_id));
-    return { node: next ?? node };
+    return next ?? node;
   }
 
-  /* INPUT NODES */
+  /* ─────────────────────────────
+     INPUT NODES
+  ───────────────────────────── */
+
   if (isInputNode) {
+
     const errors = validateNodeInput(node, input);
+
     if (errors.length) {
       return {
         validation_error: true,
@@ -30,20 +39,42 @@ module.exports = async function resolveInput(node, input, session, nodesMap) {
         input_type: node.node_type
       };
     }
-    session.history.push({ node_id: node._id, question: node.content, answer: input });
+
+    session.history.push({
+      node_id: node._id,
+      question: node.content,
+      answer: input
+    });
 
     if (node.variable_key) {
       session.variables[node.variable_key] = input;
       session.markModified("variables");
     }
+
     const next = nodesMap.get(String(node.next_node_id));
-    return { node: next };
+
+    return next ?? node;
   }
 
-  /* OPTIONS / POLICY */
+  /* ─────────────────────────────
+     OPTIONS / POLICY
+  ───────────────────────────── */
+
   if (isInteractionNode) {
 
-    const source = node.node_type === "options" ? node.options : node.policy;
+    const source =
+      node.node_type === "options"
+        ? node.options
+        : node.policy;
+
+    if (!Array.isArray(source) || source.length === 0) {
+      return {
+        validation_error: true,
+        node_id: node._id,
+        node_type: node.node_type,
+        message: "No hay opciones disponibles"
+      };
+    }
 
     const normalize = v =>
       String(v ?? "")
@@ -76,10 +107,14 @@ module.exports = async function resolveInput(node, input, session, nodesMap) {
 
     const next = nodesMap.get(String(match.next_node_id));
 
-    return { node: next };
+    return next ?? node;
   }
 
-  /* text / media / link con input ignorado */
+  /* ─────────────────────────────
+     TEXT / MEDIA / LINK
+  ───────────────────────────── */
+
   const next = nodesMap.get(String(node.next_node_id));
-  return { node: next ?? node };
+
+  return next ?? node;
 };
