@@ -16,6 +16,17 @@ const getWidgetBaseUrl = () => process.env.WIDGET_BASE_URL || "https://chatbot-w
 const WIDGET_BASE_URL = getWidgetBaseUrl();
 const WIDGET_DOMAIN   = normalizeDomain(WIDGET_BASE_URL);
 
+function getPositionStyles(position, isOpen) {
+  if (position === "bottom-left") {
+    return `"bottom:20px","left:20px"`;
+  } else if (position === "middle-right") {
+    return `"top:calc(50% - 40px)","right:20px"`;
+  } else {
+    // bottom-right default
+    return `"bottom:20px","right:20px"`;
+  }
+}
+
 /**
  * Extrae el dominio del request de forma segura.
  * Prioriza Origin (más difícil de falsificar en navegadores) sobre Referer.
@@ -56,7 +67,6 @@ exports.getInstallScript = async (req, res) => {
     const { public_id } = req.params;
     const token = req.query.t;
 
-    // 1. Chatbot activo
     const chatbot = await Chatbot.findOne({
       public_id,
       status: "active",
@@ -65,7 +75,6 @@ exports.getInstallScript = async (req, res) => {
 
     if (!chatbot) return res.status(404).send("// Chatbot no encontrado");
 
-    // 2. Token válido (timing-safe)
     if (!token || !chatbot.install_token) {
       return res.status(403).send("// Token inválido");
     }
@@ -77,35 +86,39 @@ exports.getInstallScript = async (req, res) => {
 
     if (!tokenMatch) return res.status(403).send("// Token inválido");
 
-    // 3. Dominio del llamante
     const domain = extractDomain(req);
     if (!domain) return res.status(403).send("// Dominio no detectable");
 
-    // 4. Dominio autorizado
     if (!isDomainAllowed(chatbot, domain)) {
       return res.status(403).send("// Dominio no autorizado");
     }
 
-    const baseUrl   = getBaseUrl();
+    const baseUrl    = getBaseUrl();
     const safeDomain = encodeURIComponent(domain);
+
+    // ✅ Leer position con fallback
+    const position = chatbot.position || "bottom-right";
+
+    // ✅ Calcular estilos iniciales según posición
+    const positionStyles = getPositionStyles(position, false);
 
     res.type("application/javascript");
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     res.setHeader("Pragma", "no-cache");
-    // Sólo el dominio autorizado puede cargar este script
     res.setHeader("Content-Security-Policy", `default-src 'none'`);
 
     res.send(`(function(){ 
   if (window.__CHATBOT_INSTALLED__) return;
   window.__CHATBOT_INSTALLED__ = true;
 
+  var POSITION = "${position}";
+
   var iframe = document.createElement("iframe");
   iframe.src = "${baseUrl}/api/chatbot-integration/embed/${public_id}?d=${safeDomain}";
 
   iframe.style.cssText = [
     "position:fixed",
-    "bottom:20px",
-    "right:20px",
+    ${positionStyles},
     "width:80px",
     "height:80px",
     "border:none",
@@ -114,7 +127,7 @@ exports.getInstallScript = async (req, res) => {
     "pointer-events:auto",
     "overflow:hidden",
     "border-radius:50%",
-    "transition:width 0.3s ease,height 0.3s ease,border-radius 0.3s ease"
+    "transition:width 0.3s ease,height 0.3s ease,border-radius 0.3s ease,bottom 0.3s ease,right 0.3s ease,left 0.3s ease,top 0.3s ease"
   ].join(";");
 
   iframe.sandbox = "allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation";
@@ -126,42 +139,68 @@ exports.getInstallScript = async (req, res) => {
     if (!e.data || e.data.type !== "CHATBOT_RESIZE") return;
 
     if (e.data.open) {
-
       iframe.style.borderRadius = "16px";
       iframe.style.overflow     = "visible";
 
       var isMobile = window.innerWidth <= 480;
 
       if (isMobile) {
-
         iframe.style.width  = "100vw";
         iframe.style.height = "100vh";
         iframe.style.bottom = "0";
         iframe.style.right  = "0";
-
+        iframe.style.left   = "0";
+        iframe.style.top    = "0";
       } else {
-
         var w = Math.min(420, window.innerWidth  - 40);
         var h = Math.min(680, window.innerHeight - 60);
 
         iframe.style.width  = w + "px";
         iframe.style.height = h + "px";
 
-        iframe.style.bottom = "20px";
-        iframe.style.right  = "20px";
-
+        if (POSITION === "bottom-left") {
+          iframe.style.bottom = "20px";
+          iframe.style.left   = "20px";
+          iframe.style.right  = "auto";
+          iframe.style.top    = "auto";
+        } else if (POSITION === "middle-right") {
+          iframe.style.top    = "50%";
+          iframe.style.right  = "20px";
+          iframe.style.bottom = "auto";
+          iframe.style.left   = "auto";
+          iframe.style.transform = "translateY(-50%)";
+        } else {
+          // bottom-right (default)
+          iframe.style.bottom = "20px";
+          iframe.style.right  = "20px";
+          iframe.style.left   = "auto";
+          iframe.style.top    = "auto";
+        }
       }
 
     } else {
-
       iframe.style.width        = "80px";
       iframe.style.height       = "80px";
       iframe.style.borderRadius = "50%";
       iframe.style.overflow     = "hidden";
+      iframe.style.transform    = "";
 
-      iframe.style.bottom = "20px";
-      iframe.style.right  = "20px";
-
+      if (POSITION === "bottom-left") {
+        iframe.style.bottom = "20px";
+        iframe.style.left   = "20px";
+        iframe.style.right  = "auto";
+        iframe.style.top    = "auto";
+      } else if (POSITION === "middle-right") {
+        iframe.style.top    = "calc(50% - 40px)";
+        iframe.style.right  = "20px";
+        iframe.style.bottom = "auto";
+        iframe.style.left   = "auto";
+      } else {
+        iframe.style.bottom = "20px";
+        iframe.style.right  = "20px";
+        iframe.style.left   = "auto";
+        iframe.style.top    = "auto";
+      }
     }
   });
 
