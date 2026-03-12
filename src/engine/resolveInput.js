@@ -46,14 +46,23 @@ module.exports = async function resolveInput(node, input, session, nodesMap) {
     const match = source.find(
       o => String(o.value) === String(input) || String(o.label) === String(input)
     );
+
+    console.log("INPUT RECIBIDO:", input);
+    console.log("OPTIONS DISPONIBLES:", source.map(o => o.value));
+    console.log("MATCH:", match);
+
     if (!match) return { node };
+
+    console.log("NEXT NODE ID:", match.next_node_id);
+    console.log("EN MAPA:", nodesMap.has(String(match.next_node_id)));
+
     session.current_branch_id = match.next_branch_id ?? null;
     const next = nodesMap.get(String(match.next_node_id));
+
+    console.log("NEXT NODE:", next);
+
     return { node: next };
   }
-
-  console.log("OPTION MATCH:", match);
-  console.log("NEXT NODE:", nodesMap.get(String(match.next_node_id)));
 
   /* text / media / link con input ignorado */
   const next = nodesMap.get(String(node.next_node_id));
