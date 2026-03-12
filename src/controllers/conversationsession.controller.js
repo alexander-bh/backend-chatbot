@@ -1,4 +1,4 @@
-//conversationsession.controller
+// conversationsession.controller
 const mongoose = require("mongoose");
 const ConversationSession = require("../models/ConversationSession");
 const Flow = require("../models/Flow");
@@ -7,8 +7,8 @@ const Chatbot = require("../models/Chatbot");
 const renderNode = require("../engine/renderNode");
 const resolveInput = require("../engine/resolveInput");
 const autoFlow = require("../engine/autoFlow");
-const markAbandonedSessions = require("../services/markAbandonedSessions.service");
 const ALLOWED_MODES = ["preview", "production"];
+const upsertContactFromSession = require("../services/upsertContactFromSession.service");
 
 /* --------------------------------------------------
    START CONVERSATION
@@ -117,21 +117,13 @@ exports.startConversation = async (req, res) => {
       current_node_id: startNode._id,
       variables: {},
       origin_url,
-      visitor_id: visitor_id || null, // ← guardar visitor_id
+      visitor_id: visitor_id || null,
       mode,
       is_completed: false,
       is_abandoned: false,
       last_activity_at: new Date(),
       history: []
     });
-
-    if (visitor_id) {
-      markAbandonedSessions({
-        account_id: accountId,
-        visitor_id,
-        exclude_session_id: session._id
-      }).catch(() => { });
-    }
 
     /* ================= RESPONSE ================= */
 
@@ -147,11 +139,14 @@ exports.startConversation = async (req, res) => {
 
   }
 };
+
+
 /* --------------------------------------------------
    NEXT STEP (ENGINE)
 -------------------------------------------------- */
 exports.nextStep = async (req, res) => {
   try {
+
     const { id: sessionId } = req.params;
     const { input } = req.body;
 
@@ -162,14 +157,6 @@ exports.nextStep = async (req, res) => {
 
     session.last_activity_at = new Date();
 
-    if (session.visitor_id) {
-      markAbandonedSessions({
-        account_id: session.account_id,
-        visitor_id: session.visitor_id,
-        exclude_session_id: session._id
-      }).catch(() => { });
-    }
-
     const nodes = await FlowNode.find({
       flow_id: session.flow_id,
       account_id: session.account_id
@@ -179,6 +166,7 @@ exports.nextStep = async (req, res) => {
 
     let node = nodesMap.get(String(session.current_node_id));
 
+    // Nodo actual no existe → conversación terminada
     if (!node) {
       session.is_completed = true;
       await session.save();
@@ -193,21 +181,46 @@ exports.nextStep = async (req, res) => {
 
     node = result.node;
 
+    // ── Caso: resolveInput no encontró siguiente nodo (end_conversation) ──
     if (!node) {
       session.is_completed = true;
       await session.save();
-      return res.json({ completed: true, session_id: session._id });
+
+      const contact = await upsertContactFromSession(session);
+      if (contact) {
+        session.contact_id = contact._id;
+        await session.save();
+      }
+
+      return res.json({
+        completed: true,
+        contact_id: contact?._id || null
+      });
     }
+
+    // ── Caso: hay siguiente nodo, actualizar y correr autoFlow ──
+    session.current_node_id = node._id;
+    await session.save();
 
     const finalNode = await autoFlow(node, session, nodesMap);
 
-    if (!finalNode) {
-      session.is_completed = true;
+    if (session.is_completed) {
       await session.save();
-      return res.json({ completed: true, session_id: session._id });
+
+      const contact = await upsertContactFromSession(session);
+      if (contact) {
+        session.contact_id = contact._id;
+        await session.save();
+      }
+
+      return res.json({
+        completed: true,
+        contact_id: contact?._id || null
+      });
     }
 
     await session.save();
+
     return res.json(renderNode(finalNode, session._id));
 
   } catch (error) {
