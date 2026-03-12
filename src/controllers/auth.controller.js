@@ -33,18 +33,18 @@ exports.registerFirst = async (req, res, next) => {
 
     /* ───────── VALIDACIONES ───────── */
 
-    if (
-      !account_name ||
-      !name ||
-      !email ||
-      !password ||
-      !onboarding?.phone
-    ) {
-      throw new Error("Datos obligatorios incompletos");
+    if (!account_name || !name || !email || !password || !onboarding?.phone) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        message: "Datos obligatorios incompletos"
+      });
     }
 
     if (password.length < 6) {
-      throw new Error("La contraseña debe tener al menos 6 caracteres");
+      await session.abortTransaction();
+      return res.status(400).json({
+        message: "La contraseña debe tener al menos 6 caracteres"
+      });
     }
 
     const normalizedEmail = email.toLowerCase().trim();
@@ -53,10 +53,8 @@ exports.registerFirst = async (req, res, next) => {
       email: normalizedEmail
     }).session(session);
 
-
     if (userExists) {
       await session.abortTransaction();
-
       return res.status(409).json({
         message: "El email ya está registrado"
       });
@@ -147,9 +145,7 @@ exports.registerFirst = async (req, res, next) => {
 
     } catch (err) {
 
-      console.warn(
-        "⚠️ No hay flow global, creando flow básico"
-      );
+      console.warn("⚠️ No hay flow global, creando flow básico");
 
       flow = await createFallbackFlow({
         chatbot_id: chatbotDoc._id,
@@ -219,11 +215,6 @@ exports.registerFirst = async (req, res, next) => {
 
       }
 
-    } else {
-      console.log(
-        "La cuenta ya tiene contactos del sistema"
-      );
-
     }
 
     /* ───────── COMMIT ───────── */
@@ -247,7 +238,10 @@ exports.registerFirst = async (req, res, next) => {
   } catch (error) {
 
     await session.abortTransaction();
-    next(error);
+
+    return res.status(500).json({
+      message: "Error interno del servidor"
+    });
 
   } finally {
 
