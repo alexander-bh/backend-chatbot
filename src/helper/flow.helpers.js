@@ -1,7 +1,5 @@
 exports.extractMediaToDelete = (payload = {}) => {
 
-  console.log("🔍 ANALIZANDO MEDIA A ELIMINAR");
-
   const nodes = payload.nodes || [];
   const branches = payload.branches || [];
 
@@ -11,9 +9,6 @@ exports.extractMediaToDelete = (payload = {}) => {
   /* ================= ROOT ================= */
 
   if (Array.isArray(payload.media_delete_items)) {
-
-    console.log("ROOT media_delete_items:", payload.media_delete_items);
-
     for (const id of payload.media_delete_items) {
       if (typeof id === "string" && id.includes("/")) {
         publicIds.push(id);
@@ -21,23 +16,17 @@ exports.extractMediaToDelete = (payload = {}) => {
     }
   }
 
-
   if (Array.isArray(payload.media_delete_nodes)) {
-
-    console.log("ROOT media_delete_nodes:", payload.media_delete_nodes);
-
     for (const id of payload.media_delete_nodes) {
       if (typeof id === "string" && id.includes("/")) {
-        publicIds.push(id); // 🔥 ES PUBLIC_ID, NO NODE_ID
+        publicIds.push(id); // ES PUBLIC_ID, NO NODE_ID
       }
     }
   }
 
   /* ================= NODES ================= */
 
-  const collect = (n, index, type) => {
-    console.log(`📦 Revisando nodo (${type}) index=${index}`);
-  };
+  const collect = () => {};
 
   nodes.forEach((n, i) => collect(n, i, "main"));
 

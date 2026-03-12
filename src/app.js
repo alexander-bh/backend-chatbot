@@ -1,6 +1,5 @@
 const express = require("express");
 const cors = require("cors");
-const path = require("path");
 const app = express();
 
 // ───────── MIDDLEWARES NORMALES ─────────
@@ -37,8 +36,6 @@ app.use("/api/media", require("./routes/media.routes.js"));
 app.use("/api/meta", require("./routes/meta.routes.js"));
 app.use("/api/crm-fields", require("./routes/crmfields.routes"));
 app.use("/api/validation-rule",require("./routes/validationRule.routes.js"))
-
-app.use("/public", express.static(path.join(__dirname, "public")));
 
 // ───────── ERROR HANDLERS (AL FINAL SIEMPRE) ─────────
 app.use(require("./middlewares/multerError.middleware.js"));

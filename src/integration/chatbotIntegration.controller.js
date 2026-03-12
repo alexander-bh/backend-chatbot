@@ -89,7 +89,7 @@ res.send(`(function(){
     "transition:width 0.3s ease,height 0.3s ease,border-radius 0.3s ease"
   ].join(";");
 
-  iframe.sandbox = "allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox";
+  iframe.sandbox = "allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation";
   iframe.setAttribute("allow", "clipboard-write");
 
   document.body.appendChild(iframe);
@@ -167,8 +167,6 @@ exports.renderEmbed = async (req, res) => {
     }).lean();
 
     if (!chatbot) return res.status(404).send("Chatbot no encontrado");
-
-    console.log("CONFIG_SECRET:", process.env.CONFIG_SECRET);
 
     if (!chatbot.allowed_domains?.length && process.env.NODE_ENV === "production") {
       return res.status(403).send("Chatbot sin dominios configurados");
