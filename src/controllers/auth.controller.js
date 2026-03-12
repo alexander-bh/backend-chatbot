@@ -53,8 +53,13 @@ exports.registerFirst = async (req, res, next) => {
       email: normalizedEmail
     }).session(session);
 
+
     if (userExists) {
-      throw new Error("El email ya está registrado");
+      await session.abortTransaction();
+
+      return res.status(409).json({
+        message: "El email ya está registrado"
+      });
     }
 
     /* ───────── ACCOUNT ───────── */
