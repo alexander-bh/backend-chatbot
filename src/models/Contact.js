@@ -68,7 +68,6 @@ const ContactSchema = new mongoose.Schema({
 
   birth_date: Date,
 
-  // 🏢 Datos empresa
   company: {
     type: String,
     trim: true

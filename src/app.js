@@ -5,11 +5,24 @@ const app = express();
 // ───────── MIDDLEWARES NORMALES ─────────
 app.use(cors());
 app.use(express.json());
-app.set("trust proxy", 1);  
+app.set("trust proxy", 1);
+
+// favicon
+app.get("/favicon.ico", (req, res) => res.status(204).end());
+
+// root
+app.get("/", (req, res) => {
+  res.json({
+    service: "Chatbot Backend API",
+    status: "running"
+  });
+});
+
 // health
 app.get("/ping", (req, res) => {
   res.json({ ok: true });
 });
+
 
 // mongo (middleware normal)
 app.use(require("./middlewares/mongo.middleware.js"));
