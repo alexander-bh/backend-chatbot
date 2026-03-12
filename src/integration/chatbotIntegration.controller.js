@@ -95,7 +95,7 @@ exports.getInstallScript = async (req, res) => {
     // Sólo el dominio autorizado puede cargar este script
     res.setHeader("Content-Security-Policy", `default-src 'none'`);
 
-    res.send(`(function(){
+    res.send(`(function(){ 
   if (window.__CHATBOT_INSTALLED__) return;
   window.__CHATBOT_INSTALLED__ = true;
 
@@ -103,10 +103,16 @@ exports.getInstallScript = async (req, res) => {
   iframe.src = "${baseUrl}/api/chatbot-integration/embed/${public_id}?d=${safeDomain}";
 
   iframe.style.cssText = [
-    "position:fixed","bottom:0","right:0",
-    "width:80px","height:80px","border:none",
-    "z-index:2147483647","background:transparent",
-    "pointer-events:auto","overflow:hidden",
+    "position:fixed",
+    "bottom:20px",
+    "right:20px",
+    "width:80px",
+    "height:80px",
+    "border:none",
+    "z-index:2147483647",
+    "background:transparent",
+    "pointer-events:auto",
+    "overflow:hidden",
     "border-radius:50%",
     "transition:width 0.3s ease,height 0.3s ease,border-radius 0.3s ease"
   ].join(";");
@@ -118,43 +124,47 @@ exports.getInstallScript = async (req, res) => {
 
   window.addEventListener("message", function(e) {
     if (!e.data || e.data.type !== "CHATBOT_RESIZE") return;
+
     if (e.data.open) {
-      iframe.style.borderRadius = "0";
+
+      iframe.style.borderRadius = "16px";
       iframe.style.overflow     = "visible";
+
       var isMobile = window.innerWidth <= 480;
+
       if (isMobile) {
+
         iframe.style.width  = "100vw";
         iframe.style.height = "100vh";
         iframe.style.bottom = "0";
         iframe.style.right  = "0";
+
       } else {
-        var w = Math.min(420, window.innerWidth  - 32);
-        var h = Math.min(680, window.innerHeight - 40);
+
+        var w = Math.min(420, window.innerWidth  - 40);
+        var h = Math.min(680, window.innerHeight - 60);
+
         iframe.style.width  = w + "px";
         iframe.style.height = h + "px";
+
+        iframe.style.bottom = "20px";
+        iframe.style.right  = "20px";
+
       }
+
     } else {
+
       iframe.style.width        = "80px";
       iframe.style.height       = "80px";
       iframe.style.borderRadius = "50%";
       iframe.style.overflow     = "hidden";
+
+      iframe.style.bottom = "20px";
+      iframe.style.right  = "20px";
+
     }
   });
 
-  window.addEventListener("resize", function() {
-    var currentW = parseInt(iframe.style.width, 10);
-    if (currentW <= 80) return;
-    var isMobile = window.innerWidth <= 480;
-    if (isMobile) {
-      iframe.style.width  = "100vw";
-      iframe.style.height = "100vh";
-    } else {
-      var w = Math.min(420, window.innerWidth  - 32);
-      var h = Math.min(680, window.innerHeight - 40);
-      iframe.style.width  = w + "px";
-      iframe.style.height = h + "px";
-    }
-  });
 })();`);
 
   } catch (err) {
