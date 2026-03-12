@@ -2,21 +2,18 @@ const { Schema, model } = require("mongoose");
 
 const FlowSchema = new Schema(
   {
-    // 🔹 SOLO null cuando es template
     account_id: {
       type: Schema.Types.ObjectId,
       ref: "Account",
       default: null,
     },
 
-    // 🔹 SOLO null cuando es template
     chatbot_id: {
       type: Schema.Types.ObjectId,
       ref: "Chatbot",
       default: null,
     },
 
-    // 🔥 CLAVE
     is_template: {
       type: Boolean,
       default: false,
@@ -54,7 +51,6 @@ const FlowSchema = new Schema(
       default: 1
     },
 
-    // 🔗 referencia al template original
     base_flow_id: {
       type: Schema.Types.ObjectId,
       ref: "Flow",
@@ -66,7 +62,7 @@ const FlowSchema = new Schema(
       default: null
     }
   },
-  { timestamps: true }
+  { timestamps: true }  
 );
 
 // Índices
