@@ -1,20 +1,20 @@
 // chatbotIntegration.controller.js  — PROTECCIÓN MÁXIMA
-const Chatbot  = require("../models/Chatbot");
-const crypto   = require("crypto");
-const isDomainAllowed     = require("../helper/isDomainAllowed");
+const Chatbot = require("../models/Chatbot");
+const crypto = require("crypto");
+const isDomainAllowed = require("../helper/isDomainAllowed");
 const { normalizeDomain } = require("../utils/normalizeDomain");
-const { isLocalhost }     = require("../utils/isLocalhost");
-const { domainExists }    = require("../validators/domain.validator");
+const { isLocalhost } = require("../utils/isLocalhost");
+const { domainExists } = require("../validators/domain.validator");
 const { getStore, TTL_MS } = require("../utils/nonceStore"); // ← NUEVO
 
 /* ─────────────────────────────────────────
    HELPERS
 ───────────────────────────────────────── */
-const getBaseUrl   = () => process.env.APP_BASE_URL   || "https://backend-chatbot-omega.vercel.app";
+const getBaseUrl = () => process.env.APP_BASE_URL || "https://backend-chatbot-omega.vercel.app";
 const getWidgetBaseUrl = () => process.env.WIDGET_BASE_URL || "https://chatbot-widget-blue-eight.vercel.app";
 
 const WIDGET_BASE_URL = getWidgetBaseUrl();
-const WIDGET_DOMAIN   = normalizeDomain(WIDGET_BASE_URL);
+const WIDGET_DOMAIN = normalizeDomain(WIDGET_BASE_URL);
 
 function getPositionStyles(position, isOpen) {
   if (position === "bottom-left") {
@@ -93,7 +93,7 @@ exports.getInstallScript = async (req, res) => {
       return res.status(403).send("// Dominio no autorizado");
     }
 
-    const baseUrl    = getBaseUrl();
+    const baseUrl = getBaseUrl();
     const safeDomain = encodeURIComponent(domain);
 
     // ✅ Leer position con fallback
@@ -107,15 +107,92 @@ exports.getInstallScript = async (req, res) => {
     res.setHeader("Pragma", "no-cache");
     res.setHeader("Content-Security-Policy", `default-src 'none'`);
 
-    res.send(`(function(){ 
+res.send(`(function(){ 
   if (window.__CHATBOT_INSTALLED__) return;
   window.__CHATBOT_INSTALLED__ = true;
 
   var POSITION = "${position}";
 
+  /* ── Welcome bubble (renderizada en el padre) ── */
+  var welcomeEl = null;
+
+  function createWelcome(message) {
+    var el = document.createElement("div");
+    var isLeft = POSITION === "bottom-left";
+
+    el.style.cssText = [
+      "position:fixed",
+      "z-index:2147483646",
+      "max-width:280px",
+      "padding:14px 18px",
+      "background:white",
+      "color:#0f172a",
+      "font-size:14px",
+      "font-weight:600",
+      "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
+      "line-height:1.5",
+      "border-radius:18px",
+      "border:1.5px solid #e2e8f0",
+      "box-shadow:0 4px 20px rgba(0,0,0,0.10),0 1px 4px rgba(0,0,0,0.06)",
+      "opacity:0",
+      "pointer-events:none",
+      "cursor:default",
+      "transition:opacity 0.35s ease,transform 0.35s ease",
+      "bottom:110px",
+      isLeft ? "left:20px" : "right:20px",
+      isLeft
+        ? "transform:translateX(-10px) scale(0.97)"
+        : "transform:translateX(10px) scale(0.97)"
+    ].join(";");
+
+    // Flecha apuntando al FAB
+    var arrow = document.createElement("div");
+    arrow.style.cssText = [
+      "position:absolute",
+      "width:14px",
+      "height:14px",
+      "background:white",
+      isLeft
+        ? "left:-8px;top:50%;transform:translateY(-50%) rotate(45deg);border-left:1.5px solid #e2e8f0;border-bottom:1.5px solid #e2e8f0"
+        : "right:-8px;top:50%;transform:translateY(-50%) rotate(45deg);border-right:1.5px solid #e2e8f0;border-top:1.5px solid #e2e8f0"
+    ].join(";");
+
+    el.appendChild(arrow);
+
+    var text = document.createElement("span");
+    text.textContent = message;
+    el.appendChild(text);
+
+    document.body.appendChild(el);
+    return el;
+  }
+
+  function showWelcome(message) {
+    if (welcomeEl) { welcomeEl.remove(); welcomeEl = null; }
+    welcomeEl = createWelcome(message);
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() {
+        if (!welcomeEl) return;
+        welcomeEl.style.opacity = "1";
+        welcomeEl.style.transform = (POSITION === "bottom-left")
+          ? "translateX(0) scale(1)"
+          : "translateX(0) scale(1)";
+      });
+    });
+  }
+
+  function hideWelcome() {
+    if (!welcomeEl) return;
+    welcomeEl.style.opacity = "0";
+    welcomeEl.style.pointerEvents = "none";
+    var el = welcomeEl;
+    welcomeEl = null;
+    setTimeout(function() { if (el.parentNode) el.remove(); }, 400);
+  }
+
+  /* ── iframe ── */
   var iframe = document.createElement("iframe");
   iframe.src = "${baseUrl}/api/chatbot-integration/embed/${public_id}?d=${safeDomain}";
-
   iframe.style.cssText = [
     "position:fixed",
     ${positionStyles},
@@ -132,31 +209,70 @@ exports.getInstallScript = async (req, res) => {
 
   iframe.sandbox = "allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation";
   iframe.setAttribute("allow", "clipboard-write");
-
   document.body.appendChild(iframe);
 
+  /* ── Listener único para todos los mensajes ── */
   window.addEventListener("message", function(e) {
-    if (!e.data || e.data.type !== "CHATBOT_RESIZE") return;
+    if (!e.data || !e.data.type) return;
 
-    if (e.data.open) {
-      iframe.style.borderRadius = "16px";
-      iframe.style.overflow     = "visible";
-
-      var isMobile = window.innerWidth <= 480;
-
-      if (isMobile) {
-        iframe.style.width  = "100vw";
-        iframe.style.height = "100vh";
-        iframe.style.bottom = "0";
-        iframe.style.right  = "0";
-        iframe.style.left   = "0";
-        iframe.style.top    = "0";
+    /* Welcome */
+    if (e.data.type === "CHATBOT_WELCOME") {
+      if (e.data.visible && e.data.message) {
+        showWelcome(e.data.message);
       } else {
-        var w = Math.min(420, window.innerWidth  - 40);
-        var h = Math.min(680, window.innerHeight - 60);
+        hideWelcome();
+      }
+      return;
+    }
 
-        iframe.style.width  = w + "px";
-        iframe.style.height = h + "px";
+    /* Resize */
+    if (e.data.type === "CHATBOT_RESIZE") {
+      if (e.data.open) {
+        hideWelcome();
+        iframe.style.borderRadius = "16px";
+        iframe.style.overflow     = "visible";
+
+        var isMobile = window.innerWidth <= 480;
+        if (isMobile) {
+          iframe.style.width  = "100vw";
+          iframe.style.height = "100vh";
+          iframe.style.top    = "0";
+          iframe.style.left   = "0";
+          iframe.style.bottom = "auto";
+          iframe.style.right  = "auto";
+        } else {
+          var w = Math.min(420, window.innerWidth  - 40);
+          var h = Math.min(680, window.innerHeight - 60);
+          iframe.style.width  = w + "px";
+          iframe.style.height = h + "px";
+
+          if (POSITION === "bottom-left") {
+            iframe.style.bottom    = "20px";
+            iframe.style.left      = "20px";
+            iframe.style.right     = "auto";
+            iframe.style.top       = "auto";
+            iframe.style.transform = "";
+          } else if (POSITION === "middle-right") {
+            iframe.style.top       = "50%";
+            iframe.style.right     = "20px";
+            iframe.style.bottom    = "auto";
+            iframe.style.left      = "auto";
+            iframe.style.transform = "translateY(-50%)";
+          } else {
+            iframe.style.bottom    = "20px";
+            iframe.style.right     = "20px";
+            iframe.style.left      = "auto";
+            iframe.style.top       = "auto";
+            iframe.style.transform = "";
+          }
+        }
+
+      } else {
+        iframe.style.width        = "80px";
+        iframe.style.height       = "80px";
+        iframe.style.borderRadius = "50%";
+        iframe.style.overflow     = "hidden";
+        iframe.style.transform    = "";
 
         if (POSITION === "bottom-left") {
           iframe.style.bottom = "20px";
@@ -164,48 +280,21 @@ exports.getInstallScript = async (req, res) => {
           iframe.style.right  = "auto";
           iframe.style.top    = "auto";
         } else if (POSITION === "middle-right") {
-          iframe.style.top    = "50%";
+          iframe.style.top    = "calc(50% - 40px)";
           iframe.style.right  = "20px";
           iframe.style.bottom = "auto";
           iframe.style.left   = "auto";
-          iframe.style.transform = "translateY(-50%)";
         } else {
-          // bottom-right (default)
           iframe.style.bottom = "20px";
           iframe.style.right  = "20px";
           iframe.style.left   = "auto";
           iframe.style.top    = "auto";
         }
       }
-
-    } else {
-      iframe.style.width        = "80px";
-      iframe.style.height       = "80px";
-      iframe.style.borderRadius = "50%";
-      iframe.style.overflow     = "hidden";
-      iframe.style.transform    = "";
-
-      if (POSITION === "bottom-left") {
-        iframe.style.bottom = "20px";
-        iframe.style.left   = "20px";
-        iframe.style.right  = "auto";
-        iframe.style.top    = "auto";
-      } else if (POSITION === "middle-right") {
-        iframe.style.top    = "calc(50% - 40px)";
-        iframe.style.right  = "20px";
-        iframe.style.bottom = "auto";
-        iframe.style.left   = "auto";
-      } else {
-        iframe.style.bottom = "20px";
-        iframe.style.right  = "20px";
-        iframe.style.left   = "auto";
-        iframe.style.top    = "auto";
-      }
     }
   });
 
 })();`);
-
   } catch (err) {
     console.error("INSTALL SCRIPT ERROR:", err);
     res.status(500).send("// Error interno");
@@ -265,23 +354,23 @@ exports.renderEmbed = async (req, res) => {
 
     // 4. Construir config con nonce + TTL corto
     const config = {
-      ts:                  Date.now(),
+      ts: Date.now(),
       nonce,                                          // ← NUEVO
-      apiBase:             getBaseUrl(),
-      publicId:            public_id,
-      originDomain:        domain,
-      name:                chatbot.name,
-      avatar:              chatbot.avatar || "",
-      primaryColor:        chatbot.primary_color    || "#2563eb",
-      secondaryColor:      chatbot.secondary_color  || "#111827",
-      inputPlaceholder:    chatbot.input_placeholder || "Escribe tu mensaje...",
-      welcomeMessage:      chatbot.welcome_message  || "",
-      welcomeDelay:        chatbot.welcome_delay    ?? 2,
+      apiBase: getBaseUrl(),
+      publicId: public_id,
+      originDomain: domain,
+      name: chatbot.name,
+      avatar: chatbot.avatar || "",
+      primaryColor: chatbot.primary_color || "#2563eb",
+      secondaryColor: chatbot.secondary_color || "#111827",
+      inputPlaceholder: chatbot.input_placeholder || "Escribe tu mensaje...",
+      welcomeMessage: chatbot.welcome_message || "",
+      welcomeDelay: chatbot.welcome_delay ?? 2,
       showWelcomeOnMobile: chatbot.show_welcome_on_mobile ?? true,
-      position:            chatbot.position         || "bottom-right"
+      position: chatbot.position || "bottom-right"
     };
 
-    const payload   = JSON.stringify(config);
+    const payload = JSON.stringify(config);
     const signature = crypto
       .createHmac("sha256", process.env.CONFIG_SECRET)
       .update(payload)
@@ -354,8 +443,8 @@ exports.verifyConfigSignature = async (req, res) => {
       return res.status(403).json({ error: "Nonce ausente" });
     }
 
-    const store   = await getStore();
-    const valid   = await store.consume(config.nonce);
+    const store = await getStore();
+    const valid = await store.consume(config.nonce);
 
     if (!valid) {
       // Nonce ya usado o expirado → posible replay attack
@@ -398,8 +487,8 @@ exports.addAllowedDomain = async (req, res) => {
   try {
     if (!req.user) return res.status(401).json({ error: "No autorizado" });
 
-    const { public_id }    = req.params;
-    const normalized       = normalizeDomain(req.body.domain);
+    const { public_id } = req.params;
+    const normalized = normalizeDomain(req.body.domain);
     if (!normalized) return res.status(400).json({ error: "Dominio inválido" });
 
     const normalizedLower = normalized.toLowerCase();
@@ -476,13 +565,13 @@ exports.InstallationCode = async (req, res) => {
     if (!chatbot) return res.status(404).json({ error: "Chatbot no encontrado" });
 
     const baseUrl = getBaseUrl();
-    const script  = `<script src="${baseUrl}/api/chatbot-integration/${public_id}/install?t=${chatbot.install_token}" async></script>`;
+    const script = `<script src="${baseUrl}/api/chatbot-integration/${public_id}/install?t=${chatbot.install_token}" async></script>`;
 
     res.json({
       script,
-      install_token:   chatbot.install_token,
+      install_token: chatbot.install_token,
       allowed_domains: chatbot.allowed_domains || [],
-      has_domains:     chatbot.allowed_domains.length > 0
+      has_domains: chatbot.allowed_domains.length > 0
     });
   } catch (err) {
     console.error("INSTALL CODE ERROR:", err);
@@ -502,8 +591,8 @@ exports.regenerateInstallToken = async (req, res) => {
     const chatbot = await Chatbot.findOne({ public_id, account_id: req.user.account_id });
     if (!chatbot) return res.status(404).json({ message: "Chatbot no encontrado" });
 
-    chatbot.install_token       = crypto.randomBytes(32).toString("hex");
-    chatbot.allowed_domains     = [];
+    chatbot.install_token = crypto.randomBytes(32).toString("hex");
+    chatbot.allowed_domains = [];
     chatbot.installation_status = "pending";
     await chatbot.save();
 
