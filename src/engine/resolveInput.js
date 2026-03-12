@@ -42,13 +42,40 @@ module.exports = async function resolveInput(node, input, session, nodesMap) {
 
   /* OPTIONS / POLICY */
   if (isInteractionNode) {
+
     const source = node.node_type === "options" ? node.options : node.policy;
-    const match = source.find(
-      o => String(o.value) === String(input) || String(o.label) === String(input)
+
+    const normalize = v =>
+      String(v ?? "")
+        .trim()
+        .toLowerCase();
+
+    const inputNorm = normalize(input);
+
+    const match = source.find(o =>
+      normalize(o.value) === inputNorm ||
+      normalize(o.label) === inputNorm
     );
-    if (!match) return { node };
+
+    if (!match) {
+      return {
+        validation_error: true,
+        node_id: node._id,
+        node_type: node.node_type,
+        message: "Opción inválida"
+      };
+    }
+
+    session.history.push({
+      node_id: node._id,
+      question: node.content,
+      answer: match.label
+    });
+
     session.current_branch_id = match.next_branch_id ?? null;
+
     const next = nodesMap.get(String(match.next_node_id));
+
     return { node: next };
   }
 
