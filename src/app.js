@@ -22,8 +22,6 @@ app.use(cors({
 
 app.options("*", cors());
 
-app.options("*", cors());
-
 // mongo (middleware normal)
 app.use(require("./middlewares/mongo.middleware.js"));
 
