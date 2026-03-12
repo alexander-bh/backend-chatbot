@@ -17,7 +17,7 @@ router.post(
   controller.nextPublicStep
 );
 
-router.post("/:id/abandon", async (req, res) => {
+router.post("/chatbot-conversation/:id/abandon", async (req, res) => {
   try {
     const session = await ConversationSession.findOneAndUpdate(
       { _id: req.params.id, is_abandoned: false },

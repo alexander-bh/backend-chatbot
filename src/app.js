@@ -1,15 +1,37 @@
 const express = require("express");
 const cors = require("cors");
+
 const app = express();
 
-// ───────── MIDDLEWARES NORMALES ─────────
-app.use(cors());
 app.use(express.json());
-app.set("trust proxy", 1);  
+app.set("trust proxy", 1);
+
 // health
 app.get("/ping", (req, res) => {
   res.json({ ok: true });
 });
+
+const allowedOrigins = [
+  "https://chatbot-widget-blue-eight.vercel.app",
+  "https://backend-chatbot-omega.vercel.app"
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+
+    // permitir requests sin origin (server → server)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error("CORS bloqueado"));
+  },
+  credentials: true
+}));
+
+app.options("*", cors());
 
 // mongo (middleware normal)
 app.use(require("./middlewares/mongo.middleware.js"));
