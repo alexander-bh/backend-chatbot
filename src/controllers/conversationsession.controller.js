@@ -234,7 +234,7 @@ exports.nextStep = async (req, res) => {
         session.status = "completed";
       }
 
-      if (session.is_completed) {
+      if (session.is_completed || session.is_abandoned) {
         const contact = await finalizeConversation(session);
         if (contact) {
           session.contact_id = contact._id;
