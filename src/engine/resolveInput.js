@@ -71,7 +71,7 @@ module.exports = async function resolveInput(node, input, session, nodesMap) {
 
       session.variables.data_processing_consent = consentValue;
       session.markModified("variables");
-
+      
       if (consentValue === "rejected") {
 
         session.status = "closed";
@@ -79,13 +79,16 @@ module.exports = async function resolveInput(node, input, session, nodesMap) {
         return {
           node: {
             node_type: "text",
+            type: "text",
             content: "No podemos continuar sin aceptar nuestras políticas de tratamiento de datos.",
             typing_time: 1,
-            end_conversation: true
+            end_conversation: true,
+            auto_next: false
           }
         };
 
       }
+
     }
 
     session.current_branch_id = match.next_branch_id ?? null;
