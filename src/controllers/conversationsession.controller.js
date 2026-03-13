@@ -196,8 +196,8 @@ exports.nextStep = async (req, res) => {
     }
 
     if (!node._id) {
-      if (node.end_conversation) {
-        session.is_completed = true;
+      if (node.end_conversation && !session.is_abandoned) {
+        session.is_completed = true;  // solo marcar completed si NO es abandoned
       }
       await session.save();
 

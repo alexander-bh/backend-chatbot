@@ -71,9 +71,14 @@ module.exports = async function resolveInput(node, input, session, nodesMap) {
 
       session.variables.data_processing_consent = consentValue;
       session.markModified("variables");
-      
+
       if (consentValue === "rejected") {
 
+        // ── Marcar como abandonado, NO completado ──
+        session.is_abandoned = true;
+        session.abandoned_at = new Date();
+        session.is_completed = false;
+        session.markModified("variables");
         session.status = "closed";
 
         return {
