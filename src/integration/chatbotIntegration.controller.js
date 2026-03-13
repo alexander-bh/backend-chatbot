@@ -93,6 +93,18 @@ exports.getInstallScript = async (req, res) => {
       return res.status(403).send("// Dominio no autorizado");
     }
 
+    if (chatbot.installation_status !== "verified") {
+      await Chatbot.updateOne(
+        { _id: chatbot._id },
+        {
+          $set: {
+            installation_status: "verified",
+            updated_at: new Date()
+          }
+        }
+      );
+    }
+
     const baseUrl = getBaseUrl();
     const safeDomain = encodeURIComponent(domain);
 
