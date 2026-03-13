@@ -193,9 +193,9 @@ exports.saveFlow = async (req, res) => {
 
     const uploadedFilesMap = buildUploadedFilesMap(req.files);
 
-    await withTransactionRetry(async session => {
+    let savedFlowId = null;
 
-      let savedFlowId = null;
+    await withTransactionRetry(async session => {
 
       const flow = await ensureFlowExists({
         flowId,
@@ -395,7 +395,11 @@ exports.saveFlow = async (req, res) => {
     }
 
     if (savedFlowId) {
-      clearFlowCache(savedFlowId);
+      try {
+        clearFlowCache(savedFlowId);
+      } catch (e) {
+        console.warn("Cache clear error:", e.message);
+      }
     }
 
     return res.json({

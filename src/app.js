@@ -21,7 +21,11 @@ app.get("/", (req, res) => {
 
 // health
 app.get("/ping", (req, res) => {
-  res.json({ ok: true });
+  res.json({
+    status: "ok",
+    uptime: process.uptime(),
+    timestamp: Date.now()
+  });
 });
 
 

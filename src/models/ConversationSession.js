@@ -45,7 +45,6 @@ const ConversationSessionSchema = new mongoose.Schema(
     origin_url: {
       type: String,
       default: null,
-      index: true
     },
 
     history: [
@@ -71,7 +70,6 @@ const ConversationSessionSchema = new mongoose.Schema(
       type: String,
       enum: ["active", "completed", "abandoned", "closed"],
       default: "active",
-      index: true
     },
 
     mode: {
