@@ -234,6 +234,14 @@ exports.updateStatus = async (req, res) => {
 
     contact.status = status;
 
+    if (status === "lost") {
+      contact.completed = false;
+    }
+
+    if (status === "contacted" || status === "qualified") {
+      contact.completed = true;
+    }
+
     await contact.save({ session });
 
     /* =========================
@@ -246,7 +254,8 @@ exports.updateStatus = async (req, res) => {
       conversationUpdate = {
         is_completed: false,
         is_abandoned: true,
-        abandoned_at: new Date()
+        abandoned_at: new Date(),
+        status: "abandoned"
       };
     }
 
@@ -254,7 +263,8 @@ exports.updateStatus = async (req, res) => {
       conversationUpdate = {
         is_completed: true,
         is_abandoned: false,
-        abandoned_at: null
+        abandoned_at: null,
+        status: "completed"
       };
     }
 
@@ -263,7 +273,6 @@ exports.updateStatus = async (req, res) => {
     ========================= */
 
     if (conversationUpdate && contact.session_id) {
-
       await ConversationSession.updateOne(
         {
           _id: contact.session_id,
@@ -272,7 +281,6 @@ exports.updateStatus = async (req, res) => {
         { $set: conversationUpdate },
         { session }
       );
-
     }
 
     await session.commitTransaction();
