@@ -6,7 +6,7 @@ module.exports = function renderNode(node, session_id) {
 
   const payload = {
     session_id,
-    node_id: node._id,
+    node_id: node._id ?? null,
     node_type: node.node_type,
     content: node.content || null,
     typing_time: node.typing_time || 0,
