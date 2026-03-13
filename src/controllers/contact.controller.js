@@ -185,7 +185,7 @@ exports.updateStatus = async (req, res) => {
       return res.status(400).json({ message: "ID inválido" });
     }
 
-    /* =========================
+    /* ======================
        VALIDAR STATUS
     ========================= */
 
