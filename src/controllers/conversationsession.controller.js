@@ -230,8 +230,7 @@ exports.nextStep = async (req, res) => {
     if (!node._id) {
 
       if (node.end_conversation && !session.is_abandoned) {
-        session.is_completed = true;
-        session.status = "completed";
+        session.is_completed = false;
       }
 
       if (session.is_completed || session.is_abandoned) {
