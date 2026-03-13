@@ -6,6 +6,7 @@ exports.finalizeConversation = async (session) => {
 
     session.is_completed = true;
     session.status = "completed";
+    await session.save();     
 
     /* ================= CREAR / ACTUALIZAR CONTACTO ================= */
 
