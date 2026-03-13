@@ -1206,7 +1206,6 @@ exports.setDefaultAvatar = async (req, res) => {
   }
 };
 
-//contactos por predeterminado 
 // controllers/contact.controller.js
 exports.createDefaultContactTemplate = async (req, res) => {
   try {
