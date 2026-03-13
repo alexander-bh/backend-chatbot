@@ -475,7 +475,7 @@ exports.getContacts = async (req, res) => {
     /* ================= FILTRO BASE ================= */
 
     const filter = {
-      account_id: accountId,
+      account_id: new mongoose.Types.ObjectId(accountId),
       is_deleted: false
     };
 
@@ -512,11 +512,49 @@ exports.getContacts = async (req, res) => {
       }
     }
 
-    /* ================= OBTENER CONTACTOS ================= */
+    /* ================= CONTACTOS + HISTORIAL ================= */
 
-    const contacts = await Contact.find(filter)
-      .sort({ createdAt: -1 })
-      .lean();
+    const contacts = await Contact.aggregate([
+      {
+        $match: filter
+      },
+
+      {
+        $sort: { createdAt: -1 }
+      },
+
+      /* ================= JOIN CONVERSATION ================= */
+
+      {
+        $lookup: {
+          from: "conversationsessions",
+          localField: "session_id",
+          foreignField: "_id",
+          as: "conversation"
+        }
+      },
+
+      {
+        $unwind: {
+          path: "$conversation",
+          preserveNullAndEmptyArrays: true
+        }
+      },
+
+      /* ================= EXTRAER HISTORIAL ================= */
+
+      {
+        $addFields: {
+          conversation_history: "$conversation.history"
+        }
+      },
+
+      {
+        $project: {
+          conversation: 0
+        }
+      }
+    ]);
 
     /* ================= NORMALIZAR ================= */
 
@@ -557,7 +595,9 @@ exports.getContacts = async (req, res) => {
 
   } catch (error) {
     console.error("GET CONTACTS ERROR:", error);
-    res.status(500).json({ message: "Error al obtener contactos" });
+    res.status(500).json({
+      message: "Error al obtener contactos"
+    });
   }
 };
 
