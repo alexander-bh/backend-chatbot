@@ -81,6 +81,7 @@ module.exports = async function resolveInput(node, input, session, nodesMap) {
         session.is_completed = false;
         session.markModified("variables");
         session.status = "abandoned";
+        session.markModified("is_abandoned");
         session.markModified("status");
         return {
           node: {

@@ -226,11 +226,17 @@ exports.nextStep = async (req, res) => {
     }
 
     /* ================= NODO SIN _ID (mensaje final) ================= */
-
     if (!node._id) {
 
       if (node.end_conversation && !session.is_abandoned) {
+        session.is_completed = true;
+        session.status = "completed";
+      }
+
+      // 🔒 Protección
+      if (session.is_abandoned) {
         session.is_completed = false;
+        session.status = "abandoned";
       }
 
       if (session.is_completed || session.is_abandoned) {
@@ -239,6 +245,9 @@ exports.nextStep = async (req, res) => {
           session.contact_id = contact._id;
         }
       }
+
+      await session.save();
+
       return res.json(renderNode(node, session._id));
     }
 
