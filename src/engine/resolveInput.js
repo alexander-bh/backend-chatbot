@@ -66,24 +66,25 @@ module.exports = async function resolveInput(node, input, session, nodesMap) {
 
       let consentValue = match.value;
 
-      // convertir SI / NO a accepted / rejected
       if (consentValue.toUpperCase() === "SI") consentValue = "accepted";
       if (consentValue.toUpperCase() === "NO") consentValue = "rejected";
 
       session.variables.data_processing_consent = consentValue;
       session.markModified("variables");
 
-      // detener chatbot si rechaza
       if (consentValue === "rejected") {
+
         session.status = "closed";
 
         return {
           node: {
             node_type: "text",
             content: "No podemos continuar sin aceptar nuestras políticas de tratamiento de datos.",
+            typing_time: 1,
             end_conversation: true
           }
         };
+
       }
     }
 
