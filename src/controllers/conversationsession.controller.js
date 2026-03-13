@@ -7,10 +7,9 @@ const Chatbot = require("../models/Chatbot");
 const renderNode = require("../engine/renderNode");
 const resolveInput = require("../engine/resolveInput");
 const autoFlow = require("../engine/autoFlow");
-const ALLOWED_MODES = ["preview", "production"];
-const upsertContactFromSession = require("../services/upsertContactFromSession.service");
+const { finalizeConversation } = require("../helper/finalizeConversation");
 const { getFlowCache, setFlowCache } = require("../services/flowCache.service");
-
+const ALLOWED_MODES = ["preview", "production"];
 
 /* --------------------------------------------------
    START CONVERSATION
@@ -195,16 +194,10 @@ exports.nextStep = async (req, res) => {
     let node = nodesMap.get(String(session.current_node_id));
 
     if (!node) {
-      session.is_completed = true;
-      session.status = "completed";
-
-      const contact = await upsertContactFromSession(session);
+      const contact = await finalizeConversation(session);
       if (contact) {
         session.contact_id = contact._id;
       }
-
-      await session.save();
-
       return res.json({
         completed: true,
         contact_id: contact?._id || null
@@ -222,16 +215,10 @@ exports.nextStep = async (req, res) => {
     node = result.node;
 
     if (!node) {
-      session.is_completed = true;
-      session.status = "completed";
-
-      const contact = await upsertContactFromSession(session);
+      const contact = await finalizeConversation(session);
       if (contact) {
         session.contact_id = contact._id;
       }
-
-      await session.save();
-
       return res.json({
         completed: true,
         contact_id: contact?._id || null
@@ -248,14 +235,11 @@ exports.nextStep = async (req, res) => {
       }
 
       if (session.is_completed) {
-        const contact = await upsertContactFromSession(session);
+        const contact = await finalizeConversation(session);
         if (contact) {
           session.contact_id = contact._id;
         }
       }
-
-      await session.save();
-
       return res.json(renderNode(node, session._id));
     }
 
@@ -271,15 +255,10 @@ exports.nextStep = async (req, res) => {
 
     if (!finalNode) {
 
-      session.is_completed = true;
-      session.status = "completed";
-
-      const contact = await upsertContactFromSession(session);
+      const contact = await finalizeConversation(session);
       if (contact) {
         session.contact_id = contact._id;
       }
-
-      await session.save();
 
       return res.json({
         completed: true,
@@ -290,14 +269,11 @@ exports.nextStep = async (req, res) => {
     /* ================= GUARDAR SESIÓN ================= */
 
     if (session.is_completed) {
-      const contact = await upsertContactFromSession(session);
+      const contact = await finalizeConversation(session);
       if (contact) {
         session.contact_id = contact._id;
       }
     }
-
-    await session.save();
-
     return res.json(renderNode(finalNode, session._id));
 
   } catch (error) {

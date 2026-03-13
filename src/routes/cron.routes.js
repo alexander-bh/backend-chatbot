@@ -23,10 +23,12 @@ router.post("/mark-abandoned", vercelCron, async (req, res) => {
     const inactivityCutoff =
       new Date(now.getTime() - INACTIVITY_MINUTES * 60 * 1000);
 
+    // marcar abandono
     const abandoned = await ConversationSession.updateMany(
       {
         is_completed: false,
         is_abandoned: false,
+        status: "active",
         last_activity_at: { $lt: inactivityCutoff }
       },
       {
@@ -38,6 +40,12 @@ router.post("/mark-abandoned", vercelCron, async (req, res) => {
       }
     );
 
+    // eliminar conversaciones que rechazaron políticas
+    const rejected = await ConversationSession.deleteMany({
+      "variables.data_processing_consent": "rejected"
+    });
+
+    // eliminar abandonadas viejas
     const deleteCutoff =
       new Date(now.getTime() - DELETE_AFTER_DAYS * 24 * 60 * 60 * 1000);
 
@@ -49,6 +57,7 @@ router.post("/mark-abandoned", vercelCron, async (req, res) => {
     res.json({
       success: true,
       marked_abandoned: abandoned.modifiedCount,
+      rejected_deleted: rejected.deletedCount,
       deleted: deleted.deletedCount
     });
 

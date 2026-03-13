@@ -1,6 +1,22 @@
 const { Schema, model, models } = require("mongoose");
 const crypto = require("crypto");
 
+const EmailSettingsSchema = new Schema({
+  from_name: {
+    type: String,
+    default: "Chatbot"
+  },
+  from_email: {
+    type: String,
+    default: ""
+  },
+  to_email: {
+    type: String,
+    default: ""
+  }
+}, { _id: false });
+
+
 const ChatbotSchema = new Schema({
   account_id: {
     type: Schema.Types.ObjectId,
@@ -11,6 +27,11 @@ const ChatbotSchema = new Schema({
   public_id: { type: String, unique: true, required: true },
 
   name: { type: String, required: true },
+
+  email_settings: {
+    type: EmailSettingsSchema,
+    default: () => ({})
+  },
 
   status: {
     type: String,
@@ -27,17 +48,7 @@ const ChatbotSchema = new Schema({
 
   allowed_domains: {
     type: [String],
-    default: [],
-    index: true
-  },
-
-  verified_domains: {
-    type: [String],
-    default: [],
-    validate: {
-      validator: v => v.length <= 20,
-      message: "Máximo 20 dominios verificados"
-    }
+    default: []
   },
 
   installation_status: {
@@ -140,13 +151,9 @@ ChatbotSchema.pre("save", function () {
           .toLowerCase()
       );
   }
-
-  // Genera token de instalación si no existe
   if (!this.install_token) {
     this.install_token = crypto.randomBytes(24).toString("hex");
   }
-
-  // ✅ No se llama next() cuando usas timestamps en las opciones del Schema
 });
 
 ChatbotSchema.index({ account_id: 1, created_at: -1 });
