@@ -268,12 +268,11 @@ exports.nextStep = async (req, res) => {
 
     /* ================= GUARDAR SESIÓN ================= */
 
-    if (session.is_completed) {
-      const contact = await finalizeConversation(session);
-      if (contact) {
-        session.contact_id = contact._id;
-      }
+
+    if (!session.is_completed) {
+      await session.save();
     }
+
     return res.json(renderNode(finalNode, session._id));
 
   } catch (error) {
