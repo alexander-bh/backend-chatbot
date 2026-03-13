@@ -42,24 +42,54 @@ module.exports = async function resolveInput(node, input, session, nodesMap) {
 
   /* OPTIONS / POLICY */
   if (isInteractionNode) {
-    const source = node.node_type === "options" ? node.options : node.policy;
-    const match = source.find(
-      o => String(o.value) === String(input) || String(o.label) === String(input)
-    );
 
-    console.log("INPUT RECIBIDO:", input);
-    console.log("OPTIONS DISPONIBLES:", source.map(o => o.value));
-    console.log("MATCH:", match);
+    const source = node.node_type === "options"
+      ? node.options
+      : node.policy;
+
+    const match = source.find(
+      o => String(o.value).toLowerCase() === String(input).toLowerCase() ||
+        String(o.label).toLowerCase() === String(input).toLowerCase()
+    );
 
     if (!match) return { node };
 
-    console.log("NEXT NODE ID:", match.next_node_id);
-    console.log("EN MAPA:", nodesMap.has(String(match.next_node_id)));
+    // Guardar historial
+    session.history.push({
+      node_id: node._id,
+      question: node.content,
+      answer: match.label
+    });
+
+    /* POLICY LOGIC */
+    if (node.node_type === "policy") {
+
+      let consentValue = match.value;
+
+      // convertir SI / NO a accepted / rejected
+      if (consentValue.toUpperCase() === "SI") consentValue = "accepted";
+      if (consentValue.toUpperCase() === "NO") consentValue = "rejected";
+
+      session.variables.data_processing_consent = consentValue;
+      session.markModified("variables");
+
+      // detener chatbot si rechaza
+      if (consentValue === "rejected") {
+        session.status = "closed";
+
+        return {
+          node: {
+            node_type: "text",
+            content: "No podemos continuar sin aceptar nuestras políticas de tratamiento de datos.",
+            end_conversation: true
+          }
+        };
+      }
+    }
 
     session.current_branch_id = match.next_branch_id ?? null;
-    const next = nodesMap.get(String(match.next_node_id));
 
-    console.log("NEXT NODE:", next);
+    const next = nodesMap.get(String(match.next_node_id));
 
     return { node: next };
   }
