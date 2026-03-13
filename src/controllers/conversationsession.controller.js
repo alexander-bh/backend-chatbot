@@ -226,20 +226,20 @@ exports.nextStep = async (req, res) => {
     }
 
     /* ================= NODO SIN _ID (mensaje final) ================= */
+
     if (!node._id) {
 
       if (node.end_conversation && !session.is_abandoned) {
-        session.is_completed = false;
-        session.status = "abandoned";
+        session.is_completed = true;
+        session.status = "completed";
       }
 
-      // 🔒 Protección
       if (session.is_abandoned) {
         session.is_completed = false;
         session.status = "abandoned";
       }
 
-      if (session.is_completed || session.is_abandoned) {
+      if (session.is_completed) {
         const contact = await finalizeConversation(session);
         if (contact) {
           session.contact_id = contact._id;
@@ -250,6 +250,7 @@ exports.nextStep = async (req, res) => {
 
       return res.json(renderNode(node, session._id));
     }
+
 
     /* ================= AUTO FLOW ================= */
 
