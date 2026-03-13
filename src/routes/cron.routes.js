@@ -2,11 +2,12 @@ const express = require("express");
 const router = express.Router();
 
 const ConversationSession = require("../models/ConversationSession");
+const vercelCron = require("./middlewares/vercelCron.middleware");
 
 const INACTIVITY_MINUTES = 30;
 const DELETE_AFTER_DAYS = 4;
 
-router.post("/mark-abandoned", async (req, res) => {
+router.post("/mark-abandoned", vercelCron, async (req, res) => {
 
   if (
     !req.headers.authorization ||
