@@ -1,89 +1,53 @@
-// upsertContactFromSession.service.js
-
 const Contact = require("../models/Contact");
 const calculateLeadScore = require("../services/leadScore.service");
 
 const CRM_DEFAULT_FIELDS = [
-  "name",
-  "last_name",
-  "email",
-  "phone",
-  "birth_date",
-  "company",
-  "website",
-  "company_phone",
-  "phone_ext",
-  "position",
-  "city",
-  "country",
-  "state",
-  "postal_code",
-  "address",
-  "job_title",
-  "privacy",
-  "notes",
-  "observations",
-  "data_processing_consent"
+  "name", "last_name", "email", "phone", "birth_date",
+  "company", "website", "company_phone", "phone_ext",
+  "position", "city", "country", "state", "postal_code",
+  "address", "job_title", "privacy", "notes",
+  "observations", "data_processing_consent"
 ];
 
 module.exports = async function upsertContactFromSession(session) {
-
   try {
-
     const variables = session.variables || {};
 
-    /* ===============================
-       NORMALIZE INPUT
-    =============================== */
+    /* ── NORMALIZE ── */
+    const email = typeof variables.email === "string"
+      ? variables.email.toLowerCase().trim() || null
+      : null;
 
-    const email =
-      typeof variables.email === "string"
-        ? variables.email.toLowerCase().trim() || null
-        : null;
+    const phone = typeof variables.phone === "string"
+      ? variables.phone.replace(/\D/g, "").trim() || null
+      : null;
 
-    const phone =
-      typeof variables.phone === "string"
-        ? variables.phone.replace(/\D/g, "").trim() || null
-        : null;
+    const name = typeof variables.name === "string"
+      ? variables.name.trim() || null
+      : null;
 
-    const name =
-      typeof variables.name === "string"
-        ? variables.name.trim()
-        : null;
+    /* ── REQUIERE AL MENOS EMAIL O TELÉFONO ── */
+    if (!email && !phone) return null;
 
-    /* ===============================
-       VALIDATE LEAD DATA
-    =============================== */
-
-    const hasContactInfo = Boolean(email || phone);
-
-    if (!hasContactInfo) {
-      return null;
-    }
-    /* ===============================
-       FIND EXISTING CONTACT
-    =============================== */
-
+    /* ── BUSCAR CONTACTO EXISTENTE ── */
     let existingContact = null;
 
+    // 1. Por contact_id de la sesión
     if (session.contact_id) {
       existingContact = await Contact.findById(session.contact_id);
     }
 
-    // 2️⃣ Buscar por email
+    // 2. Por email
     if (!existingContact && email) {
-
       existingContact = await Contact.findOne({
         account_id: session.account_id,
         email,
         is_deleted: { $ne: true }
       });
-
     }
 
-
+    // 3. Por teléfono
     if (!existingContact && phone) {
-
       existingContact = await Contact.findOne({
         account_id: session.account_id,
         phone,
@@ -91,149 +55,79 @@ module.exports = async function upsertContactFromSession(session) {
       });
     }
 
-    /* ===============================
-       MERGE VARIABLES
-    =============================== */
+    /* ── MERGE Y LIMPIAR VARIABLES ── */
+    const merged = { ...(existingContact?.variables || {}), ...variables };
+    if (email) merged.email = email;
+    if (phone) merged.phone = phone;
+    if (name)  merged.name  = name;
 
-    const mergedVariables = {
-      ...(existingContact?.variables || {}),
-      ...variables
-    };
+    const cleanVariables = Object.fromEntries(
+      Object.entries(merged).filter(([_, v]) => {
+        if (v === undefined || v === null) return false;
+        if (typeof v === "string" && !v.trim()) return false;
+        return true;
+      })
+    );
 
-    if (email) mergedVariables.email = email;
-    if (phone) mergedVariables.phone = phone;
-    if (name) mergedVariables.name = name;
+    /* ── LEAD SCORE ── */
+    const leadScore = calculateLeadScore({ ...session, variables: cleanVariables });
 
-    /* ===============================
-       CLEAN VARIABLES
-    =============================== */
-
-    const cleanVariables = {};
-
-    for (const key of Object.keys(mergedVariables)) {
-
-      const value = mergedVariables[key];
-
-      if (value === undefined || value === null) continue;
-
-      if (typeof value === "string" && !value.trim()) continue;
-
-      cleanVariables[key] = value;
-
-    }
-
-    /* ===============================
-       LEAD SCORE
-    =============================== */
-
-    const leadScore = calculateLeadScore({
-      ...session,
-      variables: cleanVariables
-    });
-
-    /* ===============================
-       PREPARE CONTACT DATA
-    =============================== */
-
+    /* ── PREPARAR DATOS ── */
     const contactData = {
-      account_id: session.account_id,
-      chatbot_id: session.chatbot_id,
-      source: "chatbot",
-      origin_url: session.origin_url,
-      visitor_id: session.visitor_id,
-      variables: {
-        ...(existingContact?.variables || {}),
-        ...cleanVariables
-      },
-      completed: session.is_completed === true,
-      lead_score: leadScore
+      account_id:   session.account_id,
+      chatbot_id:   session.chatbot_id,
+      source:       "chatbot",
+      origin_url:   session.origin_url,
+      visitor_id:   session.visitor_id,
+      variables:    cleanVariables,
+      completed:    session.is_completed === true,
+      lead_score:   leadScore,
+      ...(session.duration_seconds && { duration_seconds: session.duration_seconds }),
+      ...(!existingContact && { session_id: session._id })
     };
 
-    if (!existingContact) {
-      contactData.session_id = session._id;
-    }
-
-    if (session.duration_seconds) {
-      contactData.duration_seconds = session.duration_seconds;
-    }
-
-    /* ===============================
-       MAP CRM FIELDS
-    =============================== */
-
+    // Mapear campos CRM estándar
     for (const field of CRM_DEFAULT_FIELDS) {
-
-      const value = cleanVariables[field];
-
-      if (value !== undefined) {
-        contactData[field] = value;
+      if (cleanVariables[field] !== undefined) {
+        contactData[field] = cleanVariables[field];
       }
-
     }
 
+    /* ── ACTUALIZAR O CREAR ── */
     let contact;
 
-    /* ===============================
-       UPDATE EXISTING CONTACT
-    =============================== */
-
     if (existingContact) {
-
-      const safeContactData = { ...contactData };
-
-      // conservar datos existentes si no llegan nuevos
+      // Conservar campos existentes si no llegan nuevos
       for (const field of CRM_DEFAULT_FIELDS) {
-
-        if (
-          safeContactData[field] === undefined &&
-          existingContact[field] !== undefined
-        ) {
-          safeContactData[field] = existingContact[field];
+        if (contactData[field] === undefined && existingContact[field] !== undefined) {
+          contactData[field] = existingContact[field];
         }
-
       }
 
-      // guardar último chatbot
-      if (existingContact.chatbot_id !== session.chatbot_id) {
-        safeContactData.last_chatbot_id = session.chatbot_id;
+      // Registrar último chatbot si cambió
+      if (String(existingContact.chatbot_id) !== String(session.chatbot_id)) {
+        contactData.last_chatbot_id = session.chatbot_id;
       }
 
-      // preservar visitor_id existente
-      if (!safeContactData.visitor_id && existingContact.visitor_id) {
-        safeContactData.visitor_id = existingContact.visitor_id;
+      // Preservar visitor_id existente
+      if (!contactData.visitor_id && existingContact.visitor_id) {
+        contactData.visitor_id = existingContact.visitor_id;
       }
 
       contact = await Contact.findByIdAndUpdate(
         existingContact._id,
-        { $set: safeContactData },
+        { $set: contactData },
         { new: true, runValidators: true }
       );
 
-    }
-
-    /* ===============================
-       CREATE NEW CONTACT
-    =============================== */
-
-    else {
-
+    } else {
       contact = await Contact.create(contactData);
-
     }
 
     return contact;
 
-  }
-
-  catch (error) {
-
-    console.error(
-      "upsertContactFromSession error:",
-      error
-    );
-
+  } catch (error) {
+    console.error("upsertContactFromSession error:", error);
     return null;
-
   }
-
 };
