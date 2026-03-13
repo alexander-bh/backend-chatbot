@@ -5,8 +5,7 @@ const Chatbot = require("../models/Chatbot");
 exports.finalizeConversation = async (session) => {
 
     session.is_completed = true;
-    session.status = "completed";
-    await session.save();     
+    session.status = "completed"; 
 
     /* ================= CREAR / ACTUALIZAR CONTACTO ================= */
 

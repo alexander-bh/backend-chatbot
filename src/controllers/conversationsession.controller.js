@@ -7,9 +7,10 @@ const Chatbot = require("../models/Chatbot");
 const renderNode = require("../engine/renderNode");
 const resolveInput = require("../engine/resolveInput");
 const autoFlow = require("../engine/autoFlow");
+const ALLOWED_MODES = ["preview", "production"];
 const { finalizeConversation } = require("../helper/finalizeConversation");
 const { getFlowCache, setFlowCache } = require("../services/flowCache.service");
-const ALLOWED_MODES = ["preview", "production"];
+
 
 /* --------------------------------------------------
    START CONVERSATION
@@ -194,10 +195,16 @@ exports.nextStep = async (req, res) => {
     let node = nodesMap.get(String(session.current_node_id));
 
     if (!node) {
+      session.is_completed = true;
+      session.status = "completed";
+
       const contact = await finalizeConversation(session);
       if (contact) {
         session.contact_id = contact._id;
       }
+
+      await session.save();
+
       return res.json({
         completed: true,
         contact_id: contact?._id || null
@@ -215,10 +222,16 @@ exports.nextStep = async (req, res) => {
     node = result.node;
 
     if (!node) {
+      session.is_completed = true;
+      session.status = "completed";
+
       const contact = await finalizeConversation(session);
       if (contact) {
         session.contact_id = contact._id;
       }
+
+      await session.save();
+
       return res.json({
         completed: true,
         contact_id: contact?._id || null
@@ -234,11 +247,6 @@ exports.nextStep = async (req, res) => {
         session.status = "completed";
       }
 
-      if (session.is_abandoned) {
-        session.is_completed = false;
-        session.status = "abandoned";
-      }
-
       if (session.is_completed) {
         const contact = await finalizeConversation(session);
         if (contact) {
@@ -250,7 +258,6 @@ exports.nextStep = async (req, res) => {
 
       return res.json(renderNode(node, session._id));
     }
-
 
     /* ================= AUTO FLOW ================= */
 
@@ -266,13 +273,13 @@ exports.nextStep = async (req, res) => {
 
       session.is_completed = true;
       session.status = "completed";
-      await session.save();
 
       const contact = await finalizeConversation(session);
       if (contact) {
         session.contact_id = contact._id;
-        await session.save();      
       }
+
+      await session.save();
 
       return res.json({
         completed: true,
@@ -282,10 +289,14 @@ exports.nextStep = async (req, res) => {
 
     /* ================= GUARDAR SESIÓN ================= */
 
-
-    if (!session.is_completed) {
-      await session.save();
+    if (session.is_completed) {
+      const contact = await finalizeConversation(session);
+      if (contact) {
+        session.contact_id = contact._id;
+      }
     }
+
+    await session.save();
 
     return res.json(renderNode(finalNode, session._id));
 
