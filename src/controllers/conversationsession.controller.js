@@ -195,6 +195,23 @@ exports.nextStep = async (req, res) => {
       });
     }
 
+    if (!node._id) {
+      if (node.end_conversation) {
+        session.is_completed = true;
+      }
+      await session.save();
+
+      if (session.is_completed) {
+        const contact = await upsertContactFromSession(session);
+        if (contact) {
+          session.contact_id = contact._id;
+          await session.save();
+        }
+      }
+
+      return res.json(renderNode(node, session._id));
+    }
+
     session.current_node_id = node._id;
     await session.save();
 
