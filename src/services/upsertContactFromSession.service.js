@@ -38,12 +38,12 @@ module.exports = async function upsertContactFromSession(session) {
 
     const email =
       typeof variables.email === "string"
-        ? variables.email.toLowerCase().trim()
+        ? variables.email.toLowerCase().trim() || null
         : null;
 
     const phone =
       typeof variables.phone === "string"
-        ? variables.phone.replace(/\D/g, "")
+        ? variables.phone.replace(/\D/g, "").trim() || null
         : null;
 
     const name =
@@ -55,12 +55,11 @@ module.exports = async function upsertContactFromSession(session) {
        VALIDATE LEAD DATA
     =============================== */
 
-    const hasImportantLead = email || phone || name;
+    const hasContactInfo = Boolean(email || phone);
 
-    if (!hasImportantLead) {
+    if (!hasContactInfo) {
       return null;
     }
-
     /* ===============================
        FIND EXISTING CONTACT
     =============================== */
@@ -90,17 +89,6 @@ module.exports = async function upsertContactFromSession(session) {
         phone,
         is_deleted: { $ne: true }
       });
-
-    }
-
-    if (!existingContact && session.visitor_id) {
-
-      existingContact = await Contact.findOne({
-        account_id: session.account_id,
-        visitor_id: session.visitor_id,
-        is_deleted: { $ne: true }
-      });
-
     }
 
     /* ===============================
@@ -115,26 +103,6 @@ module.exports = async function upsertContactFromSession(session) {
     if (email) mergedVariables.email = email;
     if (phone) mergedVariables.phone = phone;
     if (name) mergedVariables.name = name;
-
-    /* ===============================
-       VALIDATE CRM DATA
-    =============================== */
-
-    const hasCRMData = CRM_DEFAULT_FIELDS.some(field => {
-
-      const value = mergedVariables[field];
-
-      if (typeof value === "string") {
-        return value.trim().length > 0;
-      }
-
-      return value !== undefined && value !== null;
-
-    });
-
-    if (!hasCRMData) {
-      return null;
-    }
 
     /* ===============================
        CLEAN VARIABLES
@@ -238,7 +206,7 @@ module.exports = async function upsertContactFromSession(session) {
       contact = await Contact.findByIdAndUpdate(
         existingContact._id,
         { $set: safeContactData },
-        { new: true }
+        { new: true, runValidators: true }
       );
 
     }

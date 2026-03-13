@@ -5,6 +5,8 @@ const { validateFlow } = require("../validators/flow.validator");
 const { ensureFlowExists } = require("../services/flowNode.service");
 const withTransactionRetry = require("../utils/withTransactionRetry");
 const flowNodeService = require("../services/flowNode.service");
+const { clearFlowCache } = require("../services/flowCache.service");
+
 const {
   isValidUrl,
   isMediaUrl,
@@ -193,6 +195,8 @@ exports.saveFlow = async (req, res) => {
 
     await withTransactionRetry(async session => {
 
+      let savedFlowId = null;
+
       const flow = await ensureFlowExists({
         flowId,
         chatbot_id,
@@ -200,6 +204,8 @@ exports.saveFlow = async (req, res) => {
         user_role: req.user.role,
         session
       });
+
+      savedFlowId = flow._id;
 
       await acquireFlowLock({
         flow_id: flow._id,
@@ -388,6 +394,9 @@ exports.saveFlow = async (req, res) => {
       await deleteMediaBatch(mediaToDelete);
     }
 
+    if (savedFlowId) {
+      clearFlowCache(savedFlowId);
+    }
 
     return res.json({
       success: true,

@@ -9,6 +9,8 @@ const resolveInput = require("../engine/resolveInput");
 const autoFlow = require("../engine/autoFlow");
 const ALLOWED_MODES = ["preview", "production"];
 const upsertContactFromSession = require("../services/upsertContactFromSession.service");
+const { getFlowCache, setFlowCache } = require("../services/flowCache.service");
+
 
 /* --------------------------------------------------
    START CONVERSATION
@@ -122,7 +124,8 @@ exports.startConversation = async (req, res) => {
       is_completed: false,
       is_abandoned: false,
       last_activity_at: new Date(),
-      history: []
+      history: [],
+      status: "active"
     });
 
     /* ================= RESPONSE ================= */
@@ -149,27 +152,66 @@ exports.nextStep = async (req, res) => {
     const { id: sessionId } = req.params;
     const { input } = req.body;
 
+    if (!mongoose.Types.ObjectId.isValid(sessionId)) {
+      return res.status(400).json({ message: "session_id inválido" });
+    }
+
     const session = await ConversationSession.findById(sessionId);
     if (!session) {
       return res.status(404).json({ message: "Sesión no encontrada" });
     }
 
+    // 🔒 evitar procesar sesiones ya terminadas
+    if (session.is_completed) {
+      return res.json({
+        completed: true,
+        session_id: session._id
+      });
+    }
+
     session.last_activity_at = new Date();
 
-    const nodes = await FlowNode.find({
-      flow_id: session.flow_id,
-      account_id: session.account_id
-    }).lean();
+    /* ================= CACHE DE NODOS ================= */
 
-    const nodesMap = new Map(nodes.map(n => [String(n._id), n]));
+    let cache = getFlowCache(session.flow_id);
+
+    if (!cache) {
+      const nodes = await FlowNode.find({
+        flow_id: session.flow_id,
+        account_id: session.account_id
+      }).lean();
+
+      cache = {
+        nodesMap: new Map(nodes.map(n => [String(n._id), n]))
+      };
+
+      setFlowCache(session.flow_id, cache);
+    }
+
+    const nodesMap = cache.nodesMap;
+
+    /* ================= NODO ACTUAL ================= */
 
     let node = nodesMap.get(String(session.current_node_id));
 
     if (!node) {
       session.is_completed = true;
+      session.status = "completed";
+
+      const contact = await upsertContactFromSession(session);
+      if (contact) {
+        session.contact_id = contact._id;
+      }
+
       await session.save();
-      return res.json({ completed: true, session_id: session._id });
+
+      return res.json({
+        completed: true,
+        contact_id: contact?._id || null
+      });
     }
+
+    /* ================= PROCESAR INPUT ================= */
 
     const result = await resolveInput(node, input, session, nodesMap);
 
@@ -181,13 +223,14 @@ exports.nextStep = async (req, res) => {
 
     if (!node) {
       session.is_completed = true;
-      await session.save();
+      session.status = "completed";
 
       const contact = await upsertContactFromSession(session);
       if (contact) {
         session.contact_id = contact._id;
-        await session.save();
       }
+
+      await session.save();
 
       return res.json({
         completed: true,
@@ -195,57 +238,67 @@ exports.nextStep = async (req, res) => {
       });
     }
 
+    /* ================= NODO SIN _ID (mensaje final) ================= */
+
     if (!node._id) {
+
       if (node.end_conversation && !session.is_abandoned) {
-        session.is_completed = true;  // solo marcar completed si NO es abandoned
+        session.is_completed = true;
+        session.status = "completed";
       }
-      await session.save();
 
       if (session.is_completed) {
         const contact = await upsertContactFromSession(session);
         if (contact) {
           session.contact_id = contact._id;
-          await session.save();
         }
       }
+
+      await session.save();
 
       return res.json(renderNode(node, session._id));
     }
 
-    session.current_node_id = node._id;
-    await session.save();
+    /* ================= AUTO FLOW ================= */
 
     const finalNode = await autoFlow(node, session, nodesMap);
 
-    // ── FIX: siempre renderizar el nodo si existe ──
-    if (finalNode) {
-      await session.save();
+    if (finalNode && finalNode._id) {
+      session.current_node_id = finalNode._id;
+    }
 
-      if (session.is_completed) {
-        const contact = await upsertContactFromSession(session);
-        if (contact) {
-          session.contact_id = contact._id;
-          await session.save();
-        }
+    /* ================= CONVERSACIÓN TERMINADA ================= */
+
+    if (!finalNode) {
+
+      session.is_completed = true;
+      session.status = "completed";
+
+      const contact = await upsertContactFromSession(session);
+      if (contact) {
+        session.contact_id = contact._id;
       }
 
-      return res.json(renderNode(finalNode, session._id));
+      await session.save();
+
+      return res.json({
+        completed: true,
+        contact_id: contact?._id || null
+      });
     }
 
-    // ── Sin nodo final: devolver completed ──
-    session.is_completed = true;
+    /* ================= GUARDAR SESIÓN ================= */
+
+    if (session.is_completed) {
+      const contact = await upsertContactFromSession(session);
+      if (contact) {
+        session.contact_id = contact._id;
+      }
+    }
+
     await session.save();
 
-    const contact = await upsertContactFromSession(session);
-    if (contact) {
-      session.contact_id = contact._id;
-      await session.save();
-    }
-
-    return res.json({
-      completed: true,
-      contact_id: contact?._id || null
-    });
+    return res.json(renderNode(finalNode, session._id));
 
   } catch (error) {
     console.error("nextStep:", error);

@@ -168,34 +168,38 @@ exports.getContactsByChatbot = async (req, res) => {
 };
 
 exports.updateStatus = async (req, res) => {
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
+
     const { id } = req.params;
     const { status } = req.body;
 
     /* =========================
        VALIDAR ID
     ========================= */
+
     if (!id || !mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        message: "ID inválido"
-      });
+      return res.status(400).json({ message: "ID inválido" });
     }
 
     /* =========================
        VALIDAR STATUS
     ========================= */
+
     const allowed = ["new", "contacted", "qualified", "lost"];
 
     if (!allowed.includes(status)) {
-      return res.status(400).json({
-        message: "Estado inválido"
-      });
+      return res.status(400).json({ message: "Estado inválido" });
     }
 
     /* =========================
        BUSCAR CONTACTO
     ========================= */
-    const contact = await Contact.findById(id);
+
+    const contact = await Contact.findById(id).session(session);
 
     if (!contact || contact.is_deleted) {
       return res.status(404).json({
@@ -204,22 +208,20 @@ exports.updateStatus = async (req, res) => {
     }
 
     /* =========================
-       REGLAS DE PERMISOS
+       PERMISOS
     ========================= */
 
     const isAdmin = req.user.role === "ADMIN";
-    const sameAccount =
-      contact.account_id &&
-      contact.account_id.toString() === req.user.account_id?.toString();
 
-    // 🧩 Si es plantilla → solo ADMIN
+    const sameAccount =
+      contact.account_id?.toString() === req.user.account_id?.toString();
+
     if (contact.is_template && !isAdmin) {
       return res.status(403).json({
         message: "Solo ADMIN puede modificar plantillas"
       });
     }
 
-    // 👤 Si es contacto normal → dueño o ADMIN
     if (!contact.is_template && !sameAccount && !isAdmin) {
       return res.status(403).json({
         message: "Sin permisos para modificar este contacto"
@@ -227,19 +229,76 @@ exports.updateStatus = async (req, res) => {
     }
 
     /* =========================
-       UPDATE
+       ACTUALIZAR CONTACTO
     ========================= */
+
     contact.status = status;
-    await contact.save();
+
+    await contact.save({ session });
+
+    /* =========================
+       MAP STATUS → CONVERSATION
+    ========================= */
+
+    let conversationUpdate = null;
+
+    if (status === "lost") {
+      conversationUpdate = {
+        is_completed: false,
+        is_abandoned: true,
+        abandoned_at: new Date()
+      };
+    }
+
+    if (status === "contacted" || status === "qualified") {
+      conversationUpdate = {
+        is_completed: true,
+        is_abandoned: false,
+        abandoned_at: null
+      };
+    }
+
+    /* =========================
+       UPDATE CONVERSATION
+    ========================= */
+
+    if (conversationUpdate && contact.session_id) {
+
+      await ConversationSession.updateOne(
+        {
+          _id: contact.session_id,
+          account_id: contact.account_id
+        },
+        { $set: conversationUpdate },
+        { session }
+      );
+
+    }
+
+    await session.commitTransaction();
 
     res.json(formatContact(contact));
 
-  } catch (error) {
+  }
+
+  catch (error) {
+
+    await session.abortTransaction();
+
     console.error("UPDATE STATUS ERROR:", error);
+
     res.status(500).json({
       message: "Error al actualizar estado"
     });
+
   }
+
+  finally {
+
+    session.endSession();
+
+  }
+
 };
 
 exports.createManualContact = async (req, res) => {
