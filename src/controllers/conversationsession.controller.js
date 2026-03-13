@@ -146,7 +146,6 @@ exports.startConversation = async (req, res) => {
 -------------------------------------------------- */
 exports.nextStep = async (req, res) => {
   try {
-
     const { id: sessionId } = req.params;
     const { input } = req.body;
 
@@ -166,7 +165,6 @@ exports.nextStep = async (req, res) => {
 
     let node = nodesMap.get(String(session.current_node_id));
 
-    // Nodo actual no existe → conversación terminada
     if (!node) {
       session.is_completed = true;
       await session.save();
@@ -181,7 +179,6 @@ exports.nextStep = async (req, res) => {
 
     node = result.node;
 
-    // ── Caso: resolveInput no encontró siguiente nodo (end_conversation) ──
     if (!node) {
       session.is_completed = true;
       await session.save();
@@ -198,30 +195,40 @@ exports.nextStep = async (req, res) => {
       });
     }
 
-    // ── Caso: hay siguiente nodo, actualizar y correr autoFlow ──
     session.current_node_id = node._id;
     await session.save();
 
     const finalNode = await autoFlow(node, session, nodesMap);
 
-    if (session.is_completed) {
+    // ── FIX: siempre renderizar el nodo si existe ──
+    if (finalNode) {
       await session.save();
 
-      const contact = await upsertContactFromSession(session);
-      if (contact) {
-        session.contact_id = contact._id;
-        await session.save();
+      if (session.is_completed) {
+        const contact = await upsertContactFromSession(session);
+        if (contact) {
+          session.contact_id = contact._id;
+          await session.save();
+        }
       }
 
-      return res.json({
-        completed: true,
-        contact_id: contact?._id || null
-      });
+      return res.json(renderNode(finalNode, session._id));
     }
 
+    // ── Sin nodo final: devolver completed ──
+    session.is_completed = true;
     await session.save();
 
-    return res.json(renderNode(finalNode, session._id));
+    const contact = await upsertContactFromSession(session);
+    if (contact) {
+      session.contact_id = contact._id;
+      await session.save();
+    }
+
+    return res.json({
+      completed: true,
+      contact_id: contact?._id || null
+    });
 
   } catch (error) {
     console.error("nextStep:", error);
