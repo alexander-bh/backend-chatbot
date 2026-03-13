@@ -9,7 +9,7 @@ module.exports = async function resolveInput(node, input, session, nodesMap) {
   const isInteractionNode = INTERACTION_NODES.includes(node.node_type);
 
   // ✅ Sin input: solo avanzar si el nodo no requiere interacción
-  if (!input) {
+  if (input === undefined || input === null) {
     if (isInputNode || isInteractionNode) {
       return { node }; // estos sí necesitan input, quedarse
     }
@@ -31,6 +31,7 @@ module.exports = async function resolveInput(node, input, session, nodesMap) {
       };
     }
     session.history.push({ node_id: node._id, question: node.content, answer: input });
+    session.markModified("history");
 
     if (node.variable_key) {
       session.variables[node.variable_key] = input;
@@ -60,6 +61,7 @@ module.exports = async function resolveInput(node, input, session, nodesMap) {
       question: node.content,
       answer: match.label
     });
+    session.markModified("history");
 
     /* POLICY LOGIC */
     if (node.node_type === "policy") {
@@ -79,7 +81,7 @@ module.exports = async function resolveInput(node, input, session, nodesMap) {
         session.abandoned_at = new Date();
         session.is_completed = false;
         session.markModified("variables");
-        session.status = "closed";
+        session.status = "abandoned";
 
         return {
           node: {
