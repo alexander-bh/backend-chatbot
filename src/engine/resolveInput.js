@@ -18,7 +18,6 @@ module.exports = async function resolveInput(node, input, session, nodesMap) {
     return { node: next ?? node };
   }
 
-  /* INPUT NODES */
   if (isInputNode) {
     const errors = validateNodeInput(node, input);
     if (errors.length) {
