@@ -264,9 +264,14 @@ exports.nextStep = async (req, res) => {
 
     if (!finalNode) {
 
+      session.is_completed = true;
+      session.status = "completed";
+      await session.save();
+
       const contact = await finalizeConversation(session);
       if (contact) {
         session.contact_id = contact._id;
+        await session.save();      
       }
 
       return res.json({
