@@ -41,7 +41,7 @@ app.use("/api/admin", require("./routes/admin.routes.js"));
 app.use("/api/chatbot-integration",require("./routes/chatbotIntegration.routes.js"));
 app.use("/api/contacts", require("./routes/contact.routes"));
 app.use("/api/analytics", require("./routes/analytics.routes.js"));
-app.use("/api/cron", require("./routes/cron.routes.js"));
+//app.use("/api/cron", require("./routes/cron.routes.js"));
 
 app.use("/api/chatbots", require("./routes/chatbots.routes.js"));
 app.use("/api/flows", require("./routes/flows.routes.js"));
