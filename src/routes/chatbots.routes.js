@@ -12,14 +12,20 @@ router.get("/", auth, role("ADMIN", "CLIENT"), chatbotController.listChatbots);
 //eliminar chatbot
 router.delete("/:id", auth, role("ADMIN", "CLIENT"), chatbotController.deleteChatbot);
 //duplicar chatbot con todo su contenido
-router.post("/:id/duplicate-full",auth,role("ADMIN", "CLIENT"),chatbotController.duplicateChatbotFull);
+router.post("/:id/duplicate-full", auth, role("ADMIN", "CLIENT"), chatbotController.duplicateChatbotFull);
 // obtener chatbot por id
-router.get("/:id",auth,role("ADMIN", "CLIENT"),chatbotController.getChatbotById);
+router.get("/:id", auth, role("ADMIN", "CLIENT"), chatbotController.getChatbotById);
 //Actualizar chatbot 
-router.put("/:id/settings",auth,conditionalUpload,chatbotController.updateChatbot);
+router.put("/:id/settings", auth, conditionalUpload, chatbotController.updateChatbot);
 // Obtener avatares disponibles
-router.get("/:id/avatars", auth,chatbotController.getAvailableAvatars);
+router.get("/:id/avatars", auth, chatbotController.getAvailableAvatars);
 // Eliminar avatar 
-router.delete("/:id/deleteAvatar",auth,chatbotController.deleteAvatar);
+router.delete("/:id/deleteAvatar", auth, chatbotController.deleteAvatar);
+// Obtener configuración de email
+router.get("/:chatbotId/email-settings", auth, chatbotController.getEmailSettings);
+// Actualizar configuración de email
+router.patch("/:chatbotId/email-settings", auth, chatbotController.updateEmailSettings);
+
+module.exports = router;
 
 module.exports = router;

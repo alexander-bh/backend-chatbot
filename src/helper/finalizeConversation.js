@@ -4,35 +4,39 @@ const Chatbot = require("../models/Chatbot");
 
 exports.finalizeConversation = async (session) => {
 
-    session.is_completed = true;
-    session.status = "completed"; 
+  session.is_completed = true;
+  session.status = "completed";
 
-    /* ================= CREAR / ACTUALIZAR CONTACTO ================= */
+  /* ================= CREAR / ACTUALIZAR CONTACTO ================= */
 
-    const contact = await upsertContactFromSession(session);
+  const contact = await upsertContactFromSession(session);
 
-    if (contact) {
-        session.contact_id = contact._id;
-    }
+  if (contact) {
+    session.contact_id = contact._id;
+  }
 
-    /* ================= GUARDAR SESIÓN ================= */
+  /* ================= GUARDAR SESIÓN ================= */
 
-    await session.save();
+  await session.save();
 
-    /* ================= VERIFICAR EMAIL SETTINGS ================= */
+  /* ================= VERIFICAR EMAIL SETTINGS ================= */
 
-    const chatbot = await Chatbot.findById(session.chatbot_id).select("email_settings");
+  const chatbot = await Chatbot
+    .findById(session.chatbot_id)
+    .select("email_settings");
 
-    const hasEmailConfig =
-        chatbot?.email_settings?.to_email &&
-        chatbot?.email_settings?.from_email;
+  const emailSettings = chatbot?.email_settings || {};
 
-    /* ================= ENVIAR EMAIL SOLO SI EXISTE CONFIG ================= */
+  const canSendEmail =
+    emailSettings.enabled === true &&
+    emailSettings.to_email &&
+    emailSettings.from_email;
 
-    if (hasEmailConfig) {
-        await sendConversationEmail(session);
-    }
+  /* ================= ENVIAR EMAIL SOLO SI ESTÁ HABILITADO ================= */
 
-    return contact;
+  if (canSendEmail) {
+    await sendConversationEmail(session);
+  }
 
+  return contact;
 };

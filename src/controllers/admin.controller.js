@@ -336,9 +336,9 @@ exports.createChatbotForUser = async (req, res) => {
       welcome_message: "Hola 👋 ¿en qué puedo ayudarte?",
       welcome_delay: 2,
       show_welcome_on_mobile: true,
-      status: "active",          // 👈 correcto
+      status: "active",        
       is_enabled: false,
-      avatar: avatarToUse,      // 👈 correcto
+      avatar: avatarToUse,      
       created_by_admin: req.user._id
     }], { session });
 
