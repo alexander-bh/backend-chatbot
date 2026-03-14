@@ -807,7 +807,6 @@ exports.updateEmailSettings = async (req, res) => {
     const update = {};
 
     if (enabled !== undefined) update["email_settings.enabled"] = enabled;
-    if (from_name !== undefined) update["email_settings.from_name"] = from_name;
     if (from_email !== undefined) update["email_settings.from_email"] = from_email;
     if (to_email !== undefined) update["email_settings.to_email"] = to_email;
     if (from_asunto !== undefined) update["email_settings.from_asunto"] = from_asunto;

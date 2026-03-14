@@ -70,7 +70,7 @@ exports.sendConversationEmail = async (session) => {
                 <tr>
                   <td style="padding:12px 0;color:#6b7280;font-size:13px;width:70px;">De:</td>
                   <td style="padding:12px 0;color:#f3f4f6;font-size:13px;font-weight:bold;">
-                    ${emailSettings.from_name || chatbot.name} ${emailSettings.from_email}
+                    ${emailSettings.from_name || chatbot.name}
                   </td>
                 </tr>
               </table>
