@@ -17,6 +17,10 @@ const EmailSettingsSchema = new Schema({
   to_email: {
     type: String,
     default: ""
+  },
+  from_asunto: {   // ← NUEVO CAMPO
+    type: String,
+    default: "Nuevo mensaje desde el chatbot"
   }
 }, { _id: false });
 

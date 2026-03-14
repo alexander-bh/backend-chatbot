@@ -12,14 +12,16 @@ exports.sendConversationEmail = async (session) => {
     if (!emailSettings.to_email) return;
 
     const vars = session.variables || {};
+    const asunto = emailSettings.from_asunto
+      || `Nueva conversación - ${chatbot.name}`;
 
     /* ================= DATOS DEL CONTACTO ================= */
 
-    const nombre    = [vars.name, vars.last_name].filter(Boolean).join(" ") || "—";
-    const telefono  = vars.phone || "—";
-    const email     = vars.email || "—";
-    const origen    = session.origin_url || "Desconocido";
-    const fecha     = new Date().toLocaleString("es-MX", { timeZone: "America/Mexico_City" });
+    const nombre = [vars.name, vars.last_name].filter(Boolean).join(" ") || "—";
+    const telefono = vars.phone || "—";
+    const email = vars.email || "—";
+    const origen = session.origin_url || "Desconocido";
+    const fecha = new Date().toLocaleString("es-MX", { timeZone: "America/Mexico_City" });
 
     /* ================= HISTORIAL ================= */
 
@@ -86,7 +88,7 @@ exports.sendConversationEmail = async (session) => {
                 <tr>
                   <td style="padding:12px 0;color:#6b7280;font-size:13px;width:70px;">Asunto:</td>
                   <td style="padding:12px 0;color:#f3f4f6;font-size:13px;font-weight:bold;">
-                    Nueva conversación - ${chatbot.name}
+                    ${asunto}
                   </td>
                 </tr>
               </table>
@@ -145,7 +147,7 @@ exports.sendConversationEmail = async (session) => {
     `;
 
     const mailOptions = {
-      from: `"${emailSettings.from_name || "Chatbot"}" <${emailSettings.from_email || process.env.SMTP_USER}>`,
+      from: `"${emailSettings.from_name || "Chatbot"}" <${process.env.SMTP_USER}>`,
       to: emailSettings.to_email,
       subject: `Nueva conversación - ${chatbot.name}`,
       html: htmlContent

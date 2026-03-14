@@ -800,22 +800,24 @@ exports.updateEmailSettings = async (req, res) => {
       enabled,
       from_name,
       from_email,
-      to_email
+      to_email,
+      from_asunto
     } = req.body;
+
+    const update = {};
+
+    if (enabled !== undefined) update["email_settings.enabled"] = enabled;
+    if (from_name !== undefined) update["email_settings.from_name"] = from_name;
+    if (from_email !== undefined) update["email_settings.from_email"] = from_email;
+    if (to_email !== undefined) update["email_settings.to_email"] = to_email;
+    if (from_asunto !== undefined) update["email_settings.from_asunto"] = from_asunto;
 
     const chatbot = await Chatbot.findOneAndUpdate(
       {
         _id: chatbotId,
         account_id: req.user.account_id
       },
-      {
-        $set: {
-          "email_settings.enabled": enabled,
-          "email_settings.from_name": from_name,
-          "email_settings.from_email": from_email,
-          "email_settings.to_email": to_email
-        }
-      },
+      { $set: update },
       { new: true }
     );
 
