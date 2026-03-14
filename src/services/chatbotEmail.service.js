@@ -147,7 +147,7 @@ exports.sendConversationEmail = async (session) => {
     `;
 
     const mailOptions = {
-      from: `"${emailSettings.from_name || "Chatbot"}" <${process.env.SMTP_USER}>`,
+      from: `"${emailSettings.from_name || "Chatbot"}`,
       to: emailSettings.to_email,
       subject: `Nueva conversación - ${chatbot.name}`,
       html: htmlContent
