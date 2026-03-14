@@ -241,7 +241,6 @@ exports.getChatbotById = async (req, res) => {
   }
 };
 
-
 // ═══════════════════════════════════════════════════════════
 // ACTUALIZAR CHATBOT
 // ═══════════════════════════════════════════════════════════
@@ -783,5 +782,100 @@ exports.deleteAvatar = async (req, res) => {
   } catch (error) {
     console.error("DELETE AVATAR ERROR:", error);
     res.status(500).json({ message: "Error al eliminar avatar" });
+  }
+};
+
+exports.updateEmailSettings = async (req, res) => {
+  try {
+
+    if (!req.user?.account_id) {
+      return res.status(401).json({
+        message: "Usuario no autenticado"
+      });
+    }
+
+    const { chatbotId } = req.params;
+
+    const {
+      enabled,
+      from_name,
+      from_email,
+      to_email
+    } = req.body;
+
+    const chatbot = await Chatbot.findOneAndUpdate(
+      {
+        _id: chatbotId,
+        account_id: req.user.account_id
+      },
+      {
+        $set: {
+          "email_settings.enabled": enabled,
+          "email_settings.from_name": from_name,
+          "email_settings.from_email": from_email,
+          "email_settings.to_email": to_email
+        }
+      },
+      { new: true }
+    );
+
+    if (!chatbot) {
+      return res.status(404).json({
+        message: "Chatbot no encontrado"
+      });
+    }
+
+    res.json({
+      message: "Configuración de email actualizada",
+      email_settings: chatbot.email_settings
+    });
+
+  } catch (error) {
+
+    console.error("UPDATE EMAIL SETTINGS ERROR:", error);
+
+    res.status(500).json({
+      message: "Error al actualizar configuración de correo"
+    });
+
+  }
+};
+
+exports.getEmailSettings = async (req, res) => {
+  try {
+
+    if (!req.user?.account_id) {
+      return res.status(401).json({
+        message: "Usuario no autenticado"
+      });
+    }
+
+    const { chatbotId } = req.params;
+
+    const chatbot = await Chatbot.findOne(
+      {
+        _id: chatbotId,
+        account_id: req.user.account_id
+      }
+    ).select("email_settings");
+
+    if (!chatbot) {
+      return res.status(404).json({
+        message: "Chatbot no encontrado"
+      });
+    }
+
+    res.json({
+      email_settings: chatbot.email_settings
+    });
+
+  } catch (error) {
+
+    console.error("GET EMAIL SETTINGS ERROR:", error);
+
+    res.status(500).json({
+      message: "Error al obtener configuración de correo"
+    });
+
   }
 };

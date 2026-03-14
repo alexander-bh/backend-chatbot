@@ -2,6 +2,10 @@ const { Schema, model, models } = require("mongoose");
 const crypto = require("crypto");
 
 const EmailSettingsSchema = new Schema({
+  enabled: {
+    type: Boolean,
+    default: false
+  },
   from_name: {
     type: String,
     default: "Chatbot"
@@ -16,7 +20,6 @@ const EmailSettingsSchema = new Schema({
   }
 }, { _id: false });
 
-
 const ChatbotSchema = new Schema({
   account_id: {
     type: Schema.Types.ObjectId,
@@ -29,8 +32,10 @@ const ChatbotSchema = new Schema({
   name: { type: String, required: true },
 
   email_settings: {
-    type: EmailSettingsSchema,
-    default: () => ({})
+    enabled: false,
+    from_name: "Chatbot",
+    from_email: "",
+    to_email: ""
   },
 
   status: {
