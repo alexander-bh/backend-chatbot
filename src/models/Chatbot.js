@@ -12,7 +12,7 @@ const EmailSettingsSchema = new Schema({
   },
   from_email: {
     type: String,
-    default: ""
+    default: "chat.bot.proyect.2026@gmail.com"
   },
   to_email: {
     type: String,
