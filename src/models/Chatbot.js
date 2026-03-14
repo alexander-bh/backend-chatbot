@@ -32,10 +32,8 @@ const ChatbotSchema = new Schema({
   name: { type: String, required: true },
 
   email_settings: {
-    enabled: false,
-    from_name: "Chatbot",
-    from_email: "",
-    to_email: ""
+    type: EmailSettingsSchema,
+    default: () => ({})
   },
 
   status: {
