@@ -208,8 +208,8 @@ exports.getInstallScript = async (req, res) => {
   iframe.style.cssText = [
     "position:fixed",
     ${positionStyles},
-    "width:90px",
-    "height:90px",
+    "width:95px",
+    "height:95px",
     "border:none",
     "z-index:2147483647",
     "background:transparent",
