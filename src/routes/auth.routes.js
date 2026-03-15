@@ -2,7 +2,7 @@ const router = require("express").Router();
 const authCtrl = require("../controllers/auth.controller");
 const auth = require("../middlewares/auth.middleware");
 const role = require("../middlewares/role.middleware");
-const forgotLimiter = require("../middlewares/publicRateLimit");
+const {forgotLimiter} = require("../middlewares/publicRateLimit");
 
 // Recuperación de contraseña (SIN auth)
 router.post("/forgot-password", forgotLimiter, authCtrl.forgotPassword);
