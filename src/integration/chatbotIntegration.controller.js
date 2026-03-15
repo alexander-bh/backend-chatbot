@@ -103,6 +103,7 @@ exports.getInstallScript = async (req, res) => {
     const safeDomain = encodeURIComponent(domain);
     const position = chatbot.position || "bottom-right";
     const positionStyles = getPositionStyles(position);
+    const secondaryColor = chatbot.secondary_color || "#06070B";
  
     res.type("application/javascript");
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
@@ -118,6 +119,8 @@ exports.getInstallScript = async (req, res) => {
   window.__CHATBOT_INSTALLED__ = true;
  
   var POSITION = "${position}";
+  var SECONDARYCOLOR = "${secondaryColor}"
+
  
   /* ── Welcome bubble ── */
   var welcomeEl = null;
@@ -143,7 +146,7 @@ function createWelcome(message) {
     "max-width:260px",
     "padding:14px 18px",
     "background:white",
-    "color:#0f172a",
+    "color:" + SECONDARYCOLOR,           
     "font-size:14px",
     "font-weight:600",
     "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
