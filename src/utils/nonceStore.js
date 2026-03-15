@@ -97,14 +97,12 @@ async function getStore() {
       client.on("error", (err) => console.error("Redis error:", err));
       await client.connect();
       _store = new RedisStore(client);
-      console.log("✅ NonceStore: usando Redis");
     } catch (err) {
       console.warn("⚠️  NonceStore: Redis falló, usando memoria:", err.message);
       _store = new MemoryStore();
     }
   } else {
     _store = new MemoryStore();
-    console.log("ℹ️  NonceStore: usando memoria (single-instance)");
   }
 
   return _store;
