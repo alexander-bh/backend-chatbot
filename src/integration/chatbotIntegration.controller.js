@@ -140,7 +140,7 @@ exports.getInstallScript = async (req, res) => {
 
     el.style.cssText = [
       "position:fixed",
-      "z-index:2147483646",
+      "z-index:2147483648",
       "max-width:280px",
       "padding:14px 18px",
       "background:white",
