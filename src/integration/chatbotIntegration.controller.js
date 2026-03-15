@@ -208,8 +208,8 @@ exports.getInstallScript = async (req, res) => {
   iframe.style.cssText = [
     "position:fixed",
     ${positionStyles},
-    "width:95px",
-    "height:95px",
+    "width:80px",
+    "height:80px",
     "border:none",
     "z-index:2147483647",
     "background:transparent",
@@ -232,12 +232,13 @@ exports.getInstallScript = async (req, res) => {
   });
 
   document.body.appendChild(iframe);
-
   /* ── Listener único para todos los mensajes ── */
+  var _welcomeShownKey = "__chatbot_welcome_${public_id}__";
+
   window.addEventListener("message", function(e) {
     if (!e.data || !e.data.type) return;
 
-    /* Welcome */
+    /* Welcome — renderizar burbuja en el padre */
     if (e.data.type === "CHATBOT_WELCOME") {
       if (e.data.visible && e.data.message) {
         if (!iframe.contentDocument || iframe.contentDocument.readyState !== "complete") {
@@ -248,6 +249,25 @@ exports.getInstallScript = async (req, res) => {
       } else {
         hideWelcome();
       }
+      return;
+    }
+
+    /* Welcome Request — el widget pregunta si puede mostrar el welcome */
+    if (e.data.type === "CHATBOT_WELCOME_REQUEST") {
+      var alreadySeen = sessionStorage.getItem(_welcomeShownKey);
+      iframe.contentWindow.postMessage({
+        type: "CHATBOT_WELCOME_PERMISSION",
+        allowed: !alreadySeen
+      }, "*");
+      if (!alreadySeen) {
+        sessionStorage.setItem(_welcomeShownKey, "1");
+      }
+      return;
+    }
+
+    /* Welcome Seen — el usuario abrió el chat */
+    if (e.data.type === "CHATBOT_WELCOME_SEEN") {
+      sessionStorage.setItem(_welcomeShownKey, "1");
       return;
     }
 
@@ -320,7 +340,7 @@ exports.getInstallScript = async (req, res) => {
     }
   });
 
-  // ── NUEVO: MutationObserver para re-insertar si la SPA limpia el DOM ──
+  // ── MutationObserver para re-insertar si la SPA limpia el DOM ──
   var _chatbotObserver = new MutationObserver(function() {
     if (!document.getElementById('__chatbot_iframe__')) {
       document.body.appendChild(iframe);
@@ -331,7 +351,8 @@ exports.getInstallScript = async (req, res) => {
   });
   _chatbotObserver.observe(document.body, { childList: true });
 
-})();`);
+})();
+ `);
   } catch (err) {
     console.error("INSTALL SCRIPT ERROR:", err);
     res.status(500).send("// Error interno");
