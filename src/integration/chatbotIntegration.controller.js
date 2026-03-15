@@ -116,7 +116,10 @@ exports.getInstallScript = async (req, res) => {
     res.type("application/javascript");
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     res.setHeader("Pragma", "no-cache");
-    res.setHeader("Content-Security-Policy", `default-src 'none'`);
+    res.setHeader(
+      "Content-Security-Policy",
+      "default-src 'none'; script-src 'self'; img-src * data:; style-src 'unsafe-inline';"
+    );
 
 
     res.send(`(function(){ 
@@ -132,6 +135,7 @@ exports.getInstallScript = async (req, res) => {
   /* ── Welcome bubble ── */
   var welcomeEl = null;
   var pendingWelcome = null;
+  var iframeLoaded = false;
 
   function createWelcome(message) {
     var el = document.createElement("div");
@@ -224,43 +228,54 @@ exports.getInstallScript = async (req, res) => {
 
   /* ── load: despachar welcome pendiente DESPUÉS de que iframe cargó ── */
   iframe.addEventListener("load", function() {
+    iframeLoaded = true;
+
     if (pendingWelcome) {
       var msg = pendingWelcome;
       pendingWelcome = null;
       setTimeout(function() { showWelcome(msg); }, 300);
     }
   });
-
+  
   document.body.appendChild(iframe);
   /* ── Listener único para todos los mensajes ── */
   var _welcomeShownThisLoad = false;
+  var TRUSTED_ORIGIN = new URL("${baseUrl}").origin;
 
   window.addEventListener("message", function(e) {
-    if (!e.data || !e.data.type) return;
+    if (e.origin !== TRUSTED_ORIGIN) return;
+  if (!e.data || !e.data.type) return;
 
-    /* Welcome — renderizar burbuja en el padre */
-    if (e.data.type === "CHATBOT_WELCOME") {
-      if (e.data.visible && e.data.message) {
-        if (!iframe.contentDocument || iframe.contentDocument.readyState !== "complete") {
-          pendingWelcome = e.data.message;
-        } else {
-          showWelcome(e.data.message);
-        }
+  if (e.data.type === "CHATBOT_WELCOME") {
+
+    if (e.data.visible && e.data.message) {
+
+      if (!iframeLoaded) {
+        pendingWelcome = e.data.message;
       } else {
-        hideWelcome();
+        showWelcome(e.data.message);
       }
-      return;
+
+    } else {
+      hideWelcome();
     }
 
-    /* Welcome Request — el widget pregunta si puede mostrar el welcome */
-    if (e.data.type === "CHATBOT_WELCOME_REQUEST") {
+    return;
+  }
+
+     if (e.data.type === "CHATBOT_WELCOME_REQUEST") {
+
+    if (iframe.contentWindow) {
       iframe.contentWindow.postMessage({
         type: "CHATBOT_WELCOME_PERMISSION",
         allowed: !_welcomeShownThisLoad
-      }, "*");
-      if (!_welcomeShownThisLoad) _welcomeShownThisLoad = true;
-      return;
+      }, TRUSTED_ORIGIN);
     }
+
+    if (!_welcomeShownThisLoad) _welcomeShownThisLoad = true;
+    return;
+  }
+
 
     if (e.data.type === "CHATBOT_WELCOME_SEEN") {
       _welcomeShownThisLoad = true;
@@ -339,6 +354,7 @@ exports.getInstallScript = async (req, res) => {
   // ── MutationObserver para re-insertar si la SPA limpia el DOM ──
   var _chatbotObserver = new MutationObserver(function() {
     if (!document.getElementById('__chatbot_iframe__')) {
+      iframeLoaded = false;
       document.body.appendChild(iframe);
     }
     if (welcomeEl && !document.body.contains(welcomeEl)) {
