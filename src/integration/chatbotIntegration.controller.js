@@ -65,82 +65,68 @@ exports.getInstallScript = async (req, res) => {
   try {
     const { public_id } = req.params;
     const token = req.query.t;
-
+ 
     const chatbot = await Chatbot.findOne({
       public_id,
       status: "active",
       is_enabled: true
     }).lean();
-
+ 
     if (!chatbot) return res.status(404).send("// Chatbot no encontrado");
-
+ 
     if (!token || !chatbot.install_token) {
       return res.status(403).send("// Token inválido");
     }
-
+ 
     const tokenMatch = safeCompare(
       crypto.createHash("sha256").update(token).digest("hex"),
       crypto.createHash("sha256").update(chatbot.install_token).digest("hex")
     );
-
+ 
     if (!tokenMatch) return res.status(403).send("// Token inválido");
-
+ 
     const domain = extractDomain(req);
     if (!domain) return res.status(403).send("// Dominio no detectable");
-
+ 
     if (!isDomainAllowed(chatbot, domain)) {
       return res.status(403).send("// Dominio no autorizado");
     }
-
+ 
     if (chatbot.installation_status !== "verified") {
       await Chatbot.updateOne(
         { _id: chatbot._id },
-        {
-          $set: {
-            installation_status: "verified",
-            updated_at: new Date()
-          }
-        }
+        { $set: { installation_status: "verified", updated_at: new Date() } }
       );
     }
-
+ 
     const baseUrl = getBaseUrl();
     const safeDomain = encodeURIComponent(domain);
-
-    // ✅ Leer position con fallback
     const position = chatbot.position || "bottom-right";
-
-    // ✅ Calcular estilos iniciales según posición
-    const positionStyles = getPositionStyles(position, false);
-
+    const positionStyles = getPositionStyles(position);
+ 
     res.type("application/javascript");
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     res.setHeader("Pragma", "no-cache");
-    res.setHeader(
-      "Content-Security-Policy",
-      "default-src 'none'; script-src 'self'; img-src * data:; style-src 'unsafe-inline';"
-    );
-
-
-    res.send(`(function(){ 
+    res.setHeader("Content-Security-Policy", `default-src 'none'`);
+ 
+    res.send(`(function(){
   if (window.__CHATBOT_INSTALLED__) {
     var ex = document.getElementById('__chatbot_iframe__');
     if (ex) return;
     window.__CHATBOT_INSTALLED__ = false;
   }
   window.__CHATBOT_INSTALLED__ = true;
-
+ 
   var POSITION = "${position}";
-
+ 
   /* ── Welcome bubble ── */
   var welcomeEl = null;
   var pendingWelcome = null;
-  var iframeLoaded = false;
-
+ 
   function createWelcome(message) {
     var el = document.createElement("div");
     var isLeft = POSITION === "bottom-left";
-
+ 
     el.style.cssText = [
       "position:fixed",
       "z-index:2147483646",
@@ -164,7 +150,7 @@ exports.getInstallScript = async (req, res) => {
       isLeft ? "transform:translateX(-10px) scale(0.97)"
              : "transform:translateX(10px) scale(0.97)"
     ].join(";");
-
+ 
     var arrow = document.createElement("div");
     arrow.style.cssText = [
       "position:absolute",
@@ -175,7 +161,7 @@ exports.getInstallScript = async (req, res) => {
         ? "left:-8px;top:50%;transform:translateY(-50%) rotate(45deg);border-left:1.5px solid #e2e8f0;border-bottom:1.5px solid #e2e8f0"
         : "right:-8px;top:50%;transform:translateY(-50%) rotate(45deg);border-right:1.5px solid #e2e8f0;border-top:1.5px solid #e2e8f0"
     ].join(";");
-
+ 
     el.appendChild(arrow);
     var text = document.createElement("span");
     text.textContent = message;
@@ -183,7 +169,7 @@ exports.getInstallScript = async (req, res) => {
     document.body.appendChild(el);
     return el;
   }
-
+ 
   function showWelcome(message) {
     if (welcomeEl) { welcomeEl.remove(); welcomeEl = null; }
     welcomeEl = createWelcome(message);
@@ -195,7 +181,7 @@ exports.getInstallScript = async (req, res) => {
       });
     });
   }
-
+ 
   function hideWelcome() {
     if (!welcomeEl) return;
     welcomeEl.style.opacity = "0";
@@ -204,8 +190,8 @@ exports.getInstallScript = async (req, res) => {
     welcomeEl = null;
     setTimeout(function() { if (el.parentNode) el.remove(); }, 400);
   }
-
-  /* ── iframe — declarado ANTES de usarlo ── */
+ 
+  /* ── iframe ── */
   var iframe = document.createElement("iframe");
   iframe.id = "__chatbot_iframe__";
   iframe.src = "${baseUrl}/api/chatbot-integration/embed/${public_id}?d=${safeDomain}";
@@ -222,73 +208,68 @@ exports.getInstallScript = async (req, res) => {
     "border-radius:50%",
     "transition:width 0.3s ease,height 0.3s ease,border-radius 0.3s ease,bottom 0.3s ease,right 0.3s ease,left 0.3s ease,top 0.3s ease"
   ].join(";");
-
+ 
   iframe.sandbox = "allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation";
   iframe.setAttribute("allow", "clipboard-write");
-
-  /* ── load: despachar welcome pendiente DESPUÉS de que iframe cargó ── */
+ 
+  /* ── FIX: declarar iframeLoaded ANTES de usarlo ── */
+  var iframeLoaded = false;
+ 
   iframe.addEventListener("load", function() {
-    iframeLoaded = true;
-
+    iframeLoaded = true; // ← marcar como cargado
     if (pendingWelcome) {
       var msg = pendingWelcome;
       pendingWelcome = null;
       setTimeout(function() { showWelcome(msg); }, 300);
     }
   });
-  
+ 
   document.body.appendChild(iframe);
-  /* ── Listener único para todos los mensajes ── */
+ 
+  /* ── Control de welcome — basado en esta carga de página ── */
   var _welcomeShownThisLoad = false;
-  var TRUSTED_ORIGIN = new URL("${baseUrl}").origin;
-
+ 
+  /* ── Listener único para todos los mensajes ── */
   window.addEventListener("message", function(e) {
-    if (e.origin !== TRUSTED_ORIGIN) return;
-  if (!e.data || !e.data.type) return;
-
-  if (e.data.type === "CHATBOT_WELCOME") {
-
-    if (e.data.visible && e.data.message) {
-
-      if (!iframeLoaded) {
-        pendingWelcome = e.data.message;
+    if (!e.data || !e.data.type) return;
+ 
+    /* Welcome — renderizar burbuja en el padre */
+    if (e.data.type === "CHATBOT_WELCOME") {
+      if (e.data.visible && e.data.message) {
+        if (!iframeLoaded) {
+          pendingWelcome = e.data.message; // espera a que cargue el iframe
+        } else {
+          showWelcome(e.data.message);     // muestra directo
+        }
       } else {
-        showWelcome(e.data.message);
+        hideWelcome();
       }
-
-    } else {
-      hideWelcome();
+      return;
     }
-
-    return;
-  }
-
-     if (e.data.type === "CHATBOT_WELCOME_REQUEST") {
-
-    if (iframe.contentWindow) {
+ 
+    /* Welcome Request — el widget pregunta si puede mostrar el welcome */
+    if (e.data.type === "CHATBOT_WELCOME_REQUEST") {
       iframe.contentWindow.postMessage({
         type: "CHATBOT_WELCOME_PERMISSION",
         allowed: !_welcomeShownThisLoad
-      }, TRUSTED_ORIGIN);
+      }, "*");
+      if (!_welcomeShownThisLoad) _welcomeShownThisLoad = true;
+      return;
     }
-
-    if (!_welcomeShownThisLoad) _welcomeShownThisLoad = true;
-    return;
-  }
-
-
+ 
+    /* Welcome Seen — el usuario abrió el chat */
     if (e.data.type === "CHATBOT_WELCOME_SEEN") {
       _welcomeShownThisLoad = true;
       return;
     }
-
+ 
     /* Resize */
     if (e.data.type === "CHATBOT_RESIZE") {
       if (e.data.open) {
         hideWelcome();
         iframe.style.borderRadius = "16px";
         iframe.style.overflow     = "visible";
-
+ 
         var isMobile = window.innerWidth <= 480;
         if (isMobile) {
           iframe.style.width  = "100vw";
@@ -302,7 +283,7 @@ exports.getInstallScript = async (req, res) => {
           var h = Math.min(680, window.innerHeight - 60);
           iframe.style.width  = w + "px";
           iframe.style.height = h + "px";
-
+ 
           if (POSITION === "bottom-left") {
             iframe.style.bottom    = "20px";
             iframe.style.left      = "20px";
@@ -323,14 +304,14 @@ exports.getInstallScript = async (req, res) => {
             iframe.style.transform = "";
           }
         }
-
+ 
       } else {
         iframe.style.width        = "80px";
         iframe.style.height       = "80px";
         iframe.style.borderRadius = "50%";
         iframe.style.overflow     = "hidden";
         iframe.style.transform    = "";
-
+ 
         if (POSITION === "bottom-left") {
           iframe.style.bottom = "20px";
           iframe.style.left   = "20px";
@@ -350,11 +331,10 @@ exports.getInstallScript = async (req, res) => {
       }
     }
   });
-
-  // ── MutationObserver para re-insertar si la SPA limpia el DOM ──
+ 
+  /* ── MutationObserver para re-insertar si la SPA limpia el DOM ── */
   var _chatbotObserver = new MutationObserver(function() {
     if (!document.getElementById('__chatbot_iframe__')) {
-      iframeLoaded = false;
       document.body.appendChild(iframe);
     }
     if (welcomeEl && !document.body.contains(welcomeEl)) {
@@ -362,9 +342,9 @@ exports.getInstallScript = async (req, res) => {
     }
   });
   _chatbotObserver.observe(document.body, { childList: true });
-
-})();
- `);
+ 
+})();`);
+ 
   } catch (err) {
     console.error("INSTALL SCRIPT ERROR:", err);
     res.status(500).send("// Error interno");
