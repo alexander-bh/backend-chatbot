@@ -597,8 +597,18 @@ exports.removeAllowedDomain = async (req, res) => {
 ======================================================= */
 exports.InstallationCode = async (req, res) => {
   try {
+    if (!req.user) return res.status(401).json({ error: "No autorizado" });
+
     const { public_id } = req.params;
-    const chatbot = await Chatbot.findOne({ public_id });
+
+    // ✅ Filtrar por cuenta del usuario autenticado
+    const query = { public_id };
+    if (req.user.role !== "ADMIN") {
+      if (!req.user.account_id) return res.status(401).json({ error: "Cuenta inválida" });
+      query.account_id = req.user.account_id;
+    }
+
+    const chatbot = await Chatbot.findOne(query);
     if (!chatbot) return res.status(404).json({ error: "Chatbot no encontrado" });
 
     const baseUrl = getBaseUrl();
