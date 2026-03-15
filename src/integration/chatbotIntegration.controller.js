@@ -53,7 +53,6 @@ function safeCompare(a, b) {
   }
 }
 
-
 /* =======================================================
    1) GET INSTALL SCRIPT  →  /:public_id/install
    
@@ -121,7 +120,11 @@ exports.getInstallScript = async (req, res) => {
 
 
     res.send(`(function(){ 
-  if (window.__CHATBOT_INSTALLED__) return;
+  if (window.__CHATBOT_INSTALLED__) {
+    var ex = document.getElementById('__chatbot_iframe__');
+    if (ex) return;
+    window.__CHATBOT_INSTALLED__ = false;
+  }
   window.__CHATBOT_INSTALLED__ = true;
 
   var POSITION = "${position}";
@@ -200,6 +203,7 @@ exports.getInstallScript = async (req, res) => {
 
   /* ── iframe — declarado ANTES de usarlo ── */
   var iframe = document.createElement("iframe");
+  iframe.id = "__chatbot_iframe__";
   iframe.src = "${baseUrl}/api/chatbot-integration/embed/${public_id}?d=${safeDomain}";
   iframe.style.cssText = [
     "position:fixed",
@@ -316,10 +320,18 @@ exports.getInstallScript = async (req, res) => {
     }
   });
 
+  // ── NUEVO: MutationObserver para re-insertar si la SPA limpia el DOM ──
+  var _chatbotObserver = new MutationObserver(function() {
+    if (!document.getElementById('__chatbot_iframe__')) {
+      document.body.appendChild(iframe);
+    }
+    if (welcomeEl && !document.body.contains(welcomeEl)) {
+      document.body.appendChild(welcomeEl);
+    }
+  });
+  _chatbotObserver.observe(document.body, { childList: true });
+
 })();`);
-
-
-
   } catch (err) {
     console.error("INSTALL SCRIPT ERROR:", err);
     res.status(500).send("// Error interno");
