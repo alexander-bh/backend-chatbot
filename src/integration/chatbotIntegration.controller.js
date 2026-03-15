@@ -127,23 +127,8 @@ function createWelcome(message) {
   var el = document.createElement("div");
   var isLeft   = POSITION === "bottom-left";
   var isMiddle = POSITION === "middle-right";
-
-  // ── Posición horizontal ──
-  // bottom-left:  FAB está a la izquierda → burbuja va a la DERECHA del FAB
-  //               left: 20px(FAB) + 80px(ancho) + 12px(gap) = 112px
-  // bottom-right: FAB está a la derecha → burbuja va a la IZQUIERDA
-  //               right: 20px(margen) + 80px(FAB) + 12px(gap) = 112px
-  // middle-right: igual que bottom-right
   var hPos = isLeft ? "left:112px" : "right:112px";
-
-  // ── Posición vertical ──
-  // bottom-left / bottom-right: alineada con el centro del FAB
-  //   FAB: bottom:20px, height:80px → centro en bottom: 20 + 40 = 60px
-  //   burbuja aprox 52px alto → bottom: 60 - 26 = 34px
-  // middle-right: centrado verticalmente en la pantalla
   var vPos = isMiddle ? "top:50%" : "bottom:34px";
-
-  // ── Transform inicial (animación entrada) ──
   var transformInit = isMiddle
     ? (isLeft
         ? "transform:translateX(-10px) translateY(-50%) scale(0.97)"
@@ -185,9 +170,9 @@ function createWelcome(message) {
     "width:14px",
     "height:14px",
     "background:white",
-    isLeft
-      ? "right:-8px;top:50%;transform:translateY(-50%) rotate(45deg);border-right:1.5px solid #e2e8f0;border-top:1.5px solid #e2e8f0"
-      : "right:-8px;top:50%;transform:translateY(-50%) rotate(45deg);border-right:1.5px solid #e2e8f0;border-top:1.5px solid #e2e8f0"
+  isLeft
+    ? "left:-8px;top:50%;transform:translateY(-50%) rotate(45deg);border-left:1.5px solid #e2e8f0;border-bottom:1.5px solid #e2e8f0"
+    : "right:-8px;top:50%;transform:translateY(-50%) rotate(45deg);border-right:1.5px solid #e2e8f0;border-top:1.5px solid #e2e8f0"
   ].join(";");
 
   el.appendChild(arrow);
