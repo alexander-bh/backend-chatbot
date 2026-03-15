@@ -126,7 +126,18 @@ exports.getInstallScript = async (req, res) => {
   function createWelcome(message) {
     var el = document.createElement("div");
     var isLeft = POSITION === "bottom-left";
- 
+    var isMiddle = POSITION === "middle-right";
+
+    // ✅ Calcular posición vertical según donde está el FAB
+    var verticalStyle;
+    if (isMiddle) {
+      // middle-right: centrado verticalmente, la burbuja va al lado
+      verticalStyle = "top:50%;transform-origin:right center";
+    } else {
+      // bottom-right / bottom-left: 20px base + 80px FAB + 10px gap
+      verticalStyle = "bottom:110px";
+    }
+
     el.style.cssText = [
       "position:fixed",
       "z-index:2147483646",
@@ -145,12 +156,15 @@ exports.getInstallScript = async (req, res) => {
       "pointer-events:none",
       "cursor:default",
       "transition:opacity 0.35s ease,transform 0.35s ease",
-      "bottom:110px",
+      verticalStyle,
       isLeft ? "left:20px" : "right:20px",
-      isLeft ? "transform:translateX(-10px) scale(0.97)"
-             : "transform:translateX(10px) scale(0.97)"
+      isMiddle
+        ? "transform:translateX(-10px) translateY(-50%) scale(0.97)"
+        : (isLeft
+            ? "transform:translateX(-10px) scale(0.97)"
+            : "transform:translateX(10px) scale(0.97)")
     ].join(";");
- 
+
     var arrow = document.createElement("div");
     arrow.style.cssText = [
       "position:absolute",
@@ -161,7 +175,7 @@ exports.getInstallScript = async (req, res) => {
         ? "left:-8px;top:50%;transform:translateY(-50%) rotate(45deg);border-left:1.5px solid #e2e8f0;border-bottom:1.5px solid #e2e8f0"
         : "right:-8px;top:50%;transform:translateY(-50%) rotate(45deg);border-right:1.5px solid #e2e8f0;border-top:1.5px solid #e2e8f0"
     ].join(";");
- 
+
     el.appendChild(arrow);
     var text = document.createElement("span");
     text.textContent = message;
@@ -173,11 +187,15 @@ exports.getInstallScript = async (req, res) => {
   function showWelcome(message) {
     if (welcomeEl) { welcomeEl.remove(); welcomeEl = null; }
     welcomeEl = createWelcome(message);
+    var isMiddle = POSITION === "middle-right";
     requestAnimationFrame(function() {
       requestAnimationFrame(function() {
         if (!welcomeEl) return;
         welcomeEl.style.opacity = "1";
-        welcomeEl.style.transform = "translateX(0) scale(1)";
+        // ✅ Mantener el translateY(-50%) en middle-right al mostrar
+        welcomeEl.style.transform = isMiddle
+          ? "translateX(0) translateY(-50%) scale(1)"
+          : "translateX(0) scale(1)";
       });
     });
   }
