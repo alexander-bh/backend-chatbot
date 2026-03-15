@@ -124,80 +124,72 @@ exports.getInstallScript = async (req, res) => {
   var pendingWelcome = null;
  
   function createWelcome(message) {
-    var el = document.createElement("div");
-    var isLeft = POSITION === "bottom-left";
-    var isMiddle = POSITION === "middle-right";
+  var el = document.createElement("div");
+  var isLeft = POSITION === "bottom-left";
+  var isMiddle = POSITION === "middle-right";
 
-    // ✅ Calcular posición vertical según donde está el FAB
-    var verticalStyle;
-    if (isMiddle) {
-      // middle-right: centrado verticalmente, la burbuja va al lado
-      verticalStyle = "top:50%;transform-origin:right center";
-    } else {
-      // bottom-right / bottom-left: 20px base + 80px FAB + 10px gap
-      verticalStyle = "bottom:110px";
-    }
+  el.style.cssText = [
+    "position:fixed",
+    "z-index:2147483648",
+    "max-width:260px",
+    "padding:14px 18px",
+    "background:white",
+    "color:#0f172a",
+    "font-size:14px",
+    "font-weight:600",
+    "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
+    "line-height:1.5",
+    "border-radius:18px",
+    "border:1.5px solid #e2e8f0",
+    "box-shadow:0 4px 20px rgba(0,0,0,0.10),0 1px 4px rgba(0,0,0,0.06)",
+    "opacity:0",
+    "pointer-events:none",
+    "cursor:default",
+    "transition:opacity 0.35s ease,transform 0.35s ease",
+    // ✅ Posición vertical según modo
+    isMiddle ? "top:50%" : "bottom:110px",
+    // ✅ Posición horizontal — dejar espacio para el FAB (80px) + margen (20px) + gap (12px)
+    isLeft  ? "left:112px"  : "right:112px",
+    // ✅ Transform inicial para animación de entrada
+    isMiddle
+      ? (isLeft ? "transform:translateX(-10px) translateY(-50%) scale(0.97)"
+                : "transform:translateX(10px) translateY(-50%) scale(0.97)")
+      : (isLeft ? "transform:translateX(-10px) scale(0.97)"
+                : "transform:translateX(10px) scale(0.97)")
+  ].join(";");
 
-    el.style.cssText = [
-      "position:fixed",
-      "z-index:2147483648",
-      "max-width:280px",
-      "padding:14px 18px",
-      "background:white",
-      "color:#0f172a",
-      "font-size:14px",
-      "font-weight:600",
-      "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
-      "line-height:1.5",
-      "border-radius:18px",
-      "border:1.5px solid #e2e8f0",
-      "box-shadow:0 4px 20px rgba(0,0,0,0.10),0 1px 4px rgba(0,0,0,0.06)",
-      "opacity:0",
-      "pointer-events:none",
-      "cursor:default",
-      "transition:opacity 0.35s ease,transform 0.35s ease",
-      verticalStyle,
-      isLeft ? "left:20px" : "right:20px",
-      isMiddle
-        ? "transform:translateX(-10px) translateY(-50%) scale(0.97)"
-        : (isLeft
-            ? "transform:translateX(-10px) scale(0.97)"
-            : "transform:translateX(10px) scale(0.97)")
-    ].join(";");
+  var arrow = document.createElement("div");
+  arrow.style.cssText = [
+    "position:absolute",
+    "width:14px",
+    "height:14px",
+    "background:white",
+    isLeft
+      ? "left:-8px;top:50%;transform:translateY(-50%) rotate(45deg);border-left:1.5px solid #e2e8f0;border-bottom:1.5px solid #e2e8f0"
+      : "right:-8px;top:50%;transform:translateY(-50%) rotate(45deg);border-right:1.5px solid #e2e8f0;border-top:1.5px solid #e2e8f0"
+  ].join(";");
 
-    var arrow = document.createElement("div");
-    arrow.style.cssText = [
-      "position:absolute",
-      "width:14px",
-      "height:14px",
-      "background:white",
-      isLeft
-        ? "left:-8px;top:50%;transform:translateY(-50%) rotate(45deg);border-left:1.5px solid #e2e8f0;border-bottom:1.5px solid #e2e8f0"
-        : "right:-8px;top:50%;transform:translateY(-50%) rotate(45deg);border-right:1.5px solid #e2e8f0;border-top:1.5px solid #e2e8f0"
-    ].join(";");
-
-    el.appendChild(arrow);
-    var text = document.createElement("span");
-    text.textContent = message;
-    el.appendChild(text);
-    document.body.appendChild(el);
-    return el;
+  el.appendChild(arrow);
+  var text = document.createElement("span");
+  text.textContent = message;
+  el.appendChild(text);
+  document.body.appendChild(el);
+  return el;
   }
- 
+  
   function showWelcome(message) {
-    if (welcomeEl) { welcomeEl.remove(); welcomeEl = null; }
-    welcomeEl = createWelcome(message);
-    var isMiddle = POSITION === "middle-right";
+  if (welcomeEl) { welcomeEl.remove(); welcomeEl = null; }
+  welcomeEl = createWelcome(message);
+  var isMiddle = POSITION === "middle-right";
+  requestAnimationFrame(function() {
     requestAnimationFrame(function() {
-      requestAnimationFrame(function() {
-        if (!welcomeEl) return;
-        welcomeEl.style.opacity = "1";
-        // ✅ Mantener el translateY(-50%) en middle-right al mostrar
-        welcomeEl.style.transform = isMiddle
-          ? "translateX(0) translateY(-50%) scale(1)"
-          : "translateX(0) scale(1)";
-      });
+      if (!welcomeEl) return;
+      welcomeEl.style.opacity = "1";
+      welcomeEl.style.transform = isMiddle
+        ? "translateX(0) translateY(-50%) scale(1)"
+        : "translateX(0) scale(1)";
     });
+  });
   }
  
   function hideWelcome() {
