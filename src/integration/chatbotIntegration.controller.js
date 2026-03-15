@@ -233,7 +233,7 @@ exports.getInstallScript = async (req, res) => {
 
   document.body.appendChild(iframe);
   /* ── Listener único para todos los mensajes ── */
-  var _welcomeShownKey = "__chatbot_welcome_${public_id}__";
+  var _welcomeShownThisLoad = false;
 
   window.addEventListener("message", function(e) {
     if (!e.data || !e.data.type) return;
@@ -254,20 +254,16 @@ exports.getInstallScript = async (req, res) => {
 
     /* Welcome Request — el widget pregunta si puede mostrar el welcome */
     if (e.data.type === "CHATBOT_WELCOME_REQUEST") {
-      var alreadySeen = sessionStorage.getItem(_welcomeShownKey);
       iframe.contentWindow.postMessage({
         type: "CHATBOT_WELCOME_PERMISSION",
-        allowed: !alreadySeen
+        allowed: !_welcomeShownThisLoad
       }, "*");
-      if (!alreadySeen) {
-        sessionStorage.setItem(_welcomeShownKey, "1");
-      }
+      if (!_welcomeShownThisLoad) _welcomeShownThisLoad = true;
       return;
     }
 
-    /* Welcome Seen — el usuario abrió el chat */
     if (e.data.type === "CHATBOT_WELCOME_SEEN") {
-      sessionStorage.setItem(_welcomeShownKey, "1");
+      _welcomeShownThisLoad = true;
       return;
     }
 
