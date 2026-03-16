@@ -598,18 +598,20 @@ exports.InstallationCode = async (req, res) => {
     const chatbot = await Chatbot.findOne(query);
     if (!chatbot) return res.status(404).json({ error: "Chatbot no encontrado" });
 
-    if (!chatbot.allowed_domains?.length) {
-      return res.status(400).json({ error: "Agrega al menos un dominio antes de generar el script", has_domains: false });
-    }
+    const baseUrl = getBaseUrl();
+    const hasDomains = Boolean(chatbot.allowed_domains?.length);
 
-    const baseUrl = getBaseUrl(); // ← fix: llamar la función
-
-    const script = `<script src="${baseUrl}/api/chatbot-integration/${public_id}/install" async></script>`;
+    const scripts = hasDomains
+      ? chatbot.allowed_domains.map(domain => ({
+          domain,
+          script: `<script src='${baseUrl}/api/chatbot-integration/${public_id}/install?t=${generateDomainToken(chatbot.install_token, domain)}' async></script>`
+        }))
+      : [];
 
     res.json({
-      script,                                    // ← string único, no array
-      allowed_domains: chatbot.allowed_domains,
-      has_domains: true
+      scripts,
+      allowed_domains: chatbot.allowed_domains || [],
+      has_domains: hasDomains
     });
 
   } catch (err) {
