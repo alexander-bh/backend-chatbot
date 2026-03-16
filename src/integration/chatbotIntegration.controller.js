@@ -27,169 +27,376 @@ const WIDGET_DOMAIN = normalizeDomain(WIDGET_BASE_URL);
    - Validación de Origin/Referer contra dominios permitidos
    - El script resultante es inútil fuera del dominio autorizado
 ======================================================= */
-res.send(`(function(){
+exports.getInstallScript = async (req, res) => {
+  try {
+    const { public_id } = req.params;
 
-if(window.__CHATBOT_INSTALLED__) return;
-window.__CHATBOT_INSTALLED__ = true;
+    const chatbot = await Chatbot.findOne({
+      public_id,
+      status: "active",
+      is_enabled: true
+    }).lean();
 
-var BASE="${baseUrl}";
-var PID="${public_id}";
-var POSITION="${position}";
-var SECONDARYCOLOR="${secondaryColor}";
+    if (!chatbot) return res.status(404).send("// Chatbot no encontrado");
 
-var domain=location.hostname;
-if(location.port && location.port!=="80" && location.port!=="443"){
-  domain+=":"+location.port;
-}
+    const baseUrl = getBaseUrl();
+    const position = chatbot.position || "bottom-right";
+    const positionStyles = getPositionStyles(position);
+    const secondaryColor = chatbot.secondary_color || "#06070B";
 
-function isMobile(){
-  return window.matchMedia("(max-width:768px)").matches;
-}
+    res.type("application/javascript");
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Content-Security-Policy", `default-src 'none'`);
 
-function mount(challenge){
+    res.send(`(function(){
+  if (window.__CHATBOT_INSTALLED__) {
+    var ex = document.getElementById('__chatbot_iframe__');
+    if (ex) return;
+    window.__CHATBOT_INSTALLED__ = false;
+  }
+  window.__CHATBOT_INSTALLED__ = true;
 
-  var iframe=document.createElement("iframe");
-  iframe.id="__chatbot_iframe__";
+  var BASE           = "${baseUrl}";
+  var PID            = "${public_id}";
+  var POSITION       = "${position}";
+  var SECONDARYCOLOR = "${secondaryColor}";
 
-  iframe.src=BASE+"/api/chatbot-integration/embed/"+PID+
-  "?d="+encodeURIComponent(domain)+
-  "&c="+encodeURIComponent(challenge);
-
-  iframe.style.cssText=[
-    "position:fixed",
-    ${positionStyles},
-    "width:72px",
-    "height:72px",
-    "border:none",
-    "z-index:2147483646",
-    "background:transparent",
-    "overflow:hidden",
-    "border-radius:50%",
-    "transition:all .25s ease"
-  ].join(";");
-
-  iframe.sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals";
-  iframe.setAttribute("allow","clipboard-write");
-
-  document.body.appendChild(iframe);
-
-  var open=false;
-
-  function viewportFix(){
-
-    if(!open || !isMobile()) return;
-
-    var vh=window.visualViewport ? window.visualViewport.height : window.innerHeight;
-    var top=window.visualViewport ? window.visualViewport.offsetTop : 0;
-
-    iframe.style.height=vh+"px";
-    iframe.style.width="100%";
-    iframe.style.left="0";
-    iframe.style.top=top+"px";
-    iframe.style.bottom="auto";
+  var domain = window.location.hostname;
+  if (window.location.port &&
+      window.location.port !== "80" &&
+      window.location.port !== "443") {
+    domain += ":" + window.location.port;
   }
 
-  window.addEventListener("message",function(e){
+  /* ── Welcome bubble ── */
+  var welcomeEl     = null;
+  var pendingWelcome = null;
 
-    if(!e.data || !e.data.type) return;
+  function createWelcome(message) {
+    var el      = document.createElement("div");
+    var isLeft   = POSITION === "bottom-left";
+    var isMiddle = POSITION === "middle-right";
+    var hPos     = isLeft ? "left:112px" : "right:112px";
+    var vPos     = isMiddle ? "top:50%" : "bottom:34px";
+    var transformInit = isMiddle
+      ? (isLeft
+          ? "transform:translateX(-10px) translateY(-50%) scale(0.97)"
+          : "transform:translateX(10px) translateY(-50%) scale(0.97)")
+      : (isLeft
+          ? "transform:translateX(-10px) scale(0.97)"
+          : "transform:translateX(10px) scale(0.97)");
 
-    if(e.data.type==="CHATBOT_RESIZE"){
+    el.style.cssText = [
+      "position:fixed","z-index:2147483648","max-width:260px",
+      "padding:14px 18px","background:white","color:" + SECONDARYCOLOR,
+      "font-size:14px","font-weight:600",
+      "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
+      "line-height:1.5","border-radius:18px","border:1.5px solid #e2e8f0",
+      "box-shadow:0 4px 20px rgba(0,0,0,0.10),0 1px 4px rgba(0,0,0,0.06)",
+      "opacity:0","pointer-events:none","cursor:default",
+      "transition:opacity 0.35s ease,transform 0.35s ease",
+      vPos, hPos, transformInit
+    ].join(";");
 
-      if(e.data.open){
+    var arrow = document.createElement("div");
+    arrow.style.cssText = [
+      "position:absolute","width:14px","height:14px","background:white",
+      isLeft
+        ? "left:-8px;top:50%;transform:translateY(-50%) rotate(45deg);border-left:1.5px solid #e2e8f0;border-bottom:1.5px solid #e2e8f0"
+        : "right:-8px;top:50%;transform:translateY(-50%) rotate(45deg);border-right:1.5px solid #e2e8f0;border-top:1.5px solid #e2e8f0"
+    ].join(";");
 
-        open=true;
+    el.appendChild(arrow);
+    var text = document.createElement("span");
+    text.textContent = message;
+    el.appendChild(text);
+    document.body.appendChild(el);
+    return el;
+  }
 
-        iframe.style.borderRadius="16px";
-        iframe.style.overflow="visible";
+  function showWelcome(message) {
+    if (welcomeEl) { welcomeEl.remove(); welcomeEl = null; }
+    welcomeEl = createWelcome(message);
+    var isMiddle = POSITION === "middle-right";
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() {
+        if (!welcomeEl) return;
+        welcomeEl.style.opacity   = "1";
+        welcomeEl.style.transform = isMiddle
+          ? "translateX(0) translateY(-50%) scale(1)"
+          : "translateX(0) scale(1)";
+      });
+    });
+  }
 
-        if(isMobile()){
+  function hideWelcome() {
+    if (!welcomeEl) return;
+    welcomeEl.style.opacity       = "0";
+    welcomeEl.style.pointerEvents = "none";
+    var el = welcomeEl;
+    welcomeEl = null;
+    setTimeout(function() { if (el.parentNode) el.remove(); }, 400);
+  }
 
-          viewportFix();
+  /* ── Challenge → mount iframe ── */
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET", BASE + "/api/chatbot-integration/" + PID + "/challenge?d=" + encodeURIComponent(domain), true);
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState !== 4) return;
+    if (xhr.status !== 200) {
+      console.warn("[chatbot] dominio no autorizado:", domain);
+      return;
+    }
+    var data;
+    try { data = JSON.parse(xhr.responseText); } catch(e) { return; }
+    if (!data.challenge) return;
+    mountIframe(data.challenge);
+  };
+  xhr.send();
 
-        }else{
+  function mountIframe(challenge) {
+    var iframe = document.createElement("iframe");
+    iframe.id  = "__chatbot_iframe__";
+    iframe.src = BASE + "/api/chatbot-integration/embed/" + PID
+      + "?d=" + encodeURIComponent(domain)
+      + "&c=" + encodeURIComponent(challenge);
 
-          var w=Math.min(420,window.innerWidth-40);
-          var h=Math.min(680,window.innerHeight-60);
+    iframe.style.cssText = [
+      "position:fixed",
+      ${positionStyles},
+      "width:80px","height:80px","border:none",
+      "z-index:2147483647","background:transparent",
+      "pointer-events:auto","overflow:hidden","border-radius:50%",
+      "transition:width 0.3s ease,height 0.3s ease,border-radius 0.3s ease,bottom 0.3s ease,right 0.3s ease,left 0.3s ease,top 0.3s ease"
+    ].join(";");
 
-          iframe.style.width=w+"px";
-          iframe.style.height=h+"px";
+    iframe.sandbox = "allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation";
+    iframe.setAttribute("allow", "clipboard-write");
 
-          if(POSITION==="bottom-left"){
-            iframe.style.left="20px";
-            iframe.style.bottom="20px";
-          }
-          else if(POSITION==="middle-right"){
-            iframe.style.right="20px";
-            iframe.style.top="50%";
-            iframe.style.transform="translateY(-50%)";
-          }
-          else{
-            iframe.style.right="20px";
-            iframe.style.bottom="20px";
-          }
+    var iframeLoaded = false;
 
-        }
-
-      }else{
-
-        open=false;
-
-        iframe.style.width="72px";
-        iframe.style.height="72px";
-        iframe.style.borderRadius="50%";
-        iframe.style.overflow="hidden";
-        iframe.style.transform="";
-
-        if(POSITION==="bottom-left"){
-          iframe.style.left="20px";
-          iframe.style.bottom="20px";
-        }
-        else if(POSITION==="middle-right"){
-          iframe.style.top="calc(50% - 36px)";
-          iframe.style.right="20px";
-        }
-        else{
-          iframe.style.right="20px";
-          iframe.style.bottom="20px";
-        }
-
+    iframe.addEventListener("load", function() {
+      iframeLoaded = true;
+      if (pendingWelcome) {
+        var msg    = pendingWelcome;
+        pendingWelcome = null;
+        setTimeout(function() { showWelcome(msg); }, 300);
       }
+    });
 
+    document.body.appendChild(iframe);
+
+    /* ─────────────────────────────────────────────────────────────
+     * FIX TECLADO VIRTUAL — visualViewport API
+     *
+     * En iOS Safari el viewport NO se redimensiona cuando aparece
+     * el teclado. Usamos window.visualViewport para detectar el
+     * cambio de altura real y empujar el iframe hacia arriba,
+     * de modo que el footer (input) siempre quede visible.
+     *
+     * En Android Chrome el viewport SÍ se redimensiona, por lo que
+     * dvh en el CSS ya lo maneja; el listener de abajo es inofensivo.
+     * ───────────────────────────────────────────────────────────── */
+    var _chatOpen = false;
+
+    function applyViewportFix() {
+      if (!_chatOpen) return;
+      var isMobile = window.innerWidth <= 480;
+      if (!isMobile) return;
+
+      if (window.visualViewport) {
+        /* Altura visible real (excluye el teclado en iOS) */
+        var vvHeight = window.visualViewport.height;
+        var vvOffset = window.visualViewport.offsetTop; /* scroll del viewport */
+
+        iframe.style.height = vvHeight + "px";
+        iframe.style.top    = vvOffset + "px";
+        iframe.style.bottom = "auto";
+        iframe.style.left   = "0";
+        iframe.style.right  = "auto";
+        iframe.style.width  = "100%";
+      }
+      /* Si visualViewport no existe, dvh del CSS es suficiente */
     }
 
-  });
+    function resetViewportFix() {
+      /* Restaura estilos a los que pone CHATBOT_RESIZE:close */
+      iframe.style.height = "80px";
+      iframe.style.width  = "80px";
+      iframe.style.top    = "";
+    }
 
-  if(window.visualViewport){
-    visualViewport.addEventListener("resize",viewportFix);
-    visualViewport.addEventListener("scroll",viewportFix);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", applyViewportFix);
+      window.visualViewport.addEventListener("scroll", applyViewportFix);
+    }
+
+    /*
+     * FIX SCROLL — cuando el teclado sube, notificar al iframe
+     * para que haga scroll al último mensaje.
+     * Se dispara tanto con visualViewport (iOS) como con
+     * el evento resize del window (Android Chrome).
+     */
+    function notifyScrollToBottom() {
+      if (!_chatOpen) return;
+      try {
+        iframe.contentWindow.postMessage({ type: "CHATBOT_SCROLL_BOTTOM" }, "*");
+      } catch(e) {}
+    }
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", notifyScrollToBottom);
+    }
+    window.addEventListener("resize", function() {
+      if (_chatOpen) notifyScrollToBottom();
+    });
+
+    /* ── Fallback iOS: scrollTo(0,0) cuando el teclado baja ── */
+    var _inputFocused = false;
+    window.addEventListener("focusin", function(e) {
+      var tag = e.target && e.target.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") {
+        _inputFocused = true;
+      }
+    });
+    window.addEventListener("focusout", function() {
+      if (_inputFocused) {
+        _inputFocused = false;
+        /* Pequeño delay para que el teclado termine de bajar */
+        setTimeout(function() {
+          if (_chatOpen) applyViewportFix();
+          else resetViewportFix();
+        }, 100);
+      }
+    });
+
+    var _welcomeShownThisLoad = false;
+
+    window.addEventListener("message", function(e) {
+      if (!e.data || !e.data.type) return;
+
+      /* ── Welcome messages ── */
+      if (e.data.type === "CHATBOT_WELCOME") {
+        if (e.data.visible && e.data.message) {
+          if (!iframeLoaded) {
+            pendingWelcome = e.data.message;
+          } else {
+            showWelcome(e.data.message);
+          }
+        } else {
+          hideWelcome();
+        }
+        return;
+      }
+
+      if (e.data.type === "CHATBOT_WELCOME_REQUEST") {
+        iframe.contentWindow.postMessage({
+          type:    "CHATBOT_WELCOME_PERMISSION",
+          allowed: !_welcomeShownThisLoad
+        }, "*");
+        if (!_welcomeShownThisLoad) _welcomeShownThisLoad = true;
+        return;
+      }
+
+      if (e.data.type === "CHATBOT_WELCOME_SEEN") {
+        _welcomeShownThisLoad = true;
+        return;
+      }
+
+      /* ── Resize (abrir / cerrar chat) ── */
+      if (e.data.type === "CHATBOT_RESIZE") {
+        if (e.data.open) {
+          _chatOpen = true;
+          hideWelcome();
+          iframe.style.borderRadius = "16px";
+          iframe.style.overflow     = "visible";
+
+          var isMobile = window.innerWidth <= 480;
+          if (isMobile) {
+            /* Dimensiones base full-screen */
+            iframe.style.width  = "100%";
+            iframe.style.left   = "0";
+            iframe.style.right  = "auto";
+            iframe.style.bottom = "auto";
+
+            /*
+             * FIX: usamos visualViewport si está disponible para
+             * obtener la altura real sin el teclado (iOS).
+             * Si no, caemos a window.innerHeight.
+             */
+            if (window.visualViewport) {
+              iframe.style.height = window.visualViewport.height + "px";
+              iframe.style.top    = window.visualViewport.offsetTop + "px";
+            } else {
+              iframe.style.height = window.innerHeight + "px";
+              iframe.style.top    = "0";
+            }
+
+          } else {
+            /* Desktop / tablet: comportamiento original */
+            var w = Math.min(420, window.innerWidth - 40);
+            var h = Math.min(680, window.innerHeight - 60);
+            iframe.style.width  = w + "px";
+            iframe.style.height = h + "px";
+
+            if (POSITION === "bottom-left") {
+              iframe.style.bottom = "20px"; iframe.style.left   = "20px";
+              iframe.style.right  = "auto"; iframe.style.top    = "auto";
+              iframe.style.transform = "";
+            } else if (POSITION === "middle-right") {
+              iframe.style.top    = "50%";  iframe.style.right  = "20px";
+              iframe.style.bottom = "auto"; iframe.style.left   = "auto";
+              iframe.style.transform = "translateY(-50%)";
+            } else {
+              iframe.style.bottom = "20px"; iframe.style.right  = "20px";
+              iframe.style.left   = "auto"; iframe.style.top    = "auto";
+              iframe.style.transform = "";
+            }
+          }
+
+        } else {
+          /* ── Cerrar ── */
+          _chatOpen = false;
+          iframe.style.width        = "80px";
+          iframe.style.height       = "80px";
+          iframe.style.borderRadius = "50%";
+          iframe.style.overflow     = "hidden";
+          iframe.style.transform    = "";
+          iframe.style.top          = "";
+
+          if (POSITION === "bottom-left") {
+            iframe.style.bottom = "20px"; iframe.style.left   = "20px";
+            iframe.style.right  = "auto"; iframe.style.top    = "auto";
+          } else if (POSITION === "middle-right") {
+            iframe.style.top    = "calc(50% - 40px)"; iframe.style.right  = "20px";
+            iframe.style.bottom = "auto";              iframe.style.left   = "auto";
+          } else {
+            iframe.style.bottom = "20px"; iframe.style.right  = "20px";
+            iframe.style.left   = "auto"; iframe.style.top    = "auto";
+          }
+        }
+      }
+    });
+
+    var _chatbotObserver = new MutationObserver(function() {
+      if (!document.getElementById('__chatbot_iframe__')) {
+        document.body.appendChild(iframe);
+      }
+      if (welcomeEl && !document.body.contains(welcomeEl)) {
+        document.body.appendChild(welcomeEl);
+      }
+    });
+    _chatbotObserver.observe(document.body, { childList: true });
   }
-
-}
-
-/* challenge */
-
-var xhr=new XMLHttpRequest();
-xhr.open("GET",BASE+"/api/chatbot-integration/"+PID+"/challenge?d="+encodeURIComponent(domain),true);
-
-xhr.onreadystatechange=function(){
-
-  if(xhr.readyState!==4) return;
-
-  if(xhr.status!==200){
-    console.warn("[chatbot] dominio no autorizado:",domain);
-    return;
-  }
-
-  try{
-    var data=JSON.parse(xhr.responseText);
-    if(data.challenge) mount(data.challenge);
-  }catch(e){}
-
-};
-
-xhr.send();
 
 })();`);
+
+  } catch (err) {
+    console.error("INSTALL SCRIPT ERROR:", err);
+    res.status(500).send("// Error interno");
+  }
+};
 
 /* =======================================================
    3) RENDER EMBED (HTML)
