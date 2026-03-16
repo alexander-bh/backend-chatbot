@@ -397,11 +397,10 @@ exports.getInstallScript = async (req, res) => {
           requestAnimationFrame(function() {
             if (isMobileClose) {
               /* ── Móvil: el CSS interno anima el cierre (slide-down).
-               * El JS solo restaura las dimensiones del viewport para
-               * que el iframe siga siendo el contenedor correcto
-               * mientras la animación CSS transcurre.
-               * Después de la transición CSS (~280ms) el FAB volverá
-               * a ser visible y el iframe quedará "detrás". */
+               * Paso 1: mantenemos el iframe a pantalla completa mientras
+               *         la transición CSS (280ms) transcurre.
+               * Paso 2: después de la transición, lo restauramos a las
+               *         dimensiones y posición del FAB original. */
               iframe.style.transition   = "none";
               iframe.style.width        = "100%";
               iframe.style.left         = "0";
@@ -415,6 +414,32 @@ exports.getInstallScript = async (req, res) => {
               var topClose = window.visualViewport ? window.visualViewport.offsetTop : 0;
               iframe.style.height = hClose + "px";
               iframe.style.top    = topClose + "px";
+
+              /* ── Paso 2: restaurar FAB tras animación CSS (~300ms) ── */
+              setTimeout(function() {
+                iframe.style.transition   = "none";
+                iframe.style.width        = "80px";
+                iframe.style.height       = "80px";
+                iframe.style.borderRadius = "50%";
+                iframe.style.overflow     = "hidden";
+                iframe.style.transform    = "";
+                iframe.style.top          = "auto";
+                iframe.style.left         = "auto";
+                iframe.style.right        = "auto";
+                iframe.style.bottom       = "auto";
+
+                if (POSITION === "bottom-left") {
+                  iframe.style.bottom = "20px";
+                  iframe.style.left   = "20px";
+                } else if (POSITION === "middle-right") {
+                  iframe.style.top   = "calc(50% - 40px)";
+                  iframe.style.right = "20px";
+                } else {
+                  /* bottom-right (default) */
+                  iframe.style.bottom = "20px";
+                  iframe.style.right  = "20px";
+                }
+              }, 320);
 
             } else {
               /* ── Desktop / tablet: panel flotante → FAB ── */
