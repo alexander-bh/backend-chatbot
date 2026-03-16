@@ -29,7 +29,6 @@ const WIDGET_DOMAIN = normalizeDomain(WIDGET_BASE_URL);
 ======================================================= */
 exports.getInstallScript = async (req, res) => {
   try {
-    // FIX Bug 1: extraer public_id de req.params
     const { public_id } = req.params;
 
     const chatbot = await Chatbot.findOne({
@@ -41,7 +40,6 @@ exports.getInstallScript = async (req, res) => {
     if (!chatbot) return res.status(404).send("// Chatbot no encontrado");
 
     const baseUrl = getBaseUrl();
-    // FIX Bug 2: domain se elimina del servidor — el navegador lo detecta en runtime
     const position = chatbot.position || "bottom-right";
     const positionStyles = getPositionStyles(position);
     const secondaryColor = chatbot.secondary_color || "#06070B";
@@ -59,12 +57,11 @@ exports.getInstallScript = async (req, res) => {
   }
   window.__CHATBOT_INSTALLED__ = true;
 
-  var BASE = "${baseUrl}";
-  var PID  = "${public_id}";
-  var POSITION = "${position}";
+  var BASE           = "${baseUrl}";
+  var PID            = "${public_id}";
+  var POSITION       = "${position}";
   var SECONDARYCOLOR = "${secondaryColor}";
 
-  // FIX Bug 2: dominio detectado en el navegador, no en el servidor
   var domain = window.location.hostname;
   if (window.location.port &&
       window.location.port !== "80" &&
@@ -73,15 +70,15 @@ exports.getInstallScript = async (req, res) => {
   }
 
   /* ── Welcome bubble ── */
-  var welcomeEl = null;
+  var welcomeEl     = null;
   var pendingWelcome = null;
 
   function createWelcome(message) {
-    var el = document.createElement("div");
+    var el      = document.createElement("div");
     var isLeft   = POSITION === "bottom-left";
     var isMiddle = POSITION === "middle-right";
-    var hPos = isLeft ? "left:112px" : "right:112px";
-    var vPos = isMiddle ? "top:50%" : "bottom:34px";
+    var hPos     = isLeft ? "left:112px" : "right:112px";
+    var vPos     = isMiddle ? "top:50%" : "bottom:34px";
     var transformInit = isMiddle
       ? (isLeft
           ? "transform:translateX(-10px) translateY(-50%) scale(0.97)"
@@ -125,7 +122,7 @@ exports.getInstallScript = async (req, res) => {
     requestAnimationFrame(function() {
       requestAnimationFrame(function() {
         if (!welcomeEl) return;
-        welcomeEl.style.opacity = "1";
+        welcomeEl.style.opacity   = "1";
         welcomeEl.style.transform = isMiddle
           ? "translateX(0) translateY(-50%) scale(1)"
           : "translateX(0) scale(1)";
@@ -135,14 +132,14 @@ exports.getInstallScript = async (req, res) => {
 
   function hideWelcome() {
     if (!welcomeEl) return;
-    welcomeEl.style.opacity = "0";
+    welcomeEl.style.opacity       = "0";
     welcomeEl.style.pointerEvents = "none";
     var el = welcomeEl;
     welcomeEl = null;
     setTimeout(function() { if (el.parentNode) el.remove(); }, 400);
   }
 
-  // FIX Bug 3 y 4: pedir challenge primero, montar iframe en el callback
+  /* ── Challenge → mount iframe ── */
   var xhr = new XMLHttpRequest();
   xhr.open("GET", BASE + "/api/chatbot-integration/" + PID + "/challenge?d=" + encodeURIComponent(domain), true);
   xhr.onreadystatechange = function() {
@@ -160,8 +157,7 @@ exports.getInstallScript = async (req, res) => {
 
   function mountIframe(challenge) {
     var iframe = document.createElement("iframe");
-    iframe.id = "__chatbot_iframe__";
-    // FIX Bug 3: src incluye ?c=challenge
+    iframe.id  = "__chatbot_iframe__";
     iframe.src = BASE + "/api/chatbot-integration/embed/" + PID
       + "?d=" + encodeURIComponent(domain)
       + "&c=" + encodeURIComponent(challenge);
@@ -183,7 +179,7 @@ exports.getInstallScript = async (req, res) => {
     iframe.addEventListener("load", function() {
       iframeLoaded = true;
       if (pendingWelcome) {
-        var msg = pendingWelcome;
+        var msg    = pendingWelcome;
         pendingWelcome = null;
         setTimeout(function() { showWelcome(msg); }, 300);
       }
@@ -191,11 +187,76 @@ exports.getInstallScript = async (req, res) => {
 
     document.body.appendChild(iframe);
 
+    /* ─────────────────────────────────────────────────────────────
+     * FIX TECLADO VIRTUAL — visualViewport API
+     *
+     * En iOS Safari el viewport NO se redimensiona cuando aparece
+     * el teclado. Usamos window.visualViewport para detectar el
+     * cambio de altura real y empujar el iframe hacia arriba,
+     * de modo que el footer (input) siempre quede visible.
+     *
+     * En Android Chrome el viewport SÍ se redimensiona, por lo que
+     * dvh en el CSS ya lo maneja; el listener de abajo es inofensivo.
+     * ───────────────────────────────────────────────────────────── */
+    var _chatOpen = false;
+
+    function applyViewportFix() {
+      if (!_chatOpen) return;
+      var isMobile = window.innerWidth <= 480;
+      if (!isMobile) return;
+
+      if (window.visualViewport) {
+        /* Altura visible real (excluye el teclado en iOS) */
+        var vvHeight = window.visualViewport.height;
+        var vvOffset = window.visualViewport.offsetTop; /* scroll del viewport */
+
+        iframe.style.height = vvHeight + "px";
+        iframe.style.top    = vvOffset + "px";
+        iframe.style.bottom = "auto";
+        iframe.style.left   = "0";
+        iframe.style.right  = "auto";
+        iframe.style.width  = "100%";
+      }
+      /* Si visualViewport no existe, dvh del CSS es suficiente */
+    }
+
+    function resetViewportFix() {
+      /* Restaura estilos a los que pone CHATBOT_RESIZE:close */
+      iframe.style.height = "80px";
+      iframe.style.width  = "80px";
+      iframe.style.top    = "";
+    }
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", applyViewportFix);
+      window.visualViewport.addEventListener("scroll", applyViewportFix);
+    }
+
+    /* ── Fallback iOS: scrollTo(0,0) cuando el teclado baja ── */
+    var _inputFocused = false;
+    window.addEventListener("focusin", function(e) {
+      var tag = e.target && e.target.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") {
+        _inputFocused = true;
+      }
+    });
+    window.addEventListener("focusout", function() {
+      if (_inputFocused) {
+        _inputFocused = false;
+        /* Pequeño delay para que el teclado termine de bajar */
+        setTimeout(function() {
+          if (_chatOpen) applyViewportFix();
+          else resetViewportFix();
+        }, 100);
+      }
+    });
+
     var _welcomeShownThisLoad = false;
 
     window.addEventListener("message", function(e) {
       if (!e.data || !e.data.type) return;
 
+      /* ── Welcome messages ── */
       if (e.data.type === "CHATBOT_WELCOME") {
         if (e.data.visible && e.data.message) {
           if (!iframeLoaded) {
@@ -211,7 +272,7 @@ exports.getInstallScript = async (req, res) => {
 
       if (e.data.type === "CHATBOT_WELCOME_REQUEST") {
         iframe.contentWindow.postMessage({
-          type: "CHATBOT_WELCOME_PERMISSION",
+          type:    "CHATBOT_WELCOME_PERMISSION",
           allowed: !_welcomeShownThisLoad
         }, "*");
         if (!_welcomeShownThisLoad) _welcomeShownThisLoad = true;
@@ -223,29 +284,45 @@ exports.getInstallScript = async (req, res) => {
         return;
       }
 
+      /* ── Resize (abrir / cerrar chat) ── */
       if (e.data.type === "CHATBOT_RESIZE") {
         if (e.data.open) {
+          _chatOpen = true;
           hideWelcome();
           iframe.style.borderRadius = "16px";
           iframe.style.overflow     = "visible";
 
           var isMobile = window.innerWidth <= 480;
           if (isMobile) {
-            iframe.style.width  = "100vw";
-            iframe.style.height = "100vh";
-            iframe.style.top    = "0";
+            /* Dimensiones base full-screen */
+            iframe.style.width  = "100%";
             iframe.style.left   = "0";
-            iframe.style.bottom = "auto";
             iframe.style.right  = "auto";
+            iframe.style.bottom = "auto";
+
+            /*
+             * FIX: usamos visualViewport si está disponible para
+             * obtener la altura real sin el teclado (iOS).
+             * Si no, caemos a window.innerHeight.
+             */
+            if (window.visualViewport) {
+              iframe.style.height = window.visualViewport.height + "px";
+              iframe.style.top    = window.visualViewport.offsetTop + "px";
+            } else {
+              iframe.style.height = window.innerHeight + "px";
+              iframe.style.top    = "0";
+            }
+
           } else {
+            /* Desktop / tablet: comportamiento original */
             var w = Math.min(420, window.innerWidth - 40);
             var h = Math.min(680, window.innerHeight - 60);
             iframe.style.width  = w + "px";
             iframe.style.height = h + "px";
 
             if (POSITION === "bottom-left") {
-              iframe.style.bottom = "20px"; iframe.style.left  = "20px";
-              iframe.style.right  = "auto"; iframe.style.top   = "auto";
+              iframe.style.bottom = "20px"; iframe.style.left   = "20px";
+              iframe.style.right  = "auto"; iframe.style.top    = "auto";
               iframe.style.transform = "";
             } else if (POSITION === "middle-right") {
               iframe.style.top    = "50%";  iframe.style.right  = "20px";
@@ -257,12 +334,16 @@ exports.getInstallScript = async (req, res) => {
               iframe.style.transform = "";
             }
           }
+
         } else {
+          /* ── Cerrar ── */
+          _chatOpen = false;
           iframe.style.width        = "80px";
           iframe.style.height       = "80px";
           iframe.style.borderRadius = "50%";
           iframe.style.overflow     = "hidden";
           iframe.style.transform    = "";
+          iframe.style.top          = "";
 
           if (POSITION === "bottom-left") {
             iframe.style.bottom = "20px"; iframe.style.left   = "20px";
