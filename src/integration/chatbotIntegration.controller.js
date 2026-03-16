@@ -163,9 +163,10 @@ exports.getInstallScript = async (req, res) => {
       + "&c=" + encodeURIComponent(challenge);
 
     /* ── Estilos base del iframe ──
-     * Solo animamos border-radius aquí.
-     * width/height/position se animarán vía JS con rAF
-     * para evitar reflows forzados antes de la transición.
+     * En desktop arranca como FAB circular (80x80, border-radius:50%).
+     * En móvil también arranca igual; cuando se abre el CSS interno
+     * maneja la animación slide-up vía translateY — el JS solo fija
+     * las dimensiones del viewport sin competir con la transición CSS.
      */
     iframe.style.cssText = [
       "position:fixed",
@@ -304,45 +305,45 @@ exports.getInstallScript = async (req, res) => {
       if (e.data.type === "CHATBOT_RESIZE") {
 
         if (e.data.open) {
-          /* ════════════════════════════════════════
-           * ABRIR
-           * Paso 1: cambios de layout SIN transición
-           *         (evita reflow forzado pre-animación)
-           * Paso 2: en rAF aplica dimensiones finales
-           *         + transición spring
-           * ════════════════════════════════════════ */
           _chatOpen = true;
           hideWelcome();
 
           var isMobile = window.innerWidth <= 480;
 
           if (isMobile) {
-            /* — Móvil: fullscreen deslizando desde abajo — */
+            /* ════════════════════════════════════════
+             * MÓVIL — ABRIR
+             *
+             * El CSS interno del widget maneja la animación slide-up
+             * via translateY(100%) → translateY(0) con curva spring.
+             * El JS SOLO fija las dimensiones del viewport para que
+             * el iframe ocupe la pantalla completa correctamente.
+             * NO usamos rAF con transiciones aquí para evitar que
+             * las mutaciones de layout compitan con la transición CSS
+             * y causen jank.
+             * ════════════════════════════════════════ */
             iframe.style.transition   = "none";
             iframe.style.borderRadius = "0";
             iframe.style.overflow     = "visible";
+            iframe.style.width        = "100%";
+            iframe.style.left         = "0";
+            iframe.style.right        = "auto";
+            iframe.style.bottom       = "auto";
 
             var targetH   = window.visualViewport ? window.visualViewport.height   : window.innerHeight;
             var targetTop = window.visualViewport ? window.visualViewport.offsetTop : 0;
 
-            requestAnimationFrame(function() {
-              iframe.style.transition = [
-                "width 0.38s cubic-bezier(0.16,1,0.3,1)",
-                "height 0.38s cubic-bezier(0.16,1,0.3,1)",
-                "top 0.38s cubic-bezier(0.16,1,0.3,1)",
-                "left 0.38s cubic-bezier(0.16,1,0.3,1)",
-                "border-radius 0.32s cubic-bezier(0.16,1,0.3,1)"
-              ].join(",");
-              iframe.style.width  = "100%";
-              iframe.style.left   = "0";
-              iframe.style.right  = "auto";
-              iframe.style.bottom = "auto";
-              iframe.style.height = targetH + "px";
-              iframe.style.top    = targetTop + "px";
-            });
+            iframe.style.height = targetH + "px";
+            iframe.style.top    = targetTop + "px";
 
           } else {
-            /* — Desktop / tablet: panel flotante — */
+            /* ════════════════════════════════════════
+             * DESKTOP / TABLET — ABRIR
+             * Paso 1: cambios de layout SIN transición
+             *         (evita reflow forzado pre-animación)
+             * Paso 2: en rAF aplica dimensiones finales
+             *         + transición spring
+             * ════════════════════════════════════════ */
             var w = Math.min(420, window.innerWidth - 40);
             var h = Math.min(680, window.innerHeight - 60);
 
@@ -388,44 +389,69 @@ exports.getInstallScript = async (req, res) => {
         } else {
           /* ════════════════════════════════════════
            * CERRAR
-           * Curva ease-in (más rápida) — sensación nativa
            * ════════════════════════════════════════ */
           _chatOpen = false;
 
+          var isMobileClose = window.innerWidth <= 480;
+
           requestAnimationFrame(function() {
-            iframe.style.transition = [
-              "width 0.24s cubic-bezier(0.4,0,1,1)",
-              "height 0.24s cubic-bezier(0.4,0,1,1)",
-              "top 0.24s cubic-bezier(0.4,0,1,1)",
-              "right 0.24s cubic-bezier(0.4,0,1,1)",
-              "bottom 0.24s cubic-bezier(0.4,0,1,1)",
-              "left 0.24s cubic-bezier(0.4,0,1,1)",
-              "border-radius 0.24s cubic-bezier(0.4,0,1,1)"
-            ].join(",");
+            if (isMobileClose) {
+              /* ── Móvil: el CSS interno anima el cierre (slide-down).
+               * El JS solo restaura las dimensiones del viewport para
+               * que el iframe siga siendo el contenedor correcto
+               * mientras la animación CSS transcurre.
+               * Después de la transición CSS (~280ms) el FAB volverá
+               * a ser visible y el iframe quedará "detrás". */
+              iframe.style.transition   = "none";
+              iframe.style.width        = "100%";
+              iframe.style.left         = "0";
+              iframe.style.right        = "auto";
+              iframe.style.bottom       = "auto";
+              iframe.style.borderRadius = "0";
+              iframe.style.overflow     = "hidden";
+              iframe.style.transform    = "";
 
-            iframe.style.width        = "80px";
-            iframe.style.height       = "80px";
-            iframe.style.borderRadius = "50%";
-            iframe.style.overflow     = "hidden";
-            iframe.style.transform    = "";
-            iframe.style.top          = "";
+              var hClose   = window.visualViewport ? window.visualViewport.height   : window.innerHeight;
+              var topClose = window.visualViewport ? window.visualViewport.offsetTop : 0;
+              iframe.style.height = hClose + "px";
+              iframe.style.top    = topClose + "px";
 
-            if (POSITION === "bottom-left") {
-              iframe.style.bottom = "20px";
-              iframe.style.left   = "20px";
-              iframe.style.right  = "auto";
-              iframe.style.top    = "auto";
-            } else if (POSITION === "middle-right") {
-              iframe.style.top    = "calc(50% - 40px)";
-              iframe.style.right  = "20px";
-              iframe.style.bottom = "auto";
-              iframe.style.left   = "auto";
             } else {
-              /* bottom-right (default) */
-              iframe.style.bottom = "20px";
-              iframe.style.right  = "20px";
-              iframe.style.left   = "auto";
-              iframe.style.top    = "auto";
+              /* ── Desktop / tablet: panel flotante → FAB ── */
+              iframe.style.transition = [
+                "width 0.24s cubic-bezier(0.4,0,1,1)",
+                "height 0.24s cubic-bezier(0.4,0,1,1)",
+                "top 0.24s cubic-bezier(0.4,0,1,1)",
+                "right 0.24s cubic-bezier(0.4,0,1,1)",
+                "bottom 0.24s cubic-bezier(0.4,0,1,1)",
+                "left 0.24s cubic-bezier(0.4,0,1,1)",
+                "border-radius 0.24s cubic-bezier(0.4,0,1,1)"
+              ].join(",");
+
+              iframe.style.width        = "80px";
+              iframe.style.height       = "80px";
+              iframe.style.borderRadius = "50%";
+              iframe.style.overflow     = "hidden";
+              iframe.style.transform    = "";
+              iframe.style.top          = "";
+
+              if (POSITION === "bottom-left") {
+                iframe.style.bottom = "20px";
+                iframe.style.left   = "20px";
+                iframe.style.right  = "auto";
+                iframe.style.top    = "auto";
+              } else if (POSITION === "middle-right") {
+                iframe.style.top    = "calc(50% - 40px)";
+                iframe.style.right  = "20px";
+                iframe.style.bottom = "auto";
+                iframe.style.left   = "auto";
+              } else {
+                /* bottom-right (default) */
+                iframe.style.bottom = "20px";
+                iframe.style.right  = "20px";
+                iframe.style.left   = "auto";
+                iframe.style.top    = "auto";
+              }
             }
           });
         }
