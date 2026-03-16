@@ -8,6 +8,7 @@ const { normalizeDomain } = require("../utils/normalizeDomain");
 const { isLocalhost } = require("../utils/isLocalhost");
 const { getStore, TTL_MS } = require("../utils/nonceStore");
 const { domainExists } = require("../validators/domain.validator");
+const { generateDomainToken } = require("../helper/generateDomainToken");
 
 /* ─────────────────────────────────────────
    HELPERS
