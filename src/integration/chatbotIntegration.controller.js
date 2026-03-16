@@ -580,7 +580,6 @@ exports.removeAllowedDomain = async (req, res) => {
   }
 };
 
-
 /* =======================================================
    6) GENERAR CÓDIGO DE INSTALACIÓN
 ======================================================= */
@@ -602,15 +601,11 @@ exports.InstallationCode = async (req, res) => {
     const baseUrl = getBaseUrl();
     const hasDomains = Boolean(chatbot.allowed_domains?.length);
 
-    const scripts = hasDomains
-      ? chatbot.allowed_domains.map(domain => ({
-          domain,
-          script: `<script src='${baseUrl}/api/chatbot-integration/${public_id}/install?t=${generateDomainToken(chatbot.install_token, domain)}' async></script>`
-        }))
-      : [];
+    // ← Sin ?t= porque la seguridad ahora la maneja el challenge
+    const script = `<script src='${baseUrl}/api/chatbot-integration/${public_id}/install' async></script>`;
 
     res.json({
-      scripts,
+      scripts: hasDomains ? [{ domain: "todos los dominios autorizados", script }] : [],
       allowed_domains: chatbot.allowed_domains || [],
       has_domains: hasDomains
     });
