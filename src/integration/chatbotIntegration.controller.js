@@ -70,11 +70,11 @@ exports.getInstallScript = async (req, res) => {
   }
 
   /* ── Welcome bubble ── */
-  var welcomeEl     = null;
+  var welcomeEl      = null;
   var pendingWelcome = null;
 
   function createWelcome(message) {
-    var el      = document.createElement("div");
+    var el       = document.createElement("div");
     var isLeft   = POSITION === "bottom-left";
     var isMiddle = POSITION === "middle-right";
     var hPos     = isLeft ? "left:112px" : "right:112px";
@@ -162,13 +162,18 @@ exports.getInstallScript = async (req, res) => {
       + "?d=" + encodeURIComponent(domain)
       + "&c=" + encodeURIComponent(challenge);
 
+    /* ── Estilos base del iframe ──
+     * Solo animamos border-radius aquí.
+     * width/height/position se animarán vía JS con rAF
+     * para evitar reflows forzados antes de la transición.
+     */
     iframe.style.cssText = [
       "position:fixed",
       ${positionStyles},
       "width:80px","height:80px","border:none",
       "z-index:2147483647","background:transparent",
       "pointer-events:auto","overflow:hidden","border-radius:50%",
-      "transition:width 0.3s ease,height 0.3s ease,border-radius 0.3s ease,bottom 0.3s ease,right 0.3s ease,left 0.3s ease,top 0.3s ease"
+      "transition:border-radius 0.32s cubic-bezier(0.16,1,0.3,1),opacity 0.22s ease"
     ].join(";");
 
     iframe.sandbox = "allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation";
@@ -206,9 +211,8 @@ exports.getInstallScript = async (req, res) => {
       if (!isMobile) return;
 
       if (window.visualViewport) {
-        /* Altura visible real (excluye el teclado en iOS) */
         var vvHeight = window.visualViewport.height;
-        var vvOffset = window.visualViewport.offsetTop; /* scroll del viewport */
+        var vvOffset = window.visualViewport.offsetTop;
 
         iframe.style.height = vvHeight + "px";
         iframe.style.top    = vvOffset + "px";
@@ -217,11 +221,9 @@ exports.getInstallScript = async (req, res) => {
         iframe.style.right  = "auto";
         iframe.style.width  = "100%";
       }
-      /* Si visualViewport no existe, dvh del CSS es suficiente */
     }
 
     function resetViewportFix() {
-      /* Restaura estilos a los que pone CHATBOT_RESIZE:close */
       iframe.style.height = "80px";
       iframe.style.width  = "80px";
       iframe.style.top    = "";
@@ -232,12 +234,7 @@ exports.getInstallScript = async (req, res) => {
       window.visualViewport.addEventListener("scroll", applyViewportFix);
     }
 
-    /*
-     * FIX SCROLL — cuando el teclado sube, notificar al iframe
-     * para que haga scroll al último mensaje.
-     * Se dispara tanto con visualViewport (iOS) como con
-     * el evento resize del window (Android Chrome).
-     */
+    /* ── Notificar scroll al último mensaje cuando sube el teclado ── */
     function notifyScrollToBottom() {
       if (!_chatOpen) return;
       try {
@@ -252,7 +249,7 @@ exports.getInstallScript = async (req, res) => {
       if (_chatOpen) notifyScrollToBottom();
     });
 
-    /* ── Fallback iOS: scrollTo(0,0) cuando el teclado baja ── */
+    /* ── Fallback iOS: restaurar posición cuando el teclado baja ── */
     var _inputFocused = false;
     window.addEventListener("focusin", function(e) {
       var tag = e.target && e.target.tagName;
@@ -263,7 +260,6 @@ exports.getInstallScript = async (req, res) => {
     window.addEventListener("focusout", function() {
       if (_inputFocused) {
         _inputFocused = false;
-        /* Pequeño delay para que el teclado termine de bajar */
         setTimeout(function() {
           if (_chatOpen) applyViewportFix();
           else resetViewportFix();
@@ -306,79 +302,138 @@ exports.getInstallScript = async (req, res) => {
 
       /* ── Resize (abrir / cerrar chat) ── */
       if (e.data.type === "CHATBOT_RESIZE") {
+
         if (e.data.open) {
+          /* ════════════════════════════════════════
+           * ABRIR
+           * Paso 1: cambios de layout SIN transición
+           *         (evita reflow forzado pre-animación)
+           * Paso 2: en rAF aplica dimensiones finales
+           *         + transición spring
+           * ════════════════════════════════════════ */
           _chatOpen = true;
           hideWelcome();
-          iframe.style.borderRadius = "16px";
-          iframe.style.overflow     = "visible";
 
           var isMobile = window.innerWidth <= 480;
-          if (isMobile) {
-            /* Dimensiones base full-screen */
-            iframe.style.width  = "100%";
-            iframe.style.left   = "0";
-            iframe.style.right  = "auto";
-            iframe.style.bottom = "auto";
 
-            /*
-             * FIX: usamos visualViewport si está disponible para
-             * obtener la altura real sin el teclado (iOS).
-             * Si no, caemos a window.innerHeight.
-             */
-            if (window.visualViewport) {
-              iframe.style.height = window.visualViewport.height + "px";
-              iframe.style.top    = window.visualViewport.offsetTop + "px";
-            } else {
-              iframe.style.height = window.innerHeight + "px";
-              iframe.style.top    = "0";
-            }
+          if (isMobile) {
+            /* — Móvil: fullscreen deslizando desde abajo — */
+            iframe.style.transition   = "none";
+            iframe.style.borderRadius = "0";
+            iframe.style.overflow     = "visible";
+
+            var targetH   = window.visualViewport ? window.visualViewport.height   : window.innerHeight;
+            var targetTop = window.visualViewport ? window.visualViewport.offsetTop : 0;
+
+            requestAnimationFrame(function() {
+              iframe.style.transition = [
+                "width 0.38s cubic-bezier(0.16,1,0.3,1)",
+                "height 0.38s cubic-bezier(0.16,1,0.3,1)",
+                "top 0.38s cubic-bezier(0.16,1,0.3,1)",
+                "left 0.38s cubic-bezier(0.16,1,0.3,1)",
+                "border-radius 0.32s cubic-bezier(0.16,1,0.3,1)"
+              ].join(",");
+              iframe.style.width  = "100%";
+              iframe.style.left   = "0";
+              iframe.style.right  = "auto";
+              iframe.style.bottom = "auto";
+              iframe.style.height = targetH + "px";
+              iframe.style.top    = targetTop + "px";
+            });
 
           } else {
-            /* Desktop / tablet: comportamiento original */
+            /* — Desktop / tablet: panel flotante — */
             var w = Math.min(420, window.innerWidth - 40);
             var h = Math.min(680, window.innerHeight - 60);
-            iframe.style.width  = w + "px";
-            iframe.style.height = h + "px";
 
-            if (POSITION === "bottom-left") {
-              iframe.style.bottom = "20px"; iframe.style.left   = "20px";
-              iframe.style.right  = "auto"; iframe.style.top    = "auto";
-              iframe.style.transform = "";
-            } else if (POSITION === "middle-right") {
-              iframe.style.top    = "50%";  iframe.style.right  = "20px";
-              iframe.style.bottom = "auto"; iframe.style.left   = "auto";
-              iframe.style.transform = "translateY(-50%)";
-            } else {
-              iframe.style.bottom = "20px"; iframe.style.right  = "20px";
-              iframe.style.left   = "auto"; iframe.style.top    = "auto";
-              iframe.style.transform = "";
-            }
+            iframe.style.transition   = "none";
+            iframe.style.overflow     = "visible";
+            iframe.style.borderRadius = "16px";
+
+            requestAnimationFrame(function() {
+              iframe.style.transition = [
+                "width 0.32s cubic-bezier(0.16,1,0.3,1)",
+                "height 0.32s cubic-bezier(0.16,1,0.3,1)",
+                "top 0.32s cubic-bezier(0.16,1,0.3,1)",
+                "right 0.32s cubic-bezier(0.16,1,0.3,1)",
+                "bottom 0.32s cubic-bezier(0.16,1,0.3,1)",
+                "left 0.32s cubic-bezier(0.16,1,0.3,1)"
+              ].join(",");
+              iframe.style.width  = w + "px";
+              iframe.style.height = h + "px";
+
+              if (POSITION === "bottom-left") {
+                iframe.style.bottom    = "20px";
+                iframe.style.left      = "20px";
+                iframe.style.right     = "auto";
+                iframe.style.top       = "auto";
+                iframe.style.transform = "";
+              } else if (POSITION === "middle-right") {
+                iframe.style.top       = "50%";
+                iframe.style.right     = "20px";
+                iframe.style.bottom    = "auto";
+                iframe.style.left      = "auto";
+                iframe.style.transform = "translateY(-50%)";
+              } else {
+                /* bottom-right (default) */
+                iframe.style.bottom    = "20px";
+                iframe.style.right     = "20px";
+                iframe.style.left      = "auto";
+                iframe.style.top       = "auto";
+                iframe.style.transform = "";
+              }
+            });
           }
 
         } else {
-          /* ── Cerrar ── */
+          /* ════════════════════════════════════════
+           * CERRAR
+           * Curva ease-in (más rápida) — sensación nativa
+           * ════════════════════════════════════════ */
           _chatOpen = false;
-          iframe.style.width        = "80px";
-          iframe.style.height       = "80px";
-          iframe.style.borderRadius = "50%";
-          iframe.style.overflow     = "hidden";
-          iframe.style.transform    = "";
-          iframe.style.top          = "";
 
-          if (POSITION === "bottom-left") {
-            iframe.style.bottom = "20px"; iframe.style.left   = "20px";
-            iframe.style.right  = "auto"; iframe.style.top    = "auto";
-          } else if (POSITION === "middle-right") {
-            iframe.style.top    = "calc(50% - 40px)"; iframe.style.right  = "20px";
-            iframe.style.bottom = "auto";              iframe.style.left   = "auto";
-          } else {
-            iframe.style.bottom = "20px"; iframe.style.right  = "20px";
-            iframe.style.left   = "auto"; iframe.style.top    = "auto";
-          }
+          requestAnimationFrame(function() {
+            iframe.style.transition = [
+              "width 0.24s cubic-bezier(0.4,0,1,1)",
+              "height 0.24s cubic-bezier(0.4,0,1,1)",
+              "top 0.24s cubic-bezier(0.4,0,1,1)",
+              "right 0.24s cubic-bezier(0.4,0,1,1)",
+              "bottom 0.24s cubic-bezier(0.4,0,1,1)",
+              "left 0.24s cubic-bezier(0.4,0,1,1)",
+              "border-radius 0.24s cubic-bezier(0.4,0,1,1)"
+            ].join(",");
+
+            iframe.style.width        = "80px";
+            iframe.style.height       = "80px";
+            iframe.style.borderRadius = "50%";
+            iframe.style.overflow     = "hidden";
+            iframe.style.transform    = "";
+            iframe.style.top          = "";
+
+            if (POSITION === "bottom-left") {
+              iframe.style.bottom = "20px";
+              iframe.style.left   = "20px";
+              iframe.style.right  = "auto";
+              iframe.style.top    = "auto";
+            } else if (POSITION === "middle-right") {
+              iframe.style.top    = "calc(50% - 40px)";
+              iframe.style.right  = "20px";
+              iframe.style.bottom = "auto";
+              iframe.style.left   = "auto";
+            } else {
+              /* bottom-right (default) */
+              iframe.style.bottom = "20px";
+              iframe.style.right  = "20px";
+              iframe.style.left   = "auto";
+              iframe.style.top    = "auto";
+            }
+          });
         }
       }
-    });
+    }); /* ── fin addEventListener("message") ── */
 
+    /* ── MutationObserver: evita que frameworks (React/Vue/etc.)
+     *    eliminen el iframe o el welcome del DOM al re-renderizar ── */
     var _chatbotObserver = new MutationObserver(function() {
       if (!document.getElementById('__chatbot_iframe__')) {
         document.body.appendChild(iframe);
@@ -388,7 +443,8 @@ exports.getInstallScript = async (req, res) => {
       }
     });
     _chatbotObserver.observe(document.body, { childList: true });
-  }
+
+  } /* ── fin mountIframe ── */
 
 })();`);
 
