@@ -232,6 +232,26 @@ exports.getInstallScript = async (req, res) => {
       window.visualViewport.addEventListener("scroll", applyViewportFix);
     }
 
+    /*
+     * FIX SCROLL — cuando el teclado sube, notificar al iframe
+     * para que haga scroll al último mensaje.
+     * Se dispara tanto con visualViewport (iOS) como con
+     * el evento resize del window (Android Chrome).
+     */
+    function notifyScrollToBottom() {
+      if (!_chatOpen) return;
+      try {
+        iframe.contentWindow.postMessage({ type: "CHATBOT_SCROLL_BOTTOM" }, "*");
+      } catch(e) {}
+    }
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", notifyScrollToBottom);
+    }
+    window.addEventListener("resize", function() {
+      if (_chatOpen) notifyScrollToBottom();
+    });
+
     /* ── Fallback iOS: scrollTo(0,0) cuando el teclado baja ── */
     var _inputFocused = false;
     window.addEventListener("focusin", function(e) {
