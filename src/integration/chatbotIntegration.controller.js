@@ -7,8 +7,7 @@ const { safeCompare } = require("../helper/safeCompare");
 const { normalizeDomain } = require("../utils/normalizeDomain");
 const { isLocalhost } = require("../utils/isLocalhost");
 const { getStore, TTL_MS } = require("../utils/nonceStore");
-const { domainExists } = require("../validators/domain.validator");
-const { generateDomainToken } = require("../helper/generateDomainToken"); //<---- esto ya no se utliza 
+const { domainExists } = require("../validators/domain.validator"); 
 
 /* ─────────────────────────────────────────
    HELPERS

@@ -43,108 +43,140 @@ exports.sendConversationEmail = async (session) => {
     const htmlContent = `
 <!DOCTYPE html>
 <html lang="es">
-<head><meta charset="UTF-8"/></head>
-<body style="margin:0;padding:0;background:#111827;font-family:'Courier New',monospace;">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+</head>
 
-  <table width="100%" cellpadding="0" cellspacing="0"
-         style="background:#111827;padding:32px 0;">
+<body style="margin:0;padding:0;background:#F2F2F2;font-family:Arial,Helvetica,sans-serif;">
+
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:30px 0;">
     <tr>
       <td align="center">
-        <table width="560" cellpadding="0" cellspacing="0"
-               style="background:#1f2937;border-radius:12px;overflow:hidden;">
+
+        <!-- CONTAINER -->
+        <table width="600" cellpadding="0" cellspacing="0"
+               style="background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,0.08);">
 
           <!-- HEADER -->
           <tr>
-            <td style="padding:16px 24px;background:#111827;
-                        font-size:11px;letter-spacing:2px;
-                        color:#6b7280;text-transform:uppercase;">
-              VISTA PREVIA DEL CORREO
+            <td style="background:linear-gradient(135deg,#034AA6,#049DBF);padding:20px 24px;">
+              <h2 style="margin:0;color:#ffffff;font-size:18px;">
+                ${chatbot.name}
+              </h2>
+              <p style="margin:4px 0 0;color:#e0f7fa;font-size:12px;">
+                Nueva conversación recibida
+              </p>
             </td>
           </tr>
 
-          <!-- DE / PARA / ASUNTO -->
+          <!-- INFO GENERAL -->
           <tr>
-            <td style="padding:0 24px;">
-              <table width="100%" cellpadding="0" cellspacing="0"
-                     style="border-bottom:1px solid #374151;">
+            <td style="padding:20px 24px;">
+              
+              <table width="100%" cellpadding="0" cellspacing="0">
+
                 <tr>
-                  <td style="padding:12px 0;color:#6b7280;font-size:13px;width:70px;">De:</td>
-                  <td style="padding:12px 0;color:#f3f4f6;font-size:13px;font-weight:bold;">
-                    ${emailSettings.from_name || chatbot.name}
+                  <td style="font-size:13px;color:#555;padding:6px 0;">📌 Asunto:</td>
+                  <td style="font-size:13px;color:#111;font-weight:bold;">${asunto}</td>
+                </tr>
+
+                <tr>
+                  <td style="font-size:13px;color:#555;padding:6px 0;">📅 Fecha:</td>
+                  <td style="font-size:13px;color:#111;">${fecha}</td>
+                </tr>
+
+                <tr>
+                  <td style="font-size:13px;color:#555;padding:6px 0;">🌐 Origen:</td>
+                  <td style="font-size:13px;color:#111;">${origen}</td>
+                </tr>
+
+              </table>
+
+            </td>
+          </tr>
+
+          <!-- CONTACTO CARD -->
+          <tr>
+            <td style="padding:0 24px 16px;">
+              <table width="100%" cellpadding="0" cellspacing="0"
+                     style="background:#F2F2F2;border-radius:10px;padding:16px;">
+
+                <tr>
+                  <td colspan="2" style="font-size:14px;font-weight:bold;color:#034AA6;padding-bottom:10px;">
+                    Información del cliente
                   </td>
                 </tr>
-              </table>
-              <table width="100%" cellpadding="0" cellspacing="0"
-                     style="border-bottom:1px solid #374151;">
+
                 <tr>
-                  <td style="padding:12px 0;color:#6b7280;font-size:13px;width:70px;">Para:</td>
-                  <td style="padding:12px 0;color:#f3f4f6;font-size:13px;font-weight:bold;">
-                    ${emailSettings.to_email}
-                  </td>
+                  <td style="font-size:13px;color:#555;">Nombre:</td>
+                  <td style="font-size:13px;color:#111;">${nombre}</td>
                 </tr>
-              </table>
-              <table width="100%" cellpadding="0" cellspacing="0"
-                     style="border-bottom:1px solid #374151;">
+
                 <tr>
-                  <td style="padding:12px 0;color:#6b7280;font-size:13px;width:70px;">Asunto:</td>
-                  <td style="padding:12px 0;color:#f3f4f6;font-size:13px;font-weight:bold;">
-                    ${asunto}
-                  </td>
+                  <td style="font-size:13px;color:#555;">Teléfono:</td>
+                  <td style="font-size:13px;color:#111;">${telefono}</td>
                 </tr>
+
+                <tr>
+                  <td style="font-size:13px;color:#555;">Email:</td>
+                  <td style="font-size:13px;color:#111;">${email}</td>
+                </tr>
+
               </table>
             </td>
           </tr>
 
-          <!-- DATOS DEL CONTACTO -->
-          <tr>
-            <td style="padding:20px 24px 8px;">
-              <p style="margin:0 0 6px;color:#d1d5db;font-size:13px;">
-                <span style="color:#6b7280;">Nombre: </span>${nombre}
-              </p>
-              <p style="margin:0 0 6px;color:#d1d5db;font-size:13px;">
-                <span style="color:#6b7280;">Teléfono: </span>${telefono}
-              </p>
-              <p style="margin:0 0 6px;color:#d1d5db;font-size:13px;">
-                <span style="color:#6b7280;">Email: </span>${email}
-              </p>
-              <p style="margin:0 0 6px;color:#d1d5db;font-size:13px;">
-                <span style="color:#6b7280;">Origen: </span>${origen}
-              </p>
-              <p style="margin:0 0 6px;color:#d1d5db;font-size:13px;">
-                <span style="color:#6b7280;">Fecha: </span>${fecha}
-              </p>
-            </td>
-          </tr>
-
-          <!-- SEPARADOR HISTORIAL -->
-          <tr>
-            <td style="padding:4px 24px 0;">
-              <p style="margin:0;color:#4b5563;font-size:12px;text-align:center;">
-                — Historial de conversación adjunto —
-              </p>
-            </td>
-          </tr>
-
-          <!-- TABLA HISTORIAL -->
+          <!-- HISTORIAL -->
           ${historyRows ? `
           <tr>
-            <td style="padding:12px 24px 24px;">
-              <table width="100%" cellpadding="0" cellspacing="0"
-                     style="background:#111827;border-radius:8px;overflow:hidden;">
-                ${historyRows}
-              </table>
+            <td style="padding:0 24px 20px;">
+
+              <p style="margin:10px 0 14px;font-size:14px;font-weight:bold;color:#034AA6;">
+                Historial de conversación
+              </p>
+
+              ${(session.history || []).map(h => `
+                <div style="margin-bottom:12px;">
+                  
+                  <!-- USER -->
+                  <div style="background:#e6f7fb;padding:10px 12px;border-radius:8px;margin-bottom:4px;">
+                    <span style="font-size:12px;color:#049DBF;font-weight:bold;">Usuario</span><br/>
+                    <span style="font-size:13px;color:#111;">${h.question || ""}</span>
+                  </div>
+
+                  <!-- BOT -->
+                  <div style="background:#28403D;padding:10px 12px;border-radius:8px;">
+                    <span style="font-size:12px;color:#04C4D9;font-weight:bold;">Bot</span><br/>
+                    <span style="font-size:13px;color:#F2F2F2;">${h.answer || ""}</span>
+                  </div>
+
+                </div>
+              `).join("")}
+
             </td>
           </tr>
           ` : ""}
 
+          <!-- FOOTER -->
+          <tr>
+            <td style="background:#F2F2F2;padding:14px;text-align:center;">
+              <span style="font-size:11px;color:#777;">
+                Generado automáticamente por tu chatbot
+              </span>
+            </td>
+          </tr>
+
         </table>
+
       </td>
     </tr>
   </table>
 
 </body>
 </html>
-    `;
+`;
+
 
     const mailOptions = {
       from: `"${emailSettings.from_name || "Chatbot"}" <${process.env.SMTP_USE}>`,
