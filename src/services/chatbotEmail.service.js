@@ -37,7 +37,7 @@ exports.sendConversationEmail = async (session) => {
         </div>
       </div>
       <div style="margin-bottom:10px">
-        <div style="background:#034AA6;border-radius:10px 10px 2px 10px;padding:12px 14px;">
+        <div style="background:#2161B4;border-radius:10px 10px 10px 2px;padding:12px 14px;">
           <span style="font-size:11px;color:#04C4D9;font-weight:700;
                        text-transform:uppercase;letter-spacing:0.5px;">Usuario</span>
           <p style="margin:5px 0 0;font-size:13px;color:#ffffff;line-height:1.5;">
