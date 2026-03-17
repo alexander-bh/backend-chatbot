@@ -146,9 +146,9 @@ exports.sendConversationEmail = async (session) => {
                   </div>
 
                   <!-- BOT -->
-                  <div style="background:#79B5AD;padding:10px 12px;border-radius:8px;">
+                  <div style="background:#F2F2F2;padding:10px 12px;border-radius:8px;">
                     <span style="font-size:12px;color:#04C4D9;font-weight:bold;">Usuario</span><br/>
-                    <span style="font-size:13px;color:#F2F2F2;">${h.answer || ""}</span>
+                    <span style="font-size:13px;color:#111;">${h.answer || ""}</span>
                   </div>
 
                 </div>
