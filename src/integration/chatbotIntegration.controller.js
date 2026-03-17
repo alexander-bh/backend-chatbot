@@ -8,7 +8,7 @@ const { normalizeDomain } = require("../utils/normalizeDomain");
 const { isLocalhost } = require("../utils/isLocalhost");
 const { getStore, TTL_MS } = require("../utils/nonceStore");
 const { domainExists } = require("../validators/domain.validator");
-const { generateDomainToken } = require("../helper/generateDomainToken");
+const { generateDomainToken } = require("../helper/generateDomainToken"); //<---- esto ya no se utliza 
 
 /* ─────────────────────────────────────────
    HELPERS
@@ -429,20 +429,25 @@ exports.getInstallScript = async (req, res) => {
                 iframe.style.bottom       = "auto";
 
                 if (POSITION === "bottom-left") {
-                  iframe.style.bottom = "20px";
-                  iframe.style.left   = "20px";
+                    iframe.style.bottom = "20px";
+                    iframe.style.left   = "20px";
                 } else if (POSITION === "middle-right") {
-                  iframe.style.top   = "calc(50% - 40px)";
-                  iframe.style.right = "20px";
+                    iframe.style.top   = "calc(50% - 40px)";
+                    iframe.style.right = "20px";
                 } else {
-                  /* bottom-right (default) */
-                  iframe.style.bottom = "20px";
-                  iframe.style.right  = "20px";
+                    iframe.style.bottom = "20px";
+                    iframe.style.right  = "20px";
                 }
-              }, 320);
 
+                /* ← AQUÍ: freeze justo cuando el iframe recupera su tamaño */
+                iframe.contentWindow.postMessage({ type: "CHATBOT_FAB_FREEZE" }, "*");
+                setTimeout(function() {
+                    iframe.contentWindow.postMessage({ type: "CHATBOT_FAB_UNFREEZE" }, "*");
+                }, 50);
+              }, 320);
             } else {
               /* ── Desktop / tablet: panel flotante → FAB ── */
+              
               iframe.style.transition = [
                 "width 0.24s cubic-bezier(0.4,0,1,1)",
                 "height 0.24s cubic-bezier(0.4,0,1,1)",
@@ -471,12 +476,19 @@ exports.getInstallScript = async (req, res) => {
                 iframe.style.bottom = "auto";
                 iframe.style.left   = "auto";
               } else {
-                /* bottom-right (default) */
                 iframe.style.bottom = "20px";
                 iframe.style.right  = "20px";
                 iframe.style.left   = "auto";
                 iframe.style.top    = "auto";
               }
+
+              /* ← AGREGA ESTO: freeze en desktop también */
+              setTimeout(function() {
+                iframe.contentWindow.postMessage({ type: "CHATBOT_FAB_FREEZE" }, "*");
+                setTimeout(function() {
+                  iframe.contentWindow.postMessage({ type: "CHATBOT_FAB_UNFREEZE" }, "*");
+                }, 50);
+              }, 260); /* ← después de que termina la transición de 0.24s */
             }
           });
         }
