@@ -1,10 +1,6 @@
 // models/Contact.js
 const mongoose = require("mongoose");
 
-/* =========================
-   CONTACT SCHEMA
-========================= */
-
 const ContactSchema = new mongoose.Schema({
 
   account_id: {
@@ -47,7 +43,6 @@ const ContactSchema = new mongoose.Schema({
     type: String,
   },
 
-  // 👤 Datos personales
   name: {
     type: String,
     trim: true
