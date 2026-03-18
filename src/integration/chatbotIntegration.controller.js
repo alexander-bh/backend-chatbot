@@ -13,7 +13,6 @@ const { domainExists } = require("../validators/domain.validator");
    HELPERS
 ───────────────────────────────────────── */
 const getBaseUrl = () => process.env.APP_BASE_URL || "https://backend-chatbot-omega.vercel.app";
-
 const getWidgetBaseUrl = () => process.env.WIDGET_BASE_URL || "https://chatbot-widget-blue-eight.vercel.app";
 const WIDGET_BASE_URL = getWidgetBaseUrl();
 const WIDGET_DOMAIN = normalizeDomain(WIDGET_BASE_URL);
@@ -694,8 +693,6 @@ exports.verifyConfigSignature = async (req, res) => {
     const valid = await store.consume(config.nonce);
 
     if (!valid) {
-      // Nonce ya usado o expirado → posible replay attack
-      console.warn(`REPLAY ATTEMPT: nonce=${config.nonce} publicId=${config.publicId}`);
       return res.status(403).json({ error: "Nonce inválido o ya utilizado" });
     }
 
