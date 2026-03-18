@@ -550,17 +550,29 @@ exports.getContacts = async (req, res) => {
       filter.status = status;
     }
 
+    /* ===== FILTRO DE SOURCE ===== */
     if (source === "manual") {
       filter.source = "manual";
-    }
 
-    if (source === "chatbot") {
+    } else if (source === "chatbot") {
+      // Chatbot: source explícito O sin source pero con session_id (tienen historial)
       filter.$or = [
         { source: "chatbot" },
-        { source: { $exists: false } }
+        { source: { $exists: false }, session_id: { $exists: true, $ne: null } }
+      ];
+
+    } else {
+      // Sin filtro de source → TODOS:
+      // manuales + chatbot con source + chatbot sin source pero con historial
+      filter.$or = [
+        { source: "manual" },
+        { source: "chatbot" },
+        { source: { $exists: false }, session_id: { $exists: true, $ne: null } },
+        { source: { $exists: false } } // cualquier otro sin source
       ];
     }
 
+    /* ===== FILTRO DE BÚSQUEDA ===== */
     if (search) {
       const searchFilter = [
         { name: { $regex: search, $options: "i" } },
@@ -582,16 +594,10 @@ exports.getContacts = async (req, res) => {
     /* ================= CONTACTOS + HISTORIAL ================= */
 
     const contacts = await Contact.aggregate([
-      {
-        $match: filter
-      },
+      { $match: filter },
+      { $sort: { createdAt: -1 } },
 
-      {
-        $sort: { createdAt: -1 }
-      },
-
-      /* ================= JOIN CONVERSATION ================= */
-
+      /* ===== JOIN CONVERSATION ===== */
       {
         $lookup: {
           from: "conversationsessions",
@@ -604,23 +610,23 @@ exports.getContacts = async (req, res) => {
       {
         $unwind: {
           path: "$conversation",
-          preserveNullAndEmptyArrays: true
+          preserveNullAndEmptyArrays: true // mantiene contactos SIN sesión
         }
       },
 
-      /* ================= EXTRAER HISTORIAL ================= */
-
+      /* ===== EXTRAER HISTORIAL ===== */
       {
         $addFields: {
-          conversation_history: "$conversation.history"
+          conversation_history: {
+            $ifNull: ["$conversation.history", []] // array vacío si no hay historial
+          },
+          has_history: {
+            $gt: [{ $size: { $ifNull: ["$conversation.history", []] } }, 0]
+          }
         }
       },
 
-      {
-        $project: {
-          conversation: 0
-        }
-      }
+      { $project: { conversation: 0 } }
     ]);
 
     /* ================= NORMALIZAR ================= */
@@ -630,7 +636,7 @@ exports.getContacts = async (req, res) => {
     /* ================= CONTADORES ================= */
 
     const baseCountFilter = {
-      account_id: accountId,
+      account_id: new mongoose.Types.ObjectId(accountId), // ObjectId consistente
       is_deleted: false
     };
 
@@ -643,11 +649,12 @@ exports.getContacts = async (req, res) => {
         source: "manual"
       }),
 
+      // Chatbot: source explícito O sin source con session_id
       Contact.countDocuments({
         ...baseCountFilter,
         $or: [
           { source: "chatbot" },
-          { source: { $exists: false } }
+          { source: { $exists: false }, session_id: { $exists: true, $ne: null } }
         ]
       })
 
@@ -662,9 +669,7 @@ exports.getContacts = async (req, res) => {
 
   } catch (error) {
     console.error("GET CONTACTS ERROR:", error);
-    res.status(500).json({
-      message: "Error al obtener contactos"
-    });
+    res.status(500).json({ message: "Error al obtener contactos" });
   }
 };
 
