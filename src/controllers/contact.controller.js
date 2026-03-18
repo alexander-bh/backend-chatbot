@@ -537,61 +537,21 @@ exports.deleteContact = async (req, res) => {
 exports.getContacts = async (req, res) => {
   try {
     const accountId = req.user.account_id;
-    const { source, status, search } = req.query;
 
-    /* ================= FILTRO BASE ================= */
+    /* ================= FILTRO BASE (sin filtros de query) ================= */
 
     const filter = {
       account_id: new mongoose.Types.ObjectId(accountId),
       is_deleted: false
     };
 
-    if (status) {
-      filter.status = status;
-    }
-
-    if (source === "manual") {
-      filter.source = "manual";
-    }
-
-    if (source === "chatbot") {
-      filter.$or = [
-        { source: "chatbot" },
-        { source: { $exists: false } }
-      ];
-    }
-
-    if (search) {
-      const searchFilter = [
-        { name: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
-        { phone: { $regex: search, $options: "i" } }
-      ];
-
-      if (filter.$or) {
-        filter.$and = [
-          { $or: filter.$or },
-          { $or: searchFilter }
-        ];
-        delete filter.$or;
-      } else {
-        filter.$or = searchFilter;
-      }
-    }
-
     /* ================= CONTACTOS + HISTORIAL ================= */
 
     const contacts = await Contact.aggregate([
-      {
-        $match: filter
-      },
+      { $match: filter },
+      { $sort: { createdAt: -1 } },
 
-      {
-        $sort: { createdAt: -1 }
-      },
-
-      /* ================= JOIN CONVERSATION ================= */
-
+      /* JOIN CONVERSATION */
       {
         $lookup: {
           from: "conversationsessions",
@@ -600,7 +560,6 @@ exports.getContacts = async (req, res) => {
           as: "conversation"
         }
       },
-
       {
         $unwind: {
           path: "$conversation",
@@ -608,18 +567,14 @@ exports.getContacts = async (req, res) => {
         }
       },
 
-      /* ================= EXTRAER HISTORIAL ================= */
-
+      /* EXTRAER HISTORIAL */
       {
         $addFields: {
           conversation_history: "$conversation.history"
         }
       },
-
       {
-        $project: {
-          conversation: 0
-        }
+        $project: { conversation: 0 }
       }
     ]);
 
@@ -635,14 +590,8 @@ exports.getContacts = async (req, res) => {
     };
 
     const [total, total_manual, total_chatbot] = await Promise.all([
-
       Contact.countDocuments(baseCountFilter),
-
-      Contact.countDocuments({
-        ...baseCountFilter,
-        source: "manual"
-      }),
-
+      Contact.countDocuments({ ...baseCountFilter, source: "manual" }),
       Contact.countDocuments({
         ...baseCountFilter,
         $or: [
@@ -650,7 +599,6 @@ exports.getContacts = async (req, res) => {
           { source: { $exists: false } }
         ]
       })
-
     ]);
 
     res.json({
@@ -662,9 +610,7 @@ exports.getContacts = async (req, res) => {
 
   } catch (error) {
     console.error("GET CONTACTS ERROR:", error);
-    res.status(500).json({
-      message: "Error al obtener contactos"
-    });
+    res.status(500).json({ message: "Error al obtener contactos" });
   }
 };
 
