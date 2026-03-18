@@ -14,6 +14,7 @@ const formatDateAMPM = require("../utils/formatDate");
 const { deleteFromCloudinary } = require("../services/cloudinary.service");
 const { cloneTemplateToFlow, createFallbackFlow } = require("../services/flowNode.service");
 const slugify = require("../helper/slugify");
+const SystemConfig = require("../models/SystemConfig");
 
 /* ─────────────────────────────────────
    DASHBOAR
@@ -394,16 +395,46 @@ exports.getAllChatbots = async (req, res) => {
   try {
     const chatbots = await Chatbot.find().sort({ created_at: -1 });
 
-    const formatted = chatbots.map(chatbot => ({
-      ...chatbot.toObject(),
-      created_at: new Date(chatbot.created_at).toLocaleString("es-MX", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit"
+    const formatted = await Promise.all(
+      chatbots.map(async (chatbot) => {
+        const chatbotObj = {
+          ...chatbot.toObject(),
+          created_at: new Date(chatbot.created_at).toLocaleString("es-MX", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit"
+          })
+        };
+
+        /* ── TRAER FLOW PUBLICADO ── */
+        const flow = await Flow.findOne({
+          chatbot_id: chatbot._id,
+          status: "published"
+        }).lean();
+
+        if (!flow) {
+          chatbotObj.dialog = null;
+          return chatbotObj;
+        }
+
+        /* ── TRAER TODOS LOS NODOS DEL FLOW ── */
+        const nodes = await FlowNode.find({
+          flow_id: flow._id,
+          is_draft: false
+        })
+          .sort({ order: 1 })
+          .lean();
+
+        chatbotObj.dialog = {
+          ...flow,
+          nodes
+        };
+
+        return chatbotObj;
       })
-    }));
+    );
 
     res.json(formatted);
   } catch (err) {
@@ -1522,5 +1553,64 @@ exports.permanentlyDeleteDefaultContactTemplate = async (req, res) => {
 
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+};
+
+/* ─────────────────────────────────────
+   SYSTEM CONFIG (BCC y globales)
+───────────────────────────────────── */
+exports.getSystemConfig = async (req, res) => {
+  try {
+    const configs = await SystemConfig.find().lean();
+
+    // Construir objeto clave → valor
+    const result = configs.reduce((acc, c) => {
+      acc[c.key] = c.value;
+      return acc;
+    }, {});
+
+    // Fallback a .env si no hay valor en BD
+    result.bcc_email = result.bcc_email ?? process.env.BCC_EMAIL ?? null;
+
+    res.json({ config: result });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+exports.updateSystemConfig = async (req, res) => {
+  try {
+    const { bcc_email } = req.body;
+
+    const updates = [];
+
+    if (bcc_email !== undefined) {
+      // Validar formato si viene un valor
+      if (bcc_email !== null && bcc_email !== "") {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(bcc_email.trim())) {
+          return res.status(400).json({ message: "Formato de BCC inválido" });
+        }
+      }
+
+      updates.push(
+        SystemConfig.findOneAndUpdate(
+          { key: "bcc_email" },
+          { $set: { value: bcc_email?.trim() || null } },
+          { upsert: true, new: true }
+        )
+      );
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ message: "No hay campos para actualizar" });
+    }
+
+    await Promise.all(updates);
+
+    res.json({ message: "Configuración actualizada correctamente" });
+  } catch (err) {
+    console.error("UPDATE SYSTEM CONFIG ERROR:", err);
+    res.status(500).json({ message: err.message });
   }
 };

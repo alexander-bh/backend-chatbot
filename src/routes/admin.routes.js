@@ -97,4 +97,12 @@ router.get("/templates/deleted", role("ADMIN"), adminController.getDeletedDefaul
 router.patch("/templates/:id/restore", role("ADMIN"), adminController.restoreDefaultContactTemplate);
 router.delete("/templates/:id/permanent", role("ADMIN"), adminController.permanentlyDeleteDefaultContactTemplate);
 
+
+/* =========================
+   SYSTEM CONFIG
+========================= */
+router.get("/config",  role("ADMIN"), adminController.getSystemConfig);
+router.put("/config",  role("ADMIN"), adminController.updateSystemConfig);
+
+
 module.exports = router;
