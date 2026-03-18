@@ -103,7 +103,7 @@ const ContactSchema = new mongoose.Schema({
 
   status: {
     type: String,
-    enum: ["new", "contacted", "qualified", "lost","discarded"],
+    enum: ["new", "contacted", "qualified", "lost", "discarded"],
     default: "new",
   },
 
@@ -130,6 +130,15 @@ const ContactSchema = new mongoose.Schema({
   lead_score: {
     type: Number,
     default: 0
+  },
+
+  lost_at: {
+    type: Date,
+    default: null
+  },
+  discarded_at: {
+    type: Date,
+    default: null
   },
 
   duration_seconds: Number
