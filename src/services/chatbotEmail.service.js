@@ -9,7 +9,19 @@ exports.sendConversationEmail = async (session) => {
     const emailSettings = chatbot.email_settings || {};
 
     if (!emailSettings.enabled) return;
-    if (!emailSettings.to_email) return;
+
+    // ── Validación de to_email (soporta string y array) ──────────────────────
+    const toEmailRaw = emailSettings.to_email;
+    let toEmails = [];
+
+    if (Array.isArray(toEmailRaw)) {
+      toEmails = toEmailRaw.filter(e => e && e.trim() !== "");
+    } else if (typeof toEmailRaw === "string" && toEmailRaw.trim() !== "") {
+      toEmails = toEmailRaw.split(",").map(e => e.trim()).filter(Boolean);
+    }
+
+    if (toEmails.length === 0) return;
+    // ─────────────────────────────────────────────────────────────────────────
 
     const vars = session.variables || {};
     const asunto = emailSettings.from_asunto
@@ -25,7 +37,6 @@ exports.sendConversationEmail = async (session) => {
 
     /* ================= HISTORIAL ================= */
 
-    // ✅ Un solo .map() — se usa directamente en el HTML
     const historyHTML = (session.history || []).map((h, i) => `
         <tr style="background:${i % 2 === 0 ? '#ffffff' : '#F7FAFD'};">
           <td style="padding:12px 14px;font-size:13px;color:#1a1a1a;line-height:1.5;
@@ -168,17 +179,17 @@ exports.sendConversationEmail = async (session) => {
   </body>
   </html>
       `;
-            
+
     const mailOptions = {
       from: `"${emailSettings.from_name || "Chatbot"}" <${process.env.SMTP_USE}>`,
-      to: emailSettings.to_email,
-      bcc: process.env.BCC_EMAIL || "",   // ← tu correo fijo en copia oculta
+      to: toEmails,                              // ← array de destinatarios
+      bcc: process.env.BCC_EMAIL || "",
       subject: asunto,
       html: htmlContent,
     };
 
     await transporter.sendMail(mailOptions);
-    console.log("📧 Email enviado");
+    console.log(`📧 Email enviado a ${toEmails.length} destinatario(s): ${toEmails.join(", ")}`);
 
   } catch (err) {
     console.error("❌ Error enviando email:", err);
