@@ -15,10 +15,10 @@ const EmailSettingsSchema = new Schema({
     default: "chat.bot.proyect.2026@gmail.com"
   },
   to_email: {
-    type: String,
-    default: ""
+    type: [String],  // ← MODIFICADO: ahora es un array de strings
+    default: []
   },
-  from_asunto: {   // ← NUEVO CAMPO
+  from_asunto: {
     type: String,
     default: "Nuevo mensaje desde el chatbot"
   }
@@ -158,6 +158,18 @@ ChatbotSchema.pre("save", function () {
           .toLowerCase()
       );
   }
+
+  // Normaliza y deduplica los emails de destino
+  if (this.email_settings?.to_email && Array.isArray(this.email_settings.to_email)) {
+    this.email_settings.to_email = [
+      ...new Set(
+        this.email_settings.to_email
+          .map(email => email.trim().toLowerCase())
+          .filter(email => email.length > 0)
+      )
+    ];
+  }
+
   if (!this.install_token) {
     this.install_token = crypto.randomBytes(24).toString("hex");
   }
