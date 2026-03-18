@@ -809,8 +809,41 @@ exports.updateEmailSettings = async (req, res) => {
     if (from_name !== undefined) update["email_settings.from_name"] = from_name;
     if (enabled !== undefined) update["email_settings.enabled"] = enabled;
     if (from_email !== undefined) update["email_settings.from_email"] = from_email;
-    if (to_email !== undefined) update["email_settings.to_email"] = to_email;
     if (from_asunto !== undefined) update["email_settings.from_asunto"] = from_asunto;
+
+    // ── Normalización de to_email ──────────────────────────────────────────
+    if (to_email !== undefined) {
+      let emails = [];
+
+      if (Array.isArray(to_email)) {
+        // Ya viene como array: ["a@x.com", "b@x.com"]
+        emails = to_email;
+      } else if (typeof to_email === "string" && to_email.trim() !== "") {
+        // Viene como string separado por comas: "a@x.com, b@x.com"
+        emails = to_email.split(",");
+      }
+
+      // Limpiar, normalizar y deduplicar
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const normalized = [
+        ...new Set(
+          emails
+            .map(e => e.trim().toLowerCase())
+            .filter(e => e.length > 0)
+        )
+      ];
+
+      // Validar formato de cada email
+      const invalids = normalized.filter(e => !emailRegex.test(e));
+      if (invalids.length > 0) {
+        return res.status(400).json({
+          message: `Correos con formato inválido: ${invalids.join(", ")}`
+        });
+      }
+
+      update["email_settings.to_email"] = normalized;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     const chatbot = await Chatbot.findOneAndUpdate(
       {
@@ -838,6 +871,45 @@ exports.updateEmailSettings = async (req, res) => {
 
     res.status(500).json({
       message: "Error al actualizar configuración de correo"
+    });
+
+  }
+};
+
+exports.getEmailSettings = async (req, res) => {
+  try {
+
+    if (!req.user?.account_id) {
+      return res.status(401).json({
+        message: "Usuario no autenticado"
+      });
+    }
+
+    const { chatbotId } = req.params;
+
+    const chatbot = await Chatbot.findOne(
+      {
+        _id: chatbotId,
+        account_id: req.user.account_id
+      }
+    ).select("email_settings");
+
+    if (!chatbot) {
+      return res.status(404).json({
+        message: "Chatbot no encontrado"
+      });
+    }
+
+    res.json({
+      email_settings: chatbot.email_settings
+    });
+
+  } catch (error) {
+
+    console.error("GET EMAIL SETTINGS ERROR:", error);
+
+    res.status(500).json({
+      message: "Error al obtener configuración de correo"
     });
 
   }
