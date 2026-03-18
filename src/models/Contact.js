@@ -75,7 +75,7 @@ const ContactSchema = new mongoose.Schema({
   job_title: String,
   website: String,
   company_phone: String,
-  phone_ext: String, // ✅ NUEVO
+  phone_ext: String,
   position: String,
   city: String,
   country: String,
@@ -103,7 +103,7 @@ const ContactSchema = new mongoose.Schema({
 
   status: {
     type: String,
-    enum: ["new", "contacted", "qualified", "lost"],
+    enum: ["new", "contacted", "qualified", "lost","discarded"],
     default: "new",
   },
 
