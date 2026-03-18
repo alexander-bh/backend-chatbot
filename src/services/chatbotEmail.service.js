@@ -26,25 +26,18 @@ exports.sendConversationEmail = async (session) => {
     /* ================= HISTORIAL ================= */
 
     // ✅ Un solo .map() — se usa directamente en el HTML
-    const historyHTML = (session.history || []).map(h => `
-      <div style="margin-bottom:10px;">
-        <div style="background:#E8F4FB;border-radius:10px 10px 10px 2px;padding:12px 14px;">
-          <span style="font-size:11px;color:#049DBF;font-weight:700;
-                       text-transform:uppercase;letter-spacing:0.5px;">Bot</span>
-          <p style="margin:5px 0 0;font-size:13px;color:#1a1a1a;line-height:1.5;">
-            ${h.question || ""}
-          </p>
-        </div>
-      </div>
-      <div style="margin-bottom:10px">
-        <div style="background:#2161B4;border-radius:10px 10px 10px 2px;padding:12px 14px;">
-          <span style="font-size:11px;color:#04C4D9;font-weight:700;
-                       text-transform:uppercase;letter-spacing:0.5px;">Usuario</span>
-          <p style="margin:5px 0 0;font-size:13px;color:#ffffff;line-height:1.5;">
-            ${h.answer || ""}
-          </p>
-        </div>
-      </div>
+    const historyHTML = (session.history || []).map((h, i) => `
+        <tr style="background:${i % 2 === 0 ? '#ffffff' : '#F7FAFD'};">
+          <td style="padding:12px 14px;font-size:13px;color:#1a1a1a;line-height:1.5;
+                    border-bottom:1px solid #E8F0FB;width:50%;vertical-align:top;">
+            ${h.question || "—"}
+          </td>
+          <td style="padding:12px 14px;font-size:13px;color:#ffffff;line-height:1.5;
+                    border-bottom:1px solid #1a4f9e;background:#2161B4;
+                    vertical-align:top;">
+            ${h.answer || "—"}
+          </td>
+        </tr>
     `).join("");
 
     /* ================= HTML ================= */
@@ -128,18 +121,36 @@ exports.sendConversationEmail = async (session) => {
           </tr>
 
           <!-- HISTORIAL -->
-          ${historyHTML ? `
+        ${historyHTML ? `
           <tr>
             <td style="padding:4px 28px 24px;">
               <p style="margin:0 0 12px;font-size:12px;font-weight:700;color:#034AA6;
-                         letter-spacing:1px;text-transform:uppercase;">
+                        letter-spacing:1px;text-transform:uppercase;">
                 Historial de conversación
               </p>
-              ${historyHTML}
+              <table width="100%" cellpadding="0" cellspacing="0"
+                    style="border-radius:10px;overflow:hidden;border:1px solid #E8F0FB;">
+                <thead>
+                  <tr>
+                    <th style="background:#034AA6;color:#ffffff;font-size:11px;font-weight:700;
+                              text-transform:uppercase;letter-spacing:0.5px;
+                              padding:10px 14px;text-align:left;width:50%;">
+                      🤖 Bot
+                    </th>
+                    <th style="background:#2161B4;color:#04C4D9;font-size:11px;font-weight:700;
+                              text-transform:uppercase;letter-spacing:0.5px;
+                              padding:10px 14px;text-align:left;width:50%;">
+                      👤 Usuario
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${historyHTML}
+                </tbody>
+              </table>
             </td>
           </tr>
           ` : ""}
-
           <!-- FOOTER -->
           <tr>
             <td style="background:#28403D;padding:14px;text-align:center;">
