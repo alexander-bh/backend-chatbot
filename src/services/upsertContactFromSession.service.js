@@ -1,5 +1,6 @@
 const Contact = require("../models/Contact");
 const calculateLeadScore = require("../services/leadScore.service");
+const ConversationSession = require("../models/ConversationSession");
 
 const CRM_DEFAULT_FIELDS = [
   "name", "last_name", "email", "phone", "birth_date",
@@ -59,7 +60,7 @@ module.exports = async function upsertContactFromSession(session) {
     const merged = { ...(existingContact?.variables || {}), ...variables };
     if (email) merged.email = email;
     if (phone) merged.phone = phone;
-    if (name)  merged.name  = name;
+    if (name) merged.name = name;
 
     const cleanVariables = Object.fromEntries(
       Object.entries(merged).filter(([_, v]) => {
@@ -74,14 +75,14 @@ module.exports = async function upsertContactFromSession(session) {
 
     /* ── PREPARAR DATOS ── */
     const contactData = {
-      account_id:   session.account_id,
-      chatbot_id:   session.chatbot_id,
-      source:       "chatbot",
-      origin_url:   session.origin_url,
-      visitor_id:   session.visitor_id,
-      variables:    cleanVariables,
-      completed:    session.is_completed === true,
-      lead_score:   leadScore,
+      account_id: session.account_id,
+      chatbot_id: session.chatbot_id,
+      source: "chatbot",
+      origin_url: session.origin_url,
+      visitor_id: session.visitor_id,
+      variables: cleanVariables,
+      completed: session.is_completed === true,
+      lead_score: leadScore,
       ...(session.duration_seconds && { duration_seconds: session.duration_seconds }),
       ...(!existingContact && { session_id: session._id })
     };
@@ -122,6 +123,13 @@ module.exports = async function upsertContactFromSession(session) {
 
     } else {
       contact = await Contact.create(contactData);
+    }
+
+    if (session._id && contact?._id) {
+      await ConversationSession.updateOne(
+        { _id: session._id },
+        { $set: { contact_id: contact._id } }
+      );
     }
 
     return contact;
