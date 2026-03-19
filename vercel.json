@@ -1,5 +1,11 @@
 {
   "version": 2,
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/api/index.js"
+    }
+  ],
   "crons": [
     {
       "path": "/api/cron/mark-abandoned",
