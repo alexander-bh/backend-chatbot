@@ -1,13 +1,13 @@
 const router = require("express").Router();
 const contactController = require("../controllers/contact.controller");
 const metricsController = require("../controllers/metrics.controller");
+const webhook = require("../controllers/webhook.controller");
 const auth = require("../middlewares/auth.middleware");
 
 // Crear contacto desde chatbot
-router.post(
-  "/",
-  contactController.createContact
-);
+router.post("/",contactController.createContact);
+
+router.post("/webhooks/contacts-deleted", webhook.notifyContactsDeleted);
 
 // Dashboard privado
 router.post(
