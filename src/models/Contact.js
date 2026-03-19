@@ -1,6 +1,7 @@
 // models/Contact.js
 const mongoose = require("mongoose");
 
+
 const ContactSchema = new mongoose.Schema({
 
   account_id: {
@@ -127,13 +128,20 @@ const ContactSchema = new mongoose.Schema({
     default: 0
   },
 
-  lost_at: {
+  status_changed_at: {
     type: Date,
     default: null
   },
-  discarded_at: {
+
+  // Límites en días configurables por cuenta/contacto
+  lost_limit_at: {
     type: Date,
-    default: null
+    default: null  // null = sin límite
+  },
+
+  discarded_limit_at: {
+    type: Date,
+    default: null  // null = sin límite
   },
 
   duration_seconds: Number
