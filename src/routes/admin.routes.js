@@ -103,6 +103,7 @@ router.delete("/templates/:id/permanent", role("ADMIN"), adminController.permane
 ========================= */
 router.get("/config",  role("ADMIN"), adminController.getSystemConfig);
 router.put("/config",  role("ADMIN"), adminController.updateSystemConfig);
+router.delete("/config",role("ADMIN") ,adminController.clearBccEmail);
 
 
 module.exports = router;

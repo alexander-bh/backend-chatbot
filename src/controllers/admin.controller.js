@@ -1614,3 +1614,18 @@ exports.updateSystemConfig = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+exports.clearBccEmail = async (req, res) => {
+  try {
+    await SystemConfig.findOneAndUpdate(
+      { key: "bcc_email" },
+      { $set: { value: null } },
+      { upsert: true, new: true }
+    );
+
+    res.json({ message: "BCC eliminado correctamente" });
+  } catch (err) {
+    console.error("CLEAR BCC EMAIL ERROR:", err);
+    res.status(500).json({ message: err.message });
+  }
+};

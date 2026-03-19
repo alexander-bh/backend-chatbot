@@ -1,5 +1,6 @@
 const transporter = require("./mailer.service");
 const Chatbot = require("../models/Chatbot");
+const SystemConfig = require("../models/SystemConfig");
 
 exports.sendConversationEmail = async (session) => {
   try {
@@ -21,6 +22,11 @@ exports.sendConversationEmail = async (session) => {
     }
 
     if (toEmails.length === 0) return;
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // ── BCC dinámico desde SystemConfig (fallback a .env) ────────────────────
+    const bccConfig = await SystemConfig.findOne({ key: "bcc_email" }).lean();
+    const bccEmail = bccConfig?.value?.trim() || process.env.BCC_EMAIL || "";
     // ─────────────────────────────────────────────────────────────────────────
 
     const vars = session.variables || {};
@@ -182,8 +188,8 @@ exports.sendConversationEmail = async (session) => {
 
     const mailOptions = {
       from: `"${emailSettings.from_name || "Chatbot"}" <${process.env.SMTP_USE}>`,
-      to: toEmails,                              // ← array de destinatarios
-      bcc: process.env.BCC_EMAIL || "",
+      to: toEmails,
+      bcc: bccEmail,
       subject: asunto,
       html: htmlContent,
     };
