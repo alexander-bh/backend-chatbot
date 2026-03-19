@@ -1,13 +1,9 @@
 {
   "version": 2,
-  "crons": [
+  "routes": [
     {
-      "path": "/cron/mark-abandoned",
-      "schedule": "*/15 * * * *"
-    },
-    {
-      "path": "/cron/process-contact-limits",
-      "schedule": "5-59/15 * * * *"
+      "src": "/(.*)",
+      "dest": "/api/index.js"
     }
   ]
 }
