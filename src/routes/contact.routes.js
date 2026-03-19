@@ -67,6 +67,12 @@ router.patch(
 );
 
 router.patch(
+  "/:id/limits",
+  auth,
+  contactController.updateLimits
+);
+
+router.patch(
   "/restore/:id",
   auth,
   contactController.restoreContact
