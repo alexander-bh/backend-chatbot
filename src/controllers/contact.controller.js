@@ -265,7 +265,8 @@ exports.updateStatus = async (req, res) => {
         is_completed: false,
         is_abandoned: true,
         abandoned_at: new Date(),
-        status: "abandoned"
+        status: "abandoned",
+        contact_id: contact._id
       };
     }
 
@@ -274,7 +275,8 @@ exports.updateStatus = async (req, res) => {
         is_completed: true,
         is_abandoned: false,
         abandoned_at: null,
-        status: "completed"
+        status: "completed",
+        contact_id: contact._id
       };
     }
 
