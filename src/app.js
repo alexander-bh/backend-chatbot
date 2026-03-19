@@ -55,6 +55,9 @@ app.use("/api/meta", require("./routes/meta.routes.js"));
 app.use("/api/crm-fields", require("./routes/crmfields.routes"));
 app.use("/api/validation-rule",require("./routes/validationRule.routes.js"))
 
+app.use("/cron", require("../cron/mark-abandoned"));
+app.use("/cron", require("../cron/process-contact-limits"));
+
 // ───────── ERROR HANDLERS (AL FINAL SIEMPRE) ─────────
 app.use(require("./middlewares/multerError.middleware.js"));
 
