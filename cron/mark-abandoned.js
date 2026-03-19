@@ -1,5 +1,5 @@
-const connectDB = require("../../src/config/database");
-const ConversationSession = require("../../src/models/ConversationSession");
+const connectDB = require("../src/config/database");
+const ConversationSession = require("../src/models/ConversationSession");
 
 const INACTIVITY_MINUTES = 30;
 const DELETE_AFTER_DAYS = 1;

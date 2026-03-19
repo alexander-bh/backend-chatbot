@@ -1,6 +1,6 @@
-const connectDB = require("../../src/config/database");
-const Contact = require("../../src/models/Contact");
-const ConversationSession = require("../../src/models/ConversationSession");
+const connectDB = require("../src/config/database");
+const Contact = require("../src/models/Contact");
+const ConversationSession = require("../src/models/ConversationSession");
 
 module.exports = async (req, res) => {
   if (req.method !== "GET" && req.method !== "POST") {
