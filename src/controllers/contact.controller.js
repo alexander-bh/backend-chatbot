@@ -175,7 +175,7 @@ exports.updateStatus = async (req, res) => {
   try {
 
     const { id } = req.params;
-    const { status, lost_limit_at, discarded_limit_at } = req.body;
+    const { status } = req.body;
 
     /* =========================
        VALIDAR ID
@@ -191,7 +191,7 @@ exports.updateStatus = async (req, res) => {
 
     const allowed = ["new", "contacted", "qualified", "lost", "discarded"];
 
-    if (!allowed.includes(status)) {
+    if (!status || !allowed.includes(status)) {
       return res.status(400).json({ message: "Estado inválido" });
     }
 
@@ -202,9 +202,7 @@ exports.updateStatus = async (req, res) => {
     const contact = await Contact.findById(id).session(session);
 
     if (!contact || contact.is_deleted) {
-      return res.status(404).json({
-        message: "Contacto no encontrado"
-      });
+      return res.status(404).json({ message: "Contacto no encontrado" });
     }
 
     /* =========================
@@ -212,32 +210,24 @@ exports.updateStatus = async (req, res) => {
     ========================= */
 
     const isAdmin = req.user.role === "ADMIN";
-
-    const sameAccount =
-      contact.account_id?.toString() === req.user.account_id?.toString();
+    const sameAccount = contact.account_id?.toString() === req.user.account_id?.toString();
 
     if (contact.is_template && !isAdmin) {
-      return res.status(403).json({
-        message: "Solo ADMIN puede modificar plantillas"
-      });
+      return res.status(403).json({ message: "Solo ADMIN puede modificar plantillas" });
     }
 
     if (!contact.is_template && !sameAccount && !isAdmin) {
-      return res.status(403).json({
-        message: "Sin permisos para modificar este contacto"
-      });
+      return res.status(403).json({ message: "Sin permisos para modificar este contacto" });
     }
 
     /* =========================
-       ACTUALIZAR CONTACTO
+       ACTUALIZAR ESTADO
     ========================= */
 
     contact.status = status;
     contact.status_changed_at = new Date();
 
-    if (lost_limit_at !== undefined) contact.lost_limit_at = lost_limit_at ? new Date(lost_limit_at) : null;
-    if (discarded_limit_at !== undefined) contact.discarded_limit_at = discarded_limit_at ? new Date(discarded_limit_at) : null;
-
+    // Al salir de lost/discarded → limpiar límites
     if (!["lost", "discarded"].includes(status)) {
       contact.lost_limit_at = null;
       contact.discarded_limit_at = null;
@@ -299,26 +289,117 @@ exports.updateStatus = async (req, res) => {
 
     res.json(formatContact(contact));
 
-  }
-
-  catch (error) {
+  } catch (error) {
 
     await session.abortTransaction();
-
     console.error("UPDATE STATUS ERROR:", error);
+    res.status(500).json({ message: "Error al actualizar estado" });
 
-    res.status(500).json({
-      message: "Error al actualizar estado"
-    });
-
-  }
-
-  finally {
+  } finally {
 
     session.endSession();
 
   }
+};
 
+exports.updateLimits = async (req, res) => {
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+
+    const { id } = req.params;
+    const { lost_limit_at, discarded_limit_at } = req.body;
+
+    /* =========================
+       VALIDAR ID
+    ========================= */
+
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "ID inválido" });
+    }
+
+    /* =========================
+       VALIDAR PAYLOAD
+    ========================= */
+
+    if (lost_limit_at === undefined && discarded_limit_at === undefined) {
+      return res.status(400).json({ message: "Se requiere al menos un campo: lost_limit_at o discarded_limit_at" });
+    }
+
+    /* =========================
+       BUSCAR CONTACTO
+    ========================= */
+
+    const contact = await Contact.findById(id).session(session);
+
+    if (!contact || contact.is_deleted) {
+      return res.status(404).json({ message: "Contacto no encontrado" });
+    }
+
+    /* =========================
+       PERMISOS
+    ========================= */
+
+    const isAdmin = req.user.role === "ADMIN";
+    const sameAccount = contact.account_id?.toString() === req.user.account_id?.toString();
+
+    if (contact.is_template && !isAdmin) {
+      return res.status(403).json({ message: "Solo ADMIN puede modificar plantillas" });
+    }
+
+    if (!contact.is_template && !sameAccount && !isAdmin) {
+      return res.status(403).json({ message: "Sin permisos para modificar este contacto" });
+    }
+
+    /* =========================
+       VALIDAR QUE EL ESTADO PERMITA LÍMITES
+    ========================= */
+
+    if (!["lost", "discarded"].includes(contact.status)) {
+      return res.status(400).json({
+        message: "Solo se pueden definir límites en contactos con estado 'lost' o 'discarded'"
+      });
+    }
+
+    if (lost_limit_at !== undefined && contact.status !== "lost") {
+      return res.status(400).json({ message: "lost_limit_at solo aplica para estado 'lost'" });
+    }
+
+    if (discarded_limit_at !== undefined && contact.status !== "discarded") {
+      return res.status(400).json({ message: "discarded_limit_at solo aplica para estado 'discarded'" });
+    }
+
+    /* =========================
+       ACTUALIZAR LÍMITES
+    ========================= */
+
+    if (lost_limit_at !== undefined) {
+      contact.lost_limit_at = lost_limit_at ? new Date(lost_limit_at) : null;
+    }
+
+    if (discarded_limit_at !== undefined) {
+      contact.discarded_limit_at = discarded_limit_at ? new Date(discarded_limit_at) : null;
+    }
+
+    await contact.save({ session });
+
+    await session.commitTransaction();
+
+    res.json(formatContact(contact));
+
+  } catch (error) {
+
+    await session.abortTransaction();
+    console.error("UPDATE LIMITS ERROR:", error);
+    res.status(500).json({ message: "Error al actualizar límites" });
+
+  } finally {
+
+    session.endSession();
+
+  }
 };
 
 exports.createManualContact = async (req, res) => {
@@ -632,6 +713,9 @@ exports.getContacts = async (req, res) => {
     });
   }
 };
+
+
+
 
 
 //Esta variables ya no se usan 
