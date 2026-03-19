@@ -5,7 +5,6 @@ exports.sendContactsDeletedEmail = async ({ accountId, deletedContacts }) => {
     try {
         const account = await Account.findById(accountId).lean();
 
-        // ← Si notificaciones deshabilitadas o sin emails, no enviar
         if (!account?.notification_emails_enabled) {
             console.log(`⚠️ Notificaciones deshabilitadas para cuenta ${accountId}`);
             return;
