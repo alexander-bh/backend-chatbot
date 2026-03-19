@@ -61,7 +61,7 @@ app.use(require("./middlewares/multerError.middleware.js"));
 app.use((err, req, res, next) => {
   console.error("GLOBAL ERROR:", err);
   res.status(err.status || 400).json({
-    message: err.message || "Error interno del servidor"
+    message: err.message || "Error del servidor"
   });
 });
 
