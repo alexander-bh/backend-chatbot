@@ -95,7 +95,6 @@ const ConversationSessionSchema = new mongoose.Schema(
     visitor_id: {
       type: String,
       default: null,
-      index: true
     },
 
     last_activity_at: {
@@ -106,20 +105,17 @@ const ConversationSessionSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// ── Índices generales ─────────────────────────────────────────────────────────
 ConversationSessionSchema.index({ status: 1 });
 ConversationSessionSchema.index({ last_activity_at: 1 });
 ConversationSessionSchema.index({ flow_id: 1, account_id: 1, mode: 1 });
 ConversationSessionSchema.index({ "history.node_id": 1 });
-ConversationSessionSchema.index({
-  is_abandoned: 1,
-  abandoned_at: 1
-});
-ConversationSessionSchema.index({
-  visitor_id: 1,
-  chatbot_id: 1,
-  is_completed: 1
-});
+ConversationSessionSchema.index({ visitor_id: 1, chatbot_id: 1, is_completed: 1 });
 
+// ── Índices para el trigger ───────────────────────────────────────────────────
+ConversationSessionSchema.index({ is_completed: 1, is_abandoned: 1, status: 1, last_activity_at: 1 });
+ConversationSessionSchema.index({ "variables.data_processing_consent": 1 });
+ConversationSessionSchema.index({ is_abandoned: 1, abandoned_at: 1, contact_id: 1 });
 
 module.exports = mongoose.model(
   "ConversationSession",
