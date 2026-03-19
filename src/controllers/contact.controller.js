@@ -175,7 +175,7 @@ exports.updateStatus = async (req, res) => {
   try {
 
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, lost_limit_at, discarded_limit_at } = req.body;
 
     /* =========================
        VALIDAR ID
@@ -189,7 +189,7 @@ exports.updateStatus = async (req, res) => {
        VALIDAR STATUS
     ========================= */
 
-    const allowed = ["new", "contacted", "qualified", "lost","discarded"];
+    const allowed = ["new", "contacted", "qualified", "lost", "discarded"];
 
     if (!allowed.includes(status)) {
       return res.status(400).json({ message: "Estado inválido" });
@@ -233,6 +233,16 @@ exports.updateStatus = async (req, res) => {
     ========================= */
 
     contact.status = status;
+    contact.status_changed_at = new Date();
+
+    if (lost_limit_at !== undefined) contact.lost_limit_at = lost_limit_at ? new Date(lost_limit_at) : null;
+    if (discarded_limit_at !== undefined) contact.discarded_limit_at = discarded_limit_at ? new Date(discarded_limit_at) : null;
+
+    if (!["lost", "discarded"].includes(status)) {
+      contact.lost_limit_at = null;
+      contact.discarded_limit_at = null;
+      contact.status_changed_at = null;
+    }
 
     if (status === "lost") {
       contact.completed = false;
@@ -487,53 +497,6 @@ exports.updateContact = async (req, res) => {
   }
 };
 
-exports.deleteContact = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const accountId = req.user.account_id;
-
-    const contact = await Contact.findOne({
-      _id: id,
-      account_id: accountId,
-      is_deleted: false
-    });
-
-    if (!contact) {
-      return res.status(404).json({
-        message: "Contacto no encontrado"
-      });
-    }
-
-    /* ================= SOFT DELETE CONTACT ================= */
-
-    contact.is_deleted = true;
-    await contact.save();
-
-    /* ================= SOFT DELETE CONVERSATION ================= */
-
-    await ConversationSession.updateOne(
-      {
-        _id: contact.session_id,
-        account_id: accountId
-      },
-      {
-        $set: { is_deleted: true }
-      }
-    );
-
-    return res.json({
-      message: "Contacto y conversación eliminados correctamente",
-      contact: formatContact(contact)
-    });
-
-  } catch (error) {
-    console.error("DELETE CONTACT ERROR:", error);
-    res.status(500).json({
-      message: "Error al eliminar contacto"
-    });
-  }
-};
-
 exports.getContacts = async (req, res) => {
   try {
     const accountId = req.user.account_id;
@@ -664,6 +627,56 @@ exports.getContacts = async (req, res) => {
     console.error("GET CONTACTS ERROR:", error);
     res.status(500).json({
       message: "Error al obtener contactos"
+    });
+  }
+};
+
+
+//Esta variables ya no se usan 
+
+exports.deleteContact = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const accountId = req.user.account_id;
+
+    const contact = await Contact.findOne({
+      _id: id,
+      account_id: accountId,
+      is_deleted: false
+    });
+
+    if (!contact) {
+      return res.status(404).json({
+        message: "Contacto no encontrado"
+      });
+    }
+
+    /* ================= SOFT DELETE CONTACT ================= */
+
+    contact.is_deleted = true;
+    await contact.save();
+
+    /* ================= SOFT DELETE CONVERSATION ================= */
+
+    await ConversationSession.updateOne(
+      {
+        _id: contact.session_id,
+        account_id: accountId
+      },
+      {
+        $set: { is_deleted: true }
+      }
+    );
+
+    return res.json({
+      message: "Contacto y conversación eliminados correctamente",
+      contact: formatContact(contact)
+    });
+
+  } catch (error) {
+    console.error("DELETE CONTACT ERROR:", error);
+    res.status(500).json({
+      message: "Error al eliminar contacto"
     });
   }
 };
