@@ -716,8 +716,6 @@ exports.getContacts = async (req, res) => {
 
 
 
-
-
 //Esta variables ya no se usan 
 exports.deleteContact = async (req, res) => {
   try {
