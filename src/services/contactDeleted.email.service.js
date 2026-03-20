@@ -1,21 +1,28 @@
-const transporter       = require("./mailer.service");
-const Account           = require("../models/Account");
-const Notification      = require("../models/Notification");
-const { sendToAccount } = require("./pusher.service"); 
+const transporter = require("./mailer.service");
+const Account = require("../models/Account");
+const Notification = require("../models/Notification");
+const { sendToAccount } = require("./pusher.service");
 
 exports.sendContactsDeletedEmail = async ({ accountId, deletedContacts }) => {
   try {
+
+    console.log("🔔 sendContactsDeletedEmail llamado:", { accountId, contactsCount: deletedContacts.length });
+
     const account = await Account.findById(accountId).lean();
+    console.log("🔔 account encontrado:", account ? account.name : "NULL");
+    console.log("🔔 emails_enabled:", account?.notification_emails_enabled);
+    console.log("🔔 emails:", JSON.stringify(account?.notification_emails));
+
     if (!account) return;
 
     /* ── Guardar notificación en BD siempre ──────────────────────────────── */
     const notif = await Notification.create({
       account_id: accountId,
-      type:       "contacts_deleted",
-      title:      `${deletedContacts.length} contacto(s) eliminado(s)`,
-      message:    `Se eliminaron automáticamente ${deletedContacts.length} contacto(s) por superar su fecha límite de descarte.`,
-      data:       { contacts: deletedContacts },
-      is_read:    false
+      type: "contacts_deleted",
+      title: `${deletedContacts.length} contacto(s) eliminado(s)`,
+      message: `Se eliminaron automáticamente ${deletedContacts.length} contacto(s) por superar su fecha límite de descarte.`,
+      data: { contacts: deletedContacts },
+      is_read: false
     });
 
     // ← Emitir en tiempo real via Pusher
@@ -39,7 +46,7 @@ exports.sendContactsDeletedEmail = async ({ accountId, deletedContacts }) => {
     const rows = deletedContacts.map((c, i) => `
       <tr style="background:${i % 2 === 0 ? "#ffffff" : "#F7FAFD"};">
         <td style="padding:10px 14px;font-size:13px;color:#1a1a1a;border-bottom:1px solid #E8F0FB;">
-          ${c.name  || "—"}
+          ${c.name || "—"}
         </td>
         <td style="padding:10px 14px;font-size:13px;color:#1a1a1a;border-bottom:1px solid #E8F0FB;">
           ${c.email || "—"}
@@ -108,10 +115,10 @@ exports.sendContactsDeletedEmail = async ({ accountId, deletedContacts }) => {
     `;
 
     await transporter.sendMail({
-      from:    `"Sistema CRM" <${process.env.SMTP_USE}>`,
-      to:      account.notification_emails,
+      from: `"Sistema CRM" <${process.env.SMTP_USE}>`,
+      to: account.notification_emails,
       subject: `🗑️ ${deletedContacts.length} contacto(s) eliminado(s) - ${account.name}`,
-      html:    htmlContent,
+      html: htmlContent,
     });
 
     console.log(`📧 Notificación enviada a ${account.notification_emails.join(", ")}`);
