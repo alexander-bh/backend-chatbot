@@ -7,7 +7,7 @@ const { safeCompare } = require("../helper/safeCompare");
 const { normalizeDomain } = require("../utils/normalizeDomain");
 const { isLocalhost } = require("../utils/isLocalhost");
 const { getStore, TTL_MS } = require("../utils/nonceStore");
-const { domainExists } = require("../validators/domain.validator"); 
+const { domainExists } = require("../validators/domain.validator");
 
 /* ─────────────────────────────────────────
    HELPERS
@@ -631,14 +631,25 @@ exports.renderEmbed = async (req, res) => {
 
     res.setHeader(
       "Content-Security-Policy",
-      `frame-ancestors 'self' https://${WIDGET_DOMAIN} http://${domain} https://${domain}`
+      `default-src 'none'; script-src 'unsafe-inline'; frame-ancestors 'self' https://${WIDGET_DOMAIN} http://${domain} https://${domain}`
     );
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     res.setHeader("Pragma", "no-cache");
 
-    return res.redirect(widgetUrl);
-
+    return res.send(`<!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+      </head>
+      <body>
+        <script>
+          window.location.replace(${JSON.stringify(widgetUrl)});
+        </script>
+      </body>
+      </html>`
+    );
   } catch (err) {
     console.error("RENDER EMBED ERROR:", err);
     return res.status(500).send("No se pudo cargar el chatbot");
