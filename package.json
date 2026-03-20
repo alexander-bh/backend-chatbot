@@ -25,6 +25,8 @@
     "multer": "^2.0.2",
     "multer-storage-cloudinary": "^4.0.0",
     "nodemailer": "^7.0.12",
+    "pusher": "^5.3.3",
+    "pusher-js": "^8.4.3",
     "uuid": "^13.0.0"
   },
   "devDependencies": {

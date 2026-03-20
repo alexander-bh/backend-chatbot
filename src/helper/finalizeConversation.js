@@ -2,7 +2,7 @@ const upsertContactFromSession = require("../services/upsertContactFromSession.s
 const { sendConversationEmail } = require("../services/chatbotEmail.service");
 const Chatbot = require("../models/Chatbot");
 const Notification = require("../models/Notification");
-
+const { sendToAccount } = require("../services/pusher.service"); // ← nuevo
 
 exports.finalizeConversation = async (session) => {
 
@@ -23,7 +23,7 @@ exports.finalizeConversation = async (session) => {
         contact.last_name
       ].filter(Boolean).join(" ") || "Sin nombre";
 
-      await Notification.create({
+      const notif = await Notification.create({
         account_id: session.account_id,
         type: "new_contact",
         title: "Nuevo contacto registrado",
@@ -37,8 +37,14 @@ exports.finalizeConversation = async (session) => {
         },
         is_read: false
       });
+
+      // ← Emitir en tiempo real via Pusher
+      await sendToAccount(session.account_id, "new-notification", {
+        notification: notif
+      });
+
     } catch (notifErr) {
-      console.error("Error creando notificación de nuevo contacto:", notifErr);
+      console.error("❌ Error creando notificación de nuevo contacto:", notifErr);
     }
   }
 
