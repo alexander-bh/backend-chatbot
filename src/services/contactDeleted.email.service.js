@@ -1,46 +1,39 @@
-const transporter = require("./mailer.service");
-const Account = require("../models/Account");
+const transporter  = require("./mailer.service");
+const Account      = require("../models/Account");
 const Notification = require("../models/Notification");
-const { sendToAccount } = require("../controllers/sse.controller");
 
 exports.sendContactsDeletedEmail = async ({ accountId, deletedContacts }) => {
-    try {
-        const account = await Account.findById(accountId).lean();
-        if (!account) return;
+  try {
+    const account = await Account.findById(accountId).lean();
+    if (!account) return;
 
-        /* ── Guardar notificación en BD siempre ────────────────────────────────── */
-        const notif = await Notification.create({
-            account_id: accountId,
-            type: "contacts_deleted",
-            title: `${deletedContacts.length} contacto(s) eliminado(s)`,
-            message: `Se eliminaron automáticamente ${deletedContacts.length} contacto(s) por superar su fecha límite de descarte.`,
-            data: { contacts: deletedContacts },
-            is_read: false
-        });
+    /* ── Guardar notificación en BD siempre ────────────────────────────────── */
+    await Notification.create({
+      account_id: accountId,
+      type:       "contacts_deleted",
+      title:      `${deletedContacts.length} contacto(s) eliminado(s)`,
+      message:    `Se eliminaron automáticamente ${deletedContacts.length} contacto(s) por superar su fecha límite de descarte.`,
+      data:       { contacts: deletedContacts },
+      is_read:    false
+    });
 
-        // ← Emitir en tiempo real
-        sendToAccount(accountId, {
-            type: "new_notification",
-            notification: notif
-        });
+    /* ── Enviar email solo si está habilitado ──────────────────────────────── */
+    if (!account.notification_emails_enabled) {
+      console.log(`⚠️ Notificaciones email deshabilitadas para cuenta ${accountId}`);
+      return;
+    }
 
-        /* ── Enviar email solo si está habilitado ──────────────────────────────── */
-        if (!account.notification_emails_enabled) {
-            console.log(`⚠️ Notificaciones email deshabilitadas para cuenta ${accountId}`);
-            return;
-        }
+    if (!account.notification_emails?.length) {
+      console.log(`⚠️ Cuenta ${accountId} sin emails configurados`);
+      return;
+    }
 
-        if (!account.notification_emails?.length) {
-            console.log(`⚠️ Cuenta ${accountId} sin emails configurados`);
-            return;
-        }
+    const fecha = new Date().toLocaleString("es-MX", { timeZone: "America/Mexico_City" });
 
-        const fecha = new Date().toLocaleString("es-MX", { timeZone: "America/Mexico_City" });
-
-        const rows = deletedContacts.map((c, i) => `
+    const rows = deletedContacts.map((c, i) => `
       <tr style="background:${i % 2 === 0 ? "#ffffff" : "#F7FAFD"};">
         <td style="padding:10px 14px;font-size:13px;color:#1a1a1a;border-bottom:1px solid #E8F0FB;">
-          ${c.name || "—"}
+          ${c.name  || "—"}
         </td>
         <td style="padding:10px 14px;font-size:13px;color:#1a1a1a;border-bottom:1px solid #E8F0FB;">
           ${c.email || "—"}
@@ -51,7 +44,7 @@ exports.sendContactsDeletedEmail = async ({ accountId, deletedContacts }) => {
       </tr>
     `).join("");
 
-        const htmlContent = `
+    const htmlContent = `
       <!DOCTYPE html><html lang="es">
       <head><meta charset="UTF-8"/></head>
       <body style="margin:0;padding:0;background:#F2F2F2;font-family:Arial,sans-serif;">
@@ -108,16 +101,16 @@ exports.sendContactsDeletedEmail = async ({ accountId, deletedContacts }) => {
       </body></html>
     `;
 
-        await transporter.sendMail({
-            from: `"Sistema CRM" <${process.env.SMTP_USE}>`,
-            to: account.notification_emails,
-            subject: `🗑️ ${deletedContacts.length} contacto(s) eliminado(s) - ${account.name}`,
-            html: htmlContent,
-        });
+    await transporter.sendMail({
+      from:    `"Sistema CRM" <${process.env.SMTP_USE}>`,
+      to:      account.notification_emails,
+      subject: `🗑️ ${deletedContacts.length} contacto(s) eliminado(s) - ${account.name}`,
+      html:    htmlContent,
+    });
 
-        console.log(`📧 Notificación enviada a ${account.notification_emails.join(", ")}`);
+    console.log(`📧 Notificación enviada a ${account.notification_emails.join(", ")}`);
 
-    } catch (err) {
-        console.error("❌ Error en sendContactsDeletedEmail:", err);
-    }
+  } catch (err) {
+    console.error("❌ Error en sendContactsDeletedEmail:", err);
+  }
 };
