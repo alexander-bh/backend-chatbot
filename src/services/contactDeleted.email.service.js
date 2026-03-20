@@ -1,14 +1,15 @@
-const transporter  = require("./mailer.service");
-const Account      = require("../models/Account");
-const Notification = require("../models/Notification");
+const transporter       = require("./mailer.service");
+const Account           = require("../models/Account");
+const Notification      = require("../models/Notification");
+const { sendToAccount } = require("./pusher.service"); 
 
 exports.sendContactsDeletedEmail = async ({ accountId, deletedContacts }) => {
   try {
     const account = await Account.findById(accountId).lean();
     if (!account) return;
 
-    /* ── Guardar notificación en BD siempre ────────────────────────────────── */
-    await Notification.create({
+    /* ── Guardar notificación en BD siempre ──────────────────────────────── */
+    const notif = await Notification.create({
       account_id: accountId,
       type:       "contacts_deleted",
       title:      `${deletedContacts.length} contacto(s) eliminado(s)`,
@@ -17,7 +18,12 @@ exports.sendContactsDeletedEmail = async ({ accountId, deletedContacts }) => {
       is_read:    false
     });
 
-    /* ── Enviar email solo si está habilitado ──────────────────────────────── */
+    // ← Emitir en tiempo real via Pusher
+    await sendToAccount(accountId, "new-notification", {
+      notification: notif
+    });
+
+    /* ── Enviar email solo si está habilitado ────────────────────────────── */
     if (!account.notification_emails_enabled) {
       console.log(`⚠️ Notificaciones email deshabilitadas para cuenta ${accountId}`);
       return;

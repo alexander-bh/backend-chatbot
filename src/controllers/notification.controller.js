@@ -1,5 +1,5 @@
-// controllers/notification.controller.js
-const Notification = require("../models/Notification");
+const Notification           = require("../models/Notification");
+const { sendToAccount }      = require("../services/pusher.service"); // ← nuevo
 
 // Obtener notificaciones (con paginación)
 exports.getNotifications = async (req, res) => {
@@ -16,14 +16,11 @@ exports.getNotifications = async (req, res) => {
         .skip((page - 1) * limit)
         .limit(Number(limit))
         .lean(),
-
       Notification.countDocuments(filter),
-
       Notification.countDocuments({ account_id: accountId, is_read: false })
     ]);
 
     res.json({ notifications, total, unread_count, page: Number(page) });
-
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -33,11 +30,15 @@ exports.getNotifications = async (req, res) => {
 exports.markAsRead = async (req, res) => {
   try {
     const { id } = req.params;
+    const accountId = req.user.account_id;
 
     await Notification.findOneAndUpdate(
-      { _id: id, account_id: req.user.account_id },
+      { _id: id, account_id: accountId },
       { $set: { is_read: true } }
     );
+
+    // Sincronizar otros tabs/dispositivos
+    sendToAccount(accountId, "notification-read", { id });
 
     res.json({ success: true });
   } catch (err) {
@@ -48,10 +49,14 @@ exports.markAsRead = async (req, res) => {
 // Marcar todas como leídas
 exports.markAllAsRead = async (req, res) => {
   try {
+    const accountId = req.user.account_id;
+
     await Notification.updateMany(
-      { account_id: req.user.account_id, is_read: false },
+      { account_id: accountId, is_read: false },
       { $set: { is_read: true } }
     );
+
+    sendToAccount(accountId, "notifications-read-all", {});
 
     res.json({ success: true });
   } catch (err) {
@@ -59,33 +64,35 @@ exports.markAllAsRead = async (req, res) => {
   }
 };
 
-// Obtener solo el conteo de no leídas (para el badge)
+// Conteo de no leídas
 exports.getUnreadCount = async (req, res) => {
   try {
     const count = await Notification.countDocuments({
       account_id: req.user.account_id,
       is_read: false
     });
-
     res.json({ unread_count: count });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
 
-// Eliminar una notificación
+// Eliminar una
 exports.deleteNotification = async (req, res) => {
   try {
     const { id } = req.params;
+    const accountId = req.user.account_id;
 
     const deleted = await Notification.findOneAndDelete({
       _id: id,
-      account_id: req.user.account_id  // ← seguridad: solo puede borrar las suyas
+      account_id: accountId
     });
 
     if (!deleted) {
       return res.status(404).json({ message: "Notificación no encontrada" });
     }
+
+    sendToAccount(accountId, "notification-deleted", { id });
 
     res.json({ success: true });
   } catch (err) {
@@ -93,12 +100,14 @@ exports.deleteNotification = async (req, res) => {
   }
 };
 
-// Eliminar todas las notificaciones
+// Eliminar todas
 exports.deleteAllNotifications = async (req, res) => {
   try {
-    const result = await Notification.deleteMany({
-      account_id: req.user.account_id
-    });
+    const accountId = req.user.account_id;
+
+    const result = await Notification.deleteMany({ account_id: accountId });
+
+    sendToAccount(accountId, "notifications-deleted-all", {});
 
     res.json({ success: true, deleted: result.deletedCount });
   } catch (err) {
