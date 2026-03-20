@@ -115,7 +115,7 @@ exports.sendContactsDeletedEmail = async ({ accountId, deletedContacts }) => {
     `;
 
     await transporter.sendMail({
-      from: `"Sistema CRM" <${process.env.SMTP_USE}>`,
+      from: `"Sistema CRM" <${process.env.SMTP_USER}>`,
       to: account.notification_emails,
       subject: `🗑️ ${deletedContacts.length} contacto(s) eliminado(s) - ${account.name}`,
       html: htmlContent,
