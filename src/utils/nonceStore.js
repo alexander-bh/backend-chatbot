@@ -1,8 +1,8 @@
 /**
  * nonceStore.js
  * Almacén de nonces de un solo uso con TTL.
- * Usa Redis si REDIS_URL está configurado, sino Map en memoria.
- * 
+ * Usa Redis (Upstash REST) si las variables están configuradas, sino Map en memoria.
+ *
  * IMPORTANTE: En producción multi-instancia DEBES usar Redis.
  * En single-instance, el Map en memoria es suficiente.
  */
@@ -45,7 +45,7 @@ class MemoryStore {
   }
 }
 
-/* ─── Adaptador Redis ─── */
+/* ─── Adaptador Redis (Upstash REST) ─── */
 class RedisStore {
   constructor(client) {
     this._client = client;
@@ -53,31 +53,39 @@ class RedisStore {
 
   async set(key, ttlMs = TTL_MS) {
     // Guarda contador 2 para absorber doble montaje de React
-    await this._client.set(`nonce:${key}`, "2", { PX: ttlMs });
+    // PX = TTL en milisegundos
+    await this._client.set(`nonce:${key}`, "2", { px: ttlMs });
   }
 
   async consume(key) {
-    const script = `
-      local v = redis.call("GET", KEYS[1])
-      if not v then return 0 end
-      local count = tonumber(v)
-      if count <= 1 then
-        redis.call("DEL", KEYS[1])
-      else
-        redis.call("SET", KEYS[1], tostring(count - 1), "KEEPTTL")
-      end
-      return 1
-    `;
-    const result = await this._client.eval(script, {
-      keys: [`nonce:${key}`],
-      arguments: []
-    });
-    return result === 1;
+    // @upstash/redis NO soporta eval con Lua scripts via HTTP REST,
+    // así que hacemos la lógica en JS con GET + DEL/SET
+    const redisKey = `nonce:${key}`;
+    const v = await this._client.get(redisKey);
+
+    if (v === null || v === undefined) return false;
+
+    const count = parseInt(v, 10);
+
+    if (count <= 1) {
+      await this._client.del(redisKey);
+    } else {
+      // Mantener el mismo TTL no es posible directamente en REST sin KEEPTTL,
+      // usamos GETEX para obtener el TTL restante y luego SET con ese TTL
+      const ttlMs = await this._client.pttl(redisKey);
+      if (ttlMs > 0) {
+        await this._client.set(redisKey, String(count - 1), { px: ttlMs });
+      } else {
+        await this._client.del(redisKey);
+      }
+    }
+
+    return true;
   }
 
   async has(key) {
     const v = await this._client.get(`nonce:${key}`);
-    return v !== null;
+    return v !== null && v !== undefined;
   }
 }
 
@@ -87,20 +95,25 @@ let _store = null;
 async function getStore() {
   if (_store) return _store;
 
-  if (process.env.REDIS_URL) {
+  const url   = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  if (url && token) {
     try {
-      const { createClient } = require("redis");
-      const client = createClient({ url: process.env.REDIS_URL });
-      client.on("error", (err) => console.error("Redis error:", err));
-      await client.connect();
+      const { Redis } = require("@upstash/redis");
+      const client = new Redis({ url, token });
+
+      // Test de conexión
+      await client.ping();
+
       _store = new RedisStore(client);
-      console.log("✅ NonceStore: usando Redis");
+      console.log("✅ NonceStore: usando Redis (Upstash REST)");
     } catch (err) {
       console.warn("⚠️ NonceStore: Redis falló, usando memoria:", err.message);
       _store = new MemoryStore();
     }
   } else {
-    console.warn("⚠️ NonceStore: sin REDIS_URL, usando memoria (no apto para producción)");
+    console.warn("⚠️ NonceStore: sin credenciales Upstash, usando memoria (no apto para producción)");
     _store = new MemoryStore();
   }
 
