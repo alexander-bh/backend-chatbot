@@ -144,6 +144,16 @@ const ContactSchema = new mongoose.Schema({
     default: null  // null = sin límite
   },
 
+  discarded_reason: {
+    type: String,
+    default: null
+  },
+
+  discarded_notes: {
+    type: String,
+    default: null
+  },
+
   duration_seconds: Number
 
 }, { timestamps: true });
