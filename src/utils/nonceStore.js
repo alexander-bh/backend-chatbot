@@ -15,28 +15,32 @@ class MemoryStore {
     this._map = new Map();
     setInterval(() => {
       const now = Date.now();
-      for (const [key, expiresAt] of this._map) {
-        if (now > expiresAt) this._map.delete(key);
+      for (const [key, val] of this._map) {
+        if (now > val.expiresAt) this._map.delete(key);
       }
     }, 2 * 60_000).unref();
   }
 
   async set(key, ttlMs = TTL_MS) {
-    this._map.set(key, Date.now() + ttlMs);
+    this._map.set(key, { count: 2, expiresAt: Date.now() + ttlMs });
   }
 
   async consume(key) {
-    const expiresAt = this._map.get(key);
-    if (!expiresAt) return false;
-    if (Date.now() > expiresAt) { this._map.delete(key); return false; }
-    this._map.delete(key);
+    const val = this._map.get(key);
+    if (!val) return false;
+    if (Date.now() > val.expiresAt) { this._map.delete(key); return false; }
+    if (val.count <= 1) {
+      this._map.delete(key);
+    } else {
+      val.count--;
+    }
     return true;
   }
 
   async has(key) {
-    const expiresAt = this._map.get(key);
-    if (!expiresAt) return false;
-    if (Date.now() > expiresAt) { this._map.delete(key); return false; }
+    const val = this._map.get(key);
+    if (!val) return false;
+    if (Date.now() > val.expiresAt) { this._map.delete(key); return false; }
     return true;
   }
 }
@@ -48,17 +52,21 @@ class RedisStore {
   }
 
   async set(key, ttlMs = TTL_MS) {
-    await this._client.set(`nonce:${key}`, "1", { PX: ttlMs });
+    // Guarda contador 2 para absorber doble montaje de React
+    await this._client.set(`nonce:${key}`, "2", { PX: ttlMs });
   }
 
   async consume(key) {
     const script = `
       local v = redis.call("GET", KEYS[1])
-      if v then
+      if not v then return 0 end
+      local count = tonumber(v)
+      if count <= 1 then
         redis.call("DEL", KEYS[1])
-        return 1
+      else
+        redis.call("SET", KEYS[1], tostring(count - 1), "KEEPTTL")
       end
-      return 0
+      return 1
     `;
     const result = await this._client.eval(script, {
       keys: [`nonce:${key}`],
@@ -81,7 +89,7 @@ async function getStore() {
 
   if (process.env.REDIS_URL) {
     try {
-      const { createClient } = require("redis"); // ← línea que faltaba
+      const { createClient } = require("redis");
       const client = createClient({ url: process.env.REDIS_URL });
       client.on("error", (err) => console.error("Redis error:", err));
       await client.connect();
