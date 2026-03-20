@@ -300,12 +300,16 @@ exports.updateLimits = async (req, res) => {
   try {
 
     const { id } = req.params;
-    const { lost_limit_at, discarded_limit_at } = req.body;
+    const {
+      lost_limit_at,
+      discarded_limit_at,
+      discarded_reason,   // ← nuevo
+      discarded_notes     // ← nuevo
+    } = req.body;
 
     /* =========================
        VALIDAR ID
     ========================= */
-
     if (!id || !mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: "ID inválido" });
     }
@@ -313,15 +317,15 @@ exports.updateLimits = async (req, res) => {
     /* =========================
        VALIDAR PAYLOAD
     ========================= */
-
     if (lost_limit_at === undefined && discarded_limit_at === undefined) {
-      return res.status(400).json({ message: "Se requiere al menos un campo: lost_limit_at o discarded_limit_at" });
+      return res.status(400).json({
+        message: "Se requiere al menos un campo: lost_limit_at o discarded_limit_at"
+      });
     }
 
     /* =========================
        BUSCAR CONTACTO
     ========================= */
-
     const contact = await Contact.findById(id).session(session);
 
     if (!contact || contact.is_deleted) {
@@ -331,8 +335,7 @@ exports.updateLimits = async (req, res) => {
     /* =========================
        PERMISOS
     ========================= */
-
-    const isAdmin = req.user.role === "ADMIN";
+    const isAdmin     = req.user.role === "ADMIN";
     const sameAccount = contact.account_id?.toString() === req.user.account_id?.toString();
 
     if (contact.is_template && !isAdmin) {
@@ -346,7 +349,6 @@ exports.updateLimits = async (req, res) => {
     /* =========================
        VALIDAR QUE EL ESTADO PERMITA LÍMITES
     ========================= */
-
     if (!["lost", "discarded"].includes(contact.status)) {
       return res.status(400).json({
         message: "Solo se pueden definir límites en contactos con estado 'lost' o 'discarded'"
@@ -364,7 +366,6 @@ exports.updateLimits = async (req, res) => {
     /* =========================
        ACTUALIZAR LÍMITES
     ========================= */
-
     if (lost_limit_at !== undefined) {
       contact.lost_limit_at = lost_limit_at ? new Date(lost_limit_at) : null;
     }
@@ -373,8 +374,19 @@ exports.updateLimits = async (req, res) => {
       contact.discarded_limit_at = discarded_limit_at ? new Date(discarded_limit_at) : null;
     }
 
-    await contact.save({ session });
+    /* =========================
+       GUARDAR RAZÓN Y NOTAS DE DESCARTE
+    ========================= */
+    if (contact.status === "discarded") {
+      if (discarded_reason !== undefined) {
+        contact.discarded_reason = discarded_reason || null;
+      }
+      if (discarded_notes !== undefined) {
+        contact.discarded_notes = discarded_notes?.trim() || null;
+      }
+    }
 
+    await contact.save({ session });
     await session.commitTransaction();
 
     res.json(formatContact(contact));
@@ -386,9 +398,7 @@ exports.updateLimits = async (req, res) => {
     res.status(500).json({ message: "Error al actualizar límites" });
 
   } finally {
-
     session.endSession();
-
   }
 };
 
