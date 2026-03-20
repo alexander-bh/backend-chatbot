@@ -91,19 +91,9 @@ exports.createContact = async (req, res) => {
     }
 
     const contact = await Contact.findOneAndUpdate(
-      {
-        account_id: accountId,
-        chatbot_id,
-        session_id
-      },
-      {
-        $setOnInsert: insertData,
-        $set: updateData
-      },
-      {
-        new: true,
-        upsert: true
-      }
+      { account_id: accountId, chatbot_id, session_id },
+      { $setOnInsert: insertData, $set: updateData },
+      { returnDocument: "after", upsert: true }
     );
 
     res.status(200).json(formatContact(contact));
@@ -557,16 +547,9 @@ exports.updateContact = async (req, res) => {
        UPDATE
     ========================= */
     const updated = await Contact.findOneAndUpdate(
-      {
-        _id: id,
-        account_id: accountId,
-        is_deleted: false
-      },
+      { _id: id, account_id: accountId, is_deleted: false },
       { $set: safeUpdates },
-      {
-        new: true,
-        runValidators: true
-      }
+      { returnDocument: "after", runValidators: true }
     );
 
     return res.json(formatContact(updated));

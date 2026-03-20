@@ -118,7 +118,7 @@ module.exports = async function upsertContactFromSession(session) {
       contact = await Contact.findByIdAndUpdate(
         existingContact._id,
         { $set: contactData },
-        { new: true, runValidators: true }
+        { returnDocument: "after", runValidators: true }
       );
 
     } else {
