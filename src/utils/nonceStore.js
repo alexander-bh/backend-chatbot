@@ -92,17 +92,16 @@ async function getStore() {
 
   if (process.env.REDIS_URL) {
     try {
-      const { createClient } = require("redis");
-      const client = createClient({ url: process.env.REDIS_URL });
-      client.on("error", (err) => console.error("Redis error:", err));
-      await client.connect();
+      // ... código Redis existente
       _store = new RedisStore(client);
+      console.log("✅ NonceStore: usando Redis");  // ← agrega esto
     } catch (err) {
-      console.warn("⚠️  NonceStore: Redis falló, usando memoria:", err.message);
+      console.warn("⚠️ NonceStore: Redis falló, usando memoria:", err.message);
       _store = new MemoryStore();
     }
   } else {
-    _store = new MemoryStore();
+    console.warn("⚠️ NonceStore: sin REDIS_URL, usando memoria (no apto para producción)");
+    _store = new MemoryStore();  // ← esto es lo que está pasando ahora
   }
 
   return _store;
