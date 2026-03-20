@@ -7,14 +7,12 @@
  * En single-instance, el Map en memoria es suficiente.
  */
 
-const TTL_MS = 90_000; // 90 segundos
+const TTL_MS = 90_000;
 
 /* ─── Adaptador en memoria ─── */
 class MemoryStore {
   constructor() {
     this._map = new Map();
-
-    // Limpieza cada 2 minutos para evitar memory leaks
     setInterval(() => {
       const now = Date.now();
       for (const [key, expiresAt] of this._map) {
@@ -27,25 +25,18 @@ class MemoryStore {
     this._map.set(key, Date.now() + ttlMs);
   }
 
-  /** Consume el nonce: retorna true si existía y lo elimina, false si no */
   async consume(key) {
     const expiresAt = this._map.get(key);
     if (!expiresAt) return false;
-    if (Date.now() > expiresAt) {
-      this._map.delete(key);
-      return false;
-    }
-    this._map.delete(key); // ← un solo uso
+    if (Date.now() > expiresAt) { this._map.delete(key); return false; }
+    this._map.delete(key);
     return true;
   }
 
   async has(key) {
     const expiresAt = this._map.get(key);
     if (!expiresAt) return false;
-    if (Date.now() > expiresAt) {
-      this._map.delete(key);
-      return false;
-    }
+    if (Date.now() > expiresAt) { this._map.delete(key); return false; }
     return true;
   }
 }
@@ -57,12 +48,10 @@ class RedisStore {
   }
 
   async set(key, ttlMs = TTL_MS) {
-    // PX = TTL en milisegundos
     await this._client.set(`nonce:${key}`, "1", { PX: ttlMs });
   }
 
   async consume(key) {
-    // Usa un script Lua para atomicidad: GET + DEL en una sola operación
     const script = `
       local v = redis.call("GET", KEYS[1])
       if v then
@@ -84,7 +73,7 @@ class RedisStore {
   }
 }
 
-/* ─── Factory: detecta Redis automáticamente ─── */
+/* ─── Factory ─── */
 let _store = null;
 
 async function getStore() {
@@ -92,16 +81,19 @@ async function getStore() {
 
   if (process.env.REDIS_URL) {
     try {
-      // ... código Redis existente
+      const { createClient } = require("redis"); // ← línea que faltaba
+      const client = createClient({ url: process.env.REDIS_URL });
+      client.on("error", (err) => console.error("Redis error:", err));
+      await client.connect();
       _store = new RedisStore(client);
-      console.log("✅ NonceStore: usando Redis");  // ← agrega esto
+      console.log("✅ NonceStore: usando Redis");
     } catch (err) {
       console.warn("⚠️ NonceStore: Redis falló, usando memoria:", err.message);
       _store = new MemoryStore();
     }
   } else {
     console.warn("⚠️ NonceStore: sin REDIS_URL, usando memoria (no apto para producción)");
-    _store = new MemoryStore();  // ← esto es lo que está pasando ahora
+    _store = new MemoryStore();
   }
 
   return _store;
