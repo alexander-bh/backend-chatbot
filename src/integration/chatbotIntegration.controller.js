@@ -528,7 +528,8 @@ exports.getInstallScript = async (req, res) => {
 exports.renderEmbed = async (req, res) => {
   try {
     const { public_id } = req.params;
-    const domain = normalizeDomain(req.query.d || "");
+    const rawDomain = req.query.d || "";          // ← RAW con puerto
+    const domain = normalizeDomain(rawDomain);    // ← normalizado para validaciones
     const challengeB64 = req.query.c || "";
 
     if (!domain) return res.status(400).send("Dominio inválido");
@@ -631,7 +632,7 @@ exports.renderEmbed = async (req, res) => {
 
     res.setHeader(
       "Content-Security-Policy",
-      `default-src 'none'; script-src 'unsafe-inline'; frame-ancestors 'self' https://${WIDGET_DOMAIN} http://${domain} https://${domain}`
+      `default-src 'none'; script-src 'unsafe-inline'; frame-ancestors http://${rawDomain} https://${rawDomain} https://${WIDGET_DOMAIN}`
     );
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
@@ -650,6 +651,7 @@ exports.renderEmbed = async (req, res) => {
       </body>
       </html>`
     );
+
   } catch (err) {
     console.error("RENDER EMBED ERROR:", err);
     return res.status(500).send("No se pudo cargar el chatbot");
@@ -669,50 +671,52 @@ exports.verifyConfigSignature = async (req, res) => {
   try {
     const { payload, signature } = req.body;
 
-    if (!payload || !signature) {
+    if (!payload || !signature)
       return res.status(400).json({ error: "Datos incompletos" });
-    }
 
-    if (!process.env.CONFIG_SECRET) {
+    if (!process.env.CONFIG_SECRET)
       return res.status(500).json({ error: "Server misconfig" });
-    }
 
-    // 1. Verificar firma HMAC (timing-safe)
+    // 1. Verificar firma HMAC
     const expected = crypto
       .createHmac("sha256", process.env.CONFIG_SECRET)
       .update(payload)
       .digest("hex");
 
-    if (!safeCompare(signature, expected)) {
+    if (!safeCompare(signature, expected))
       return res.status(403).json({ error: "Firma inválida" });
-    }
 
     const config = JSON.parse(payload);
 
-    // 2. TTL reducido a 90s (anti-replay por tiempo)
+    // 2. TTL
     const MAX_AGE_MS = 90_000;
-    if (!config.ts || Date.now() - config.ts > MAX_AGE_MS) {
+    if (!config.ts || Date.now() - config.ts > MAX_AGE_MS)
       return res.status(403).json({ error: "Config expirada" });
-    }
 
-    // 3. Validar nonce (un solo uso — consume atómicamente)
-    if (!config.nonce) {
+    // 3. Nonce
+    if (!config.nonce)
       return res.status(403).json({ error: "Nonce ausente" });
-    }
 
     const store = await getStore();
     const valid = await store.consume(config.nonce);
 
-    if (!valid) {
-      return res.status(403).json({ error: "Nonce inválido o ya utilizado" });
-    }
-
-    // 4. Validar Origin del widget contra el dominio de la config
+    // 4. Origin — declarado ANTES del log
     const requestOrigin = normalizeDomain(
       req.headers.origin || req.headers.referer || ""
     );
 
-    // El widget vive en WIDGET_DOMAIN — se permite ese origen
+    // ✅ Log aquí, donde todas las variables ya existen
+    console.log("VERIFY attempt", {
+      nonce: config.nonce?.slice(0, 8),
+      age: Date.now() - config.ts,
+      nonceValid: valid,
+      origin: req.headers.origin,
+      requestOrigin
+    });
+
+    if (!valid)
+      return res.status(403).json({ error: "Nonce inválido o ya utilizado" });
+
     const allowedOrigins = [
       WIDGET_DOMAIN,
       config.originDomain,
@@ -720,11 +724,10 @@ exports.verifyConfigSignature = async (req, res) => {
     ].filter(Boolean);
 
     if (requestOrigin && !allowedOrigins.includes(requestOrigin)) {
-      console.warn(`ORIGIN MISMATCH on verify: got=${requestOrigin} allowed=${allowedOrigins}`);
+      console.warn(`ORIGIN MISMATCH: got=${requestOrigin} allowed=${allowedOrigins}`);
       return res.status(403).json({ error: "Origen no autorizado" });
     }
 
-    // 5. Devolver config limpia (sin nonce para no exponerlo de nuevo)
     const { nonce: _n, ...safeConfig } = config;
     res.json(safeConfig);
 
