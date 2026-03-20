@@ -100,7 +100,7 @@ exports.updateNotificationEmails = async (req, res) => {
     const account = await Account.findByIdAndUpdate(
       req.user.account_id,
       { $set: { notification_emails: normalized } },
-      { new: true }
+      { returnDocument: "after" }  // ← aquí
     );
 
     if (!account) return res.status(404).json({ message: "Cuenta no encontrada" });
@@ -122,9 +122,8 @@ exports.toggleNotificationEmails = async (req, res) => {
     const account = await Account.findByIdAndUpdate(
       req.user.account_id,
       { $set: { notification_emails_enabled: enabled } },
-      { new: true }
+      { returnDocument: "after" }  // ← aquí
     );
-
     if (!account) return res.status(404).json({ message: "Cuenta no encontrada" });
 
     res.json({ notification_emails_enabled: account.notification_emails_enabled });
