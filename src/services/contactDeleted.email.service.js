@@ -128,10 +128,15 @@ exports.sendContactsDeletedEmail = async ({ accountId, deletedContacts }) => {
         html: htmlContent,
       });
       console.log("✅ Email enviado:", info.messageId, info.response);
+      console.log("✅ messageId:", info.messageId);
+      console.log("✅ response:", info.response);
+      console.log("✅ accepted:", info.accepted);   // ← emails que aceptó
+      console.log("✅ rejected:", info.rejected);
     } catch (mailErr) {
       console.error("❌ Error en sendMail:", mailErr.message);
     }
     console.log(`📧 Notificación enviada a ${account.notification_emails.join(", ")}`);
+
 
   } catch (err) {
     console.error("❌ Error en sendContactsDeletedEmail:", err);
