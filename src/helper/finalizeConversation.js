@@ -1,7 +1,8 @@
-const upsertContactFromSession  = require("../services/upsertContactFromSession.service");
+const upsertContactFromSession = require("../services/upsertContactFromSession.service");
+const Chatbot = require("../models/Chatbot");
+const Notification = require("../models/Notification");
 const { sendConversationEmail } = require("../services/chatbotEmail.service");
-const Chatbot                   = require("../models/Chatbot");
-const Notification              = require("../models/Notification"); // ← nuevo import
+const { sendToAccount } = require("../controllers/sse.controller");
 
 exports.finalizeConversation = async (session) => {
 
@@ -22,20 +23,28 @@ exports.finalizeConversation = async (session) => {
         contact.last_name
       ].filter(Boolean).join(" ") || "Sin nombre";
 
-      await Notification.create({
+      const notif = await Notification.create({
         account_id: session.account_id,
-        type:       "new_contact",
-        title:      "Nuevo contacto registrado",
-        message:    `${nombre} se registró a través del chatbot.`,
+        type: "new_contact",
+        title: "Nuevo contacto registrado",
+        message: `${nombre} se registró a través del chatbot.`,
         data: {
           contact_id: contact._id,
-          name:       nombre,
-          email:      contact.email  || null,
-          phone:      contact.phone  || null,
+          name: nombre,
+          email: contact.email || null,
+          phone: contact.phone || null,
           origin_url: session.origin_url || null,
         },
         is_read: false
       });
+
+      // ← Emitir en tiempo real al frontend
+      sendToAccount(session.account_id, {
+        type: "new_notification",
+        notification: notif
+      });
+
+
     } catch (notifErr) {
       console.error("Error creando notificación de nuevo contacto:", notifErr);
     }
@@ -54,8 +63,8 @@ exports.finalizeConversation = async (session) => {
   const emailSettings = chatbot?.email_settings || {};
 
   const canSendEmail =
-    emailSettings.enabled    === true &&
-    emailSettings.to_email   &&
+    emailSettings.enabled === true &&
+    emailSettings.to_email &&
     emailSettings.from_email;
 
   /* ================= ENVIAR EMAIL SOLO SI ESTÁ HABILITADO ================= */
