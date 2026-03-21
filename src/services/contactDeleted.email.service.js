@@ -115,10 +115,6 @@ exports.sendContactsDeletedEmail = async ({ accountId, deletedContacts }) => {
     `;
 
     console.log("📧 from:", `"Sistema CRM" <${process.env.SMTP_USER}>`);
-    console.log("🔑 SMTP_HOST:", process.env.SMTP_HOST);
-    console.log("🔑 SMTP_PORT:", process.env.SMTP_PORT);
-    console.log("🔑 SMTP_USER:", process.env.SMTP_USER);
-    console.log("🔑 SMTP_PASS:", process.env.SMTP_PASS ? "✅ definido" : "❌ undefined");
 
     try {
       const info = await transporter.sendMail({
@@ -128,15 +124,10 @@ exports.sendContactsDeletedEmail = async ({ accountId, deletedContacts }) => {
         html: htmlContent,
       });
       console.log("✅ Email enviado:", info.messageId, info.response);
-      console.log("✅ messageId:", info.messageId);
-      console.log("✅ response:", info.response);
-      console.log("✅ accepted:", info.accepted);   // ← emails que aceptó
-      console.log("✅ rejected:", info.rejected);
     } catch (mailErr) {
       console.error("❌ Error en sendMail:", mailErr.message);
     }
     console.log(`📧 Notificación enviada a ${account.notification_emails.join(", ")}`);
-
 
   } catch (err) {
     console.error("❌ Error en sendContactsDeletedEmail:", err);
