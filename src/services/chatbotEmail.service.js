@@ -81,7 +81,7 @@ exports.sendConversationEmail = async (session) => {
                 <h2 style="margin:0;color:#ffffff;font-size:19px;font-weight:700;">
                   ${chatbot.name}
                 </h2>
-                <p style="margin:5px 0 0;color:#04C4D9;font-size:12px;
+                <p style="margin:5px 0 0;color:#FFFFFF;font-size:12px;
                           letter-spacing:1px;text-transform:uppercase;">
                   Nueva conversación recibida
                 </p>
@@ -171,7 +171,7 @@ exports.sendConversationEmail = async (session) => {
             <!-- FOOTER -->
             <tr>
               <td style="background:#28403D;padding:14px;text-align:center;">
-                <span style="font-size:11px;color:#04C4D9;letter-spacing:1px;">
+                <span style="font-size:11px;color:#FFFFFF;letter-spacing:1px;">
                   Generado automáticamente por tu chatbot
                 </span>
               </td>
