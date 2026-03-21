@@ -13,14 +13,15 @@ exports.notifyContactsDeleted = async (req, res) => {
       return res.status(400).json({ message: "Datos inválidos" });
     }
 
-    // Responder inmediato para no bloquear el trigger
-    res.json({ received: true });
-
-    // El servicio ya maneja internamente si no hay emails configurados
+    // ✅ Primero ejecutar, luego responder
     await sendContactsDeletedEmail({ accountId, deletedContacts });
+
+    res.json({ received: true });
 
   } catch (err) {
     console.error("NOTIFY CONTACTS DELETED ERROR:", err);
-    // res.status ya fue enviado, solo loggear
+    if (!res.headersSent) {
+      res.status(500).json({ message: "Error interno" });
+    }
   }
 };
