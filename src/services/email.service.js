@@ -21,6 +21,3 @@ exports.sendResetPasswordEmail = async (user, code) => {
     <p> Si no solicitaste este cambio, puedes ignorar este mensaje con seguridad. </p> </td> </tr> <!-- Footer --> <tr> <td style="border-top:1px solid #e5e7eb; margin-top:24px; padding-top:16px; font-size:13px; color:#6b7280; text-align:center;"> <p style="margin:0;"> © {{AÑO}} Chatbot · Soporte técnico </p> <p style="margin:4px 0 0;"> Este es un correo automático, por favor no respondas. </p> </td> </tr> </table> </td> </tr>`
   });
 };
-
-//chatbot_proyect2026
-//wulg zuxy wkfv ipyd
