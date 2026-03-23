@@ -493,13 +493,16 @@ exports.deleteContact = async (req, res) => {
       return res.status(404).json({ message: "Contacto no encontrado" });
     }
 
-    contact.is_deleted = true;
-    await contact.save();
+    // ── Eliminar físicamente contacto y conversación ───────────────────────
+    await Contact.deleteOne({ _id: contact._id });
 
-    await ConversationSession.updateOne(
-      { _id: contact.session_id, account_id: accountId },
-      { $set: { is_deleted: true } }
-    );
+    if (contact.session_id) {
+      await ConversationSession.deleteOne({
+        _id: contact.session_id,
+        account_id: accountId
+      });
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     // ── Pusher ────────────────────────────────────────────────────────────────
     sendToAccount(accountId, "contact-deleted", { id: contact._id });
@@ -515,7 +518,6 @@ exports.deleteContact = async (req, res) => {
     res.status(500).json({ message: "Error al eliminar contacto" });
   }
 };
-
 
 
 
