@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Contact = require("../models/Contact");
 const formatDateAMPM = require("../utils/formatDate");
 const ConversationSession = require("../models/ConversationSession");
+const { sendToAccount } = require("../services/pusher.service");
 
 const formatContact = (contact) => {
   const obj = contact.toObject ? contact.toObject() : contact;
@@ -14,9 +15,12 @@ const formatContact = (contact) => {
   };
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Chatbot contact (upsert)
+// Evento: "contact-created"
+// ─────────────────────────────────────────────────────────────────────────────
 exports.createContact = async (req, res) => {
   try {
-
     const accountId = req.user.account_id;
 
     const {
@@ -37,26 +41,10 @@ exports.createContact = async (req, res) => {
     }
 
     const allowedFields = [
-      "name",
-      "last_name",
-      "email",
-      "phone",
-      "birth_date",
-      "company",
-      "website",
-      "company_phone",
-      "phone_ext",
-      "position",
-      "city",
-      "country",
-      "state",
-      "postal_code",
-      "address",
-      "job_title",
-      "privacy",
-      "notes",
-      "observations",
-      "data_processing_consent"
+      "name", "last_name", "email", "phone", "birth_date",
+      "company", "website", "company_phone", "phone_ext", "position",
+      "city", "country", "state", "postal_code", "address", "job_title",
+      "privacy", "notes", "observations", "data_processing_consent"
     ];
 
     const insertData = {
@@ -78,17 +66,9 @@ exports.createContact = async (req, res) => {
       }
     }
 
-    if (variables) {
-      updateData.variables = variables;
-    }
-
-    if (visitor_id) {
-      updateData.visitor_id = visitor_id;
-    }
-
-    if (completed !== undefined) {
-      updateData.completed = completed;
-    }
+    if (variables)             updateData.variables  = variables;
+    if (visitor_id)            updateData.visitor_id = visitor_id;
+    if (completed !== undefined) updateData.completed = completed;
 
     const contact = await Contact.findOneAndUpdate(
       { account_id: accountId, chatbot_id, session_id },
@@ -96,46 +76,36 @@ exports.createContact = async (req, res) => {
       { returnDocument: "after", upsert: true }
     );
 
+    // ── Pusher ────────────────────────────────────────────────────────────────
+    sendToAccount(accountId, "contact-created", formatContact(contact));
+    // ─────────────────────────────────────────────────────────────────────────
+
     res.status(200).json(formatContact(contact));
 
   } catch (error) {
-
     console.error("CREATE CONTACT ERROR:", error);
 
     if (error.code === 11000) {
-      return res.status(200).json({
-        message: "Contacto ya existente"
-      });
+      return res.status(200).json({ message: "Contacto ya existente" });
     }
 
-    res.status(500).json({
-      message: "Error al guardar contacto"
-    });
-
+    res.status(500).json({ message: "Error al guardar contacto" });
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Contactos por chatbot (solo lectura, sin evento Pusher)
+// ─────────────────────────────────────────────────────────────────────────────
 exports.getContactsByChatbot = async (req, res) => {
   try {
     const { chatbot_id } = req.params;
-    const { status } = req.query;
-    const accountId = req.user.account_id;
+    const { status }     = req.query;
+    const accountId      = req.user.account_id;
 
-    const filter = {
-      chatbot_id,
-      account_id: accountId,
-      is_deleted: false
-    };
+    const filter = { chatbot_id, account_id: accountId, is_deleted: false };
+    if (status) filter.status = status;
 
-    if (status) {
-      filter.status = status;
-    }
-
-    const contacts = await Contact
-      .find(filter)
-      .sort({ createdAt: -1 })
-      .lean();
-
+    const contacts = await Contact.find(filter).sort({ createdAt: -1 }).lean();
     const formatted = contacts.map(formatContact);
 
     const total_contacts_general = await Contact.countDocuments({
@@ -143,51 +113,34 @@ exports.getContactsByChatbot = async (req, res) => {
       is_deleted: false
     });
 
-    res.json({
-      total_contacts_chatbot: formatted.length,
-      total_contacts_general,
-      contacts: formatted
-    });
+    res.json({ total_contacts_chatbot: formatted.length, total_contacts_general, contacts: formatted });
 
   } catch (error) {
     console.error("GET CONTACTS ERROR:", error);
-    res.status(500).json({
-      message: "Error al obtener contactos"
-    });
+    res.status(500).json({ message: "Error al obtener contactos" });
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Cambio de estado
+// Evento: "contact-status-updated"  →  { id, status }
+// ─────────────────────────────────────────────────────────────────────────────
 exports.updateStatus = async (req, res) => {
-
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-
-    const { id } = req.params;
+    const { id }     = req.params;
     const { status } = req.body;
-
-    /* =========================
-       VALIDAR ID
-    ========================= */
 
     if (!id || !mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: "ID inválido" });
     }
 
-    /* ======================
-       VALIDAR STATUS
-    ========================= */
-
     const allowed = ["new", "contacted", "qualified", "lost", "discarded"];
-
     if (!status || !allowed.includes(status)) {
       return res.status(400).json({ message: "Estado inválido" });
     }
-
-    /* =========================
-       BUSCAR CONTACTO
-    ========================= */
 
     const contact = await Contact.findById(id).session(session);
 
@@ -195,11 +148,7 @@ exports.updateStatus = async (req, res) => {
       return res.status(404).json({ message: "Contacto no encontrado" });
     }
 
-    /* =========================
-       PERMISOS
-    ========================= */
-
-    const isAdmin = req.user.role === "ADMIN";
+    const isAdmin     = req.user.role === "ADMIN";
     const sameAccount = contact.account_id?.toString() === req.user.account_id?.toString();
 
     if (contact.is_template && !isAdmin) {
@@ -210,33 +159,19 @@ exports.updateStatus = async (req, res) => {
       return res.status(403).json({ message: "Sin permisos para modificar este contacto" });
     }
 
-    /* =========================
-       ACTUALIZAR ESTADO
-    ========================= */
-
-    contact.status = status;
+    contact.status            = status;
     contact.status_changed_at = new Date();
 
-    // Al salir de lost/discarded → limpiar límites
     if (!["lost", "discarded"].includes(status)) {
-      contact.lost_limit_at = null;
+      contact.lost_limit_at      = null;
       contact.discarded_limit_at = null;
-      contact.status_changed_at = null;
+      contact.status_changed_at  = null;
     }
 
-    if (status === "lost") {
-      contact.completed = false;
-    }
-
-    if (status === "contacted" || status === "qualified") {
-      contact.completed = true;
-    }
+    if (status === "lost")                               contact.completed = false;
+    if (status === "contacted" || status === "qualified") contact.completed = true;
 
     await contact.save({ session });
-
-    /* =========================
-       MAP STATUS → CONVERSATION
-    ========================= */
 
     let conversationUpdate = null;
 
@@ -260,16 +195,9 @@ exports.updateStatus = async (req, res) => {
       };
     }
 
-    /* =========================
-       UPDATE CONVERSATION
-    ========================= */
-
     if (conversationUpdate && contact.session_id) {
       await ConversationSession.updateOne(
-        {
-          _id: contact.session_id,
-          account_id: contact.account_id
-        },
+        { _id: contact.session_id, account_id: contact.account_id },
         { $set: conversationUpdate },
         { session }
       );
@@ -277,64 +205,51 @@ exports.updateStatus = async (req, res) => {
 
     await session.commitTransaction();
 
+    // ── Pusher ────────────────────────────────────────────────────────────────
+    // Payload ligero: solo id + nuevo status (evita enviar el doc completo)
+    sendToAccount(contact.account_id, "contact-status-updated", {
+      id:     contact._id,
+      status: contact.status
+    });
+    // ─────────────────────────────────────────────────────────────────────────
+
     res.json(formatContact(contact));
 
   } catch (error) {
-
     await session.abortTransaction();
     console.error("UPDATE STATUS ERROR:", error);
     res.status(500).json({ message: "Error al actualizar estado" });
-
   } finally {
-
     session.endSession();
-
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Límites lost/discarded  (sin evento Pusher: cambio interno, no afecta la lista)
+// ─────────────────────────────────────────────────────────────────────────────
 exports.updateLimits = async (req, res) => {
-
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-
     const { id } = req.params;
-    const {
-      lost_limit_at,
-      discarded_limit_at,
-      discarded_reason,   // ← nuevo
-      discarded_notes     // ← nuevo
-    } = req.body;
+    const { lost_limit_at, discarded_limit_at, discarded_reason, discarded_notes } = req.body;
 
-    /* =========================
-       VALIDAR ID
-    ========================= */
     if (!id || !mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: "ID inválido" });
     }
 
-    /* =========================
-       VALIDAR PAYLOAD
-    ========================= */
     if (lost_limit_at === undefined && discarded_limit_at === undefined) {
       return res.status(400).json({
         message: "Se requiere al menos un campo: lost_limit_at o discarded_limit_at"
       });
     }
 
-    /* =========================
-       BUSCAR CONTACTO
-    ========================= */
     const contact = await Contact.findById(id).session(session);
-
     if (!contact || contact.is_deleted) {
       return res.status(404).json({ message: "Contacto no encontrado" });
     }
 
-    /* =========================
-       PERMISOS
-    ========================= */
     const isAdmin     = req.user.role === "ADMIN";
     const sameAccount = contact.account_id?.toString() === req.user.account_id?.toString();
 
@@ -346,9 +261,6 @@ exports.updateLimits = async (req, res) => {
       return res.status(403).json({ message: "Sin permisos para modificar este contacto" });
     }
 
-    /* =========================
-       VALIDAR QUE EL ESTADO PERMITA LÍMITES
-    ========================= */
     if (!["lost", "discarded"].includes(contact.status)) {
       return res.status(400).json({
         message: "Solo se pueden definir límites en contactos con estado 'lost' o 'discarded'"
@@ -363,27 +275,12 @@ exports.updateLimits = async (req, res) => {
       return res.status(400).json({ message: "discarded_limit_at solo aplica para estado 'discarded'" });
     }
 
-    /* =========================
-       ACTUALIZAR LÍMITES
-    ========================= */
-    if (lost_limit_at !== undefined) {
-      contact.lost_limit_at = lost_limit_at ? new Date(lost_limit_at) : null;
-    }
+    if (lost_limit_at !== undefined)      contact.lost_limit_at      = lost_limit_at      ? new Date(lost_limit_at)      : null;
+    if (discarded_limit_at !== undefined)  contact.discarded_limit_at = discarded_limit_at ? new Date(discarded_limit_at) : null;
 
-    if (discarded_limit_at !== undefined) {
-      contact.discarded_limit_at = discarded_limit_at ? new Date(discarded_limit_at) : null;
-    }
-
-    /* =========================
-       GUARDAR RAZÓN Y NOTAS DE DESCARTE
-    ========================= */
     if (contact.status === "discarded") {
-      if (discarded_reason !== undefined) {
-        contact.discarded_reason = discarded_reason || null;
-      }
-      if (discarded_notes !== undefined) {
-        contact.discarded_notes = discarded_notes?.trim() || null;
-      }
+      if (discarded_reason !== undefined) contact.discarded_reason = discarded_reason || null;
+      if (discarded_notes  !== undefined) contact.discarded_notes  = discarded_notes?.trim() || null;
     }
 
     await contact.save({ session });
@@ -392,16 +289,18 @@ exports.updateLimits = async (req, res) => {
     res.json(formatContact(contact));
 
   } catch (error) {
-
     await session.abortTransaction();
     console.error("UPDATE LIMITS ERROR:", error);
     res.status(500).json({ message: "Error al actualizar límites" });
-
   } finally {
     session.endSession();
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Crear contacto manual
+// Evento: "contact-created"
+// ─────────────────────────────────────────────────────────────────────────────
 exports.createManualContact = async (req, res) => {
   try {
     const accountId = req.user.account_id;
@@ -415,222 +314,132 @@ exports.createManualContact = async (req, res) => {
     };
 
     const allowedFields = [
-      // 👤 Personales
-      "name",
-      "last_name",
-      "email",
-      "phone",
-      "birth_date",
-
-      // 🏢 Empresa
-      "company",
-      "website",
-      "company_phone",
-      "phone_ext",
-      "position",
-      "city",
-      "country",
-      "state",
-      "postal_code",
-      "address",
-      "job_title",
-      "privacy",
-      "notes",
-
-      // 📝 Extra
-      "observations",
-      "data_processing_consent"
+      "name", "last_name", "email", "phone", "birth_date",
+      "company", "website", "company_phone", "phone_ext", "position",
+      "city", "country", "state", "postal_code", "address", "job_title",
+      "privacy", "notes", "observations", "data_processing_consent"
     ];
 
     for (const field of allowedFields) {
-      if (req.body[field] !== undefined) {
-        data[field] = req.body[field];
-      }
+      if (req.body[field] !== undefined) data[field] = req.body[field];
     }
 
     const contact = await Contact.create(data);
+
+    // ── Pusher ────────────────────────────────────────────────────────────────
+    sendToAccount(accountId, "contact-created", formatContact(contact));
+    // ─────────────────────────────────────────────────────────────────────────
 
     res.status(201).json(formatContact(contact));
 
   } catch (error) {
     console.error("CREATE MANUAL CONTACT ERROR:", error);
-
-    res.status(500).json({
-      message: "Error al crear contacto"
-    });
+    res.status(500).json({ message: "Error al crear contacto" });
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Editar campos de un contacto
+// Evento: "contact-updated"  →  contacto completo actualizado
+// ─────────────────────────────────────────────────────────────────────────────
 exports.updateContact = async (req, res) => {
   try {
-    const { id } = req.params;
-    const accountId = req.user.account_id;
-    const updates = req.body;
+    const { id }     = req.params;
+    const accountId  = req.user.account_id;
+    const updates    = req.body;
 
-    /* =========================
-       VALIDAR ID
-    ========================= */
     if (!id || id === "null" || !mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        message: "ID de contacto inválido"
-      });
+      return res.status(400).json({ message: "ID de contacto inválido" });
     }
 
-    /* =========================
-       BUSCAR CONTACTO
-    ========================= */
-    const contact = await Contact.findOne({
-      _id: id,
-      account_id: accountId,
-      is_deleted: false
-    });
-
+    const contact = await Contact.findOne({ _id: id, account_id: accountId, is_deleted: false });
     if (!contact) {
-      return res.status(404).json({
-        message: "Contacto no encontrado"
-      });
+      return res.status(404).json({ message: "Contacto no encontrado" });
     }
 
-    /* =========================
-       VALIDAR STATUS
-    ========================= */
     const allowedStatus = ["new", "contacted", "qualified", "lost"];
-
     if (updates.status && !allowedStatus.includes(updates.status)) {
-      return res.status(400).json({
-        message: "Estado inválido"
-      });
+      return res.status(400).json({ message: "Estado inválido" });
     }
 
-    /* =========================
-       CAMPOS PERMITIDOS
-    ========================= */
     const allowedFields = [
-      // 👤 Personales
-      "name",
-      "last_name",
-      "email",
-      "phone",
-      "birth_date",
-
-      // 🏢 Empresa
-      "company",
-      "website",
-      "company_phone",
-      "phone_ext",
-      "position",
-      "city",
-      "country",
-      "state",
-      "postal_code",
-      "address",
-      "job_title",
-      "privacy",
-      "notes",
-
-      // 📝 Extra
-      "observations",
-      "data_processing_consent",
-      "status",
-      "completed",
-      "variables"
+      "name", "last_name", "email", "phone", "birth_date",
+      "company", "website", "company_phone", "phone_ext", "position",
+      "city", "country", "state", "postal_code", "address", "job_title",
+      "privacy", "notes", "observations", "data_processing_consent",
+      "status", "completed", "variables"
     ];
 
     const safeUpdates = {};
-
     for (const field of allowedFields) {
-      if (updates[field] !== undefined) {
-        safeUpdates[field] = updates[field];
-      }
+      if (updates[field] !== undefined) safeUpdates[field] = updates[field];
     }
 
-    /* =========================
-       CAMPOS PROTEGIDOS
-    ========================= */
     delete safeUpdates.account_id;
     delete safeUpdates.source;
     delete safeUpdates.chatbot_id;
     delete safeUpdates.session_id;
     delete safeUpdates.is_deleted;
 
-    /* =========================
-       UPDATE
-    ========================= */
     const updated = await Contact.findOneAndUpdate(
       { _id: id, account_id: accountId, is_deleted: false },
       { $set: safeUpdates },
       { returnDocument: "after", runValidators: true }
     );
 
+    // ── Pusher ────────────────────────────────────────────────────────────────
+    sendToAccount(accountId, "contact-updated", formatContact(updated));
+    // ─────────────────────────────────────────────────────────────────────────
+
     return res.json(formatContact(updated));
 
   } catch (error) {
     console.error("UPDATE CONTACT ERROR:", error);
-
-    return res.status(500).json({
-      message: "Error al actualizar contacto"
-    });
+    return res.status(500).json({ message: "Error al actualizar contacto" });
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Listar contactos (solo lectura, sin evento Pusher)
+// ─────────────────────────────────────────────────────────────────────────────
 exports.getContacts = async (req, res) => {
   try {
-    const accountId = req.user.account_id;
+    const accountId        = req.user.account_id;
     const { source, status, search } = req.query;
-
-    /* ================= FILTRO BASE ================= */
 
     const filter = {
       account_id: new mongoose.Types.ObjectId(accountId),
       is_deleted: false
     };
 
-    if (status) {
-      filter.status = status;
-    }
+    if (status) filter.status = status;
 
     if (source === "manual") {
       filter.source = "manual";
     }
 
     if (source === "chatbot") {
-      filter.$or = [
-        { source: "chatbot" },
-        { source: { $exists: false } }
-      ];
+      filter.$or = [{ source: "chatbot" }, { source: { $exists: false } }];
     }
 
     if (search) {
       const searchFilter = [
-        { name: { $regex: search, $options: "i" } },
+        { name:  { $regex: search, $options: "i" } },
         { email: { $regex: search, $options: "i" } },
         { phone: { $regex: search, $options: "i" } }
       ];
 
       if (filter.$or) {
-        filter.$and = [
-          { $or: filter.$or },
-          { $or: searchFilter }
-        ];
+        filter.$and = [{ $or: filter.$or }, { $or: searchFilter }];
         delete filter.$or;
       } else {
         filter.$or = searchFilter;
       }
     }
 
-    /* ================= CONTACTOS + HISTORIAL ================= */
-
     const contacts = await Contact.aggregate([
-      {
-        $match: filter
-      },
-
-      {
-        $sort: { createdAt: -1 }
-      },
-
-      /* ================= JOIN CONVERSATION ================= */
-
+      { $match: filter },
+      { $sort: { createdAt: -1 } },
       {
         $lookup: {
           from: "conversationsessions",
@@ -639,80 +448,39 @@ exports.getContacts = async (req, res) => {
           as: "conversation"
         }
       },
-
-      {
-        $unwind: {
-          path: "$conversation",
-          preserveNullAndEmptyArrays: true
-        }
-      },
-
-      /* ================= EXTRAER HISTORIAL ================= */
-
-      {
-        $addFields: {
-          conversation_history: "$conversation.history"
-        }
-      },
-
-      {
-        $project: {
-          conversation: 0
-        }
-      }
+      { $unwind: { path: "$conversation", preserveNullAndEmptyArrays: true } },
+      { $addFields: { conversation_history: "$conversation.history" } },
+      { $project: { conversation: 0 } }
     ]);
-
-    /* ================= NORMALIZAR ================= */
 
     const normalized = contacts.map(formatContact);
 
-    /* ================= CONTADORES ================= */
-
-    const baseCountFilter = {
-      account_id: accountId,
-      is_deleted: false
-    };
+    const baseCountFilter = { account_id: accountId, is_deleted: false };
 
     const [total, total_manual, total_chatbot] = await Promise.all([
-
       Contact.countDocuments(baseCountFilter),
-
+      Contact.countDocuments({ ...baseCountFilter, source: "manual" }),
       Contact.countDocuments({
         ...baseCountFilter,
-        source: "manual"
-      }),
-
-      Contact.countDocuments({
-        ...baseCountFilter,
-        $or: [
-          { source: "chatbot" },
-          { source: { $exists: false } }
-        ]
+        $or: [{ source: "chatbot" }, { source: { $exists: false } }]
       })
-
     ]);
 
-    res.json({
-      total,
-      total_manual,
-      total_chatbot,
-      contacts: normalized
-    });
+    res.json({ total, total_manual, total_chatbot, contacts: normalized });
 
   } catch (error) {
     console.error("GET CONTACTS ERROR:", error);
-    res.status(500).json({
-      message: "Error al obtener contactos"
-    });
+    res.status(500).json({ message: "Error al obtener contactos" });
   }
 };
 
-
-
-//Esta variables ya no se usan 
+// ─────────────────────────────────────────────────────────────────────────────
+// Eliminar contacto (soft delete)
+// Evento: "contact-deleted"  →  { id }
+// ─────────────────────────────────────────────────────────────────────────────
 exports.deleteContact = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { id }    = req.params;
     const accountId = req.user.account_id;
 
     const contact = await Contact.findOne({
@@ -722,27 +490,20 @@ exports.deleteContact = async (req, res) => {
     });
 
     if (!contact) {
-      return res.status(404).json({
-        message: "Contacto no encontrado"
-      });
+      return res.status(404).json({ message: "Contacto no encontrado" });
     }
-
-    /* ================= SOFT DELETE CONTACT ================= */
 
     contact.is_deleted = true;
     await contact.save();
 
-    /* ================= SOFT DELETE CONVERSATION ================= */
-
     await ConversationSession.updateOne(
-      {
-        _id: contact.session_id,
-        account_id: accountId
-      },
-      {
-        $set: { is_deleted: true }
-      }
+      { _id: contact.session_id, account_id: accountId },
+      { $set: { is_deleted: true } }
     );
+
+    // ── Pusher ────────────────────────────────────────────────────────────────
+    sendToAccount(accountId, "contact-deleted", { id: contact._id });
+    // ─────────────────────────────────────────────────────────────────────────
 
     return res.json({
       message: "Contacto y conversación eliminados correctamente",
@@ -751,12 +512,14 @@ exports.deleteContact = async (req, res) => {
 
   } catch (error) {
     console.error("DELETE CONTACT ERROR:", error);
-    res.status(500).json({
-      message: "Error al eliminar contacto"
-    });
+    res.status(500).json({ message: "Error al eliminar contacto" });
   }
 };
 
+
+
+
+//Esta variables ya no se usan 
 exports.getDeletedContacts = async (req, res) => {
   try {
     const accountId = req.user.account_id;
