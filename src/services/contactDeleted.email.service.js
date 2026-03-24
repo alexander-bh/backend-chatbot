@@ -68,7 +68,7 @@ exports.sendContactsDeletedEmail = async ({ accountId, deletedContacts }) => {
               <tr>
                 <td style="background:#034AA6;padding:22px 28px;">
                   <h2 style="margin:0;color:#fff;font-size:19px;">${account.name}</h2>
-                  <p style="margin:5px 0 0;color:#04C4D9;font-size:12px;text-transform:uppercase;">
+                  <p style="margin:5px 0 0;color:#FFFFFF;font-size:12px;text-transform:uppercase;">
                     Contactos eliminados automáticamente
                   </p>
                 </td>
@@ -105,7 +105,7 @@ exports.sendContactsDeletedEmail = async ({ accountId, deletedContacts }) => {
               </tr>
               <tr>
                 <td style="background:#28403D;padding:14px;text-align:center;">
-                  <span style="font-size:11px;color:#04C4D9;">Generado automáticamente por tu chatbot</span>
+                  <span style="font-size:11px;color:#FAFAFA;">Generado automáticamente por tu chatbot</span>
                 </td>
               </tr>
             </table>
