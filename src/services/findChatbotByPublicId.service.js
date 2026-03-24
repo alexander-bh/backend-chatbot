@@ -14,7 +14,6 @@ module.exports = async function findChatbotByPublicId(publicId, accountId) {
     status: "active"
   });
 
-  // ✅ Genera install_token si no existe
   if (chatbot && !chatbot.install_token) {
     chatbot.install_token = crypto.randomBytes(24).toString("hex");
     await chatbot.save();
