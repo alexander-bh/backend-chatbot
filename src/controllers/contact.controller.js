@@ -66,8 +66,8 @@ exports.createContact = async (req, res) => {
       }
     }
 
-    if (variables)             updateData.variables  = variables;
-    if (visitor_id)            updateData.visitor_id = visitor_id;
+    if (variables) updateData.variables = variables;
+    if (visitor_id) updateData.visitor_id = visitor_id;
     if (completed !== undefined) updateData.completed = completed;
 
     const contact = await Contact.findOneAndUpdate(
@@ -99,8 +99,8 @@ exports.createContact = async (req, res) => {
 exports.getContactsByChatbot = async (req, res) => {
   try {
     const { chatbot_id } = req.params;
-    const { status }     = req.query;
-    const accountId      = req.user.account_id;
+    const { status } = req.query;
+    const accountId = req.user.account_id;
 
     const filter = { chatbot_id, account_id: accountId, is_deleted: false };
     if (status) filter.status = status;
@@ -130,7 +130,7 @@ exports.updateStatus = async (req, res) => {
   session.startTransaction();
 
   try {
-    const { id }     = req.params;
+    const { id } = req.params;
     const { status } = req.body;
 
     if (!id || !mongoose.Types.ObjectId.isValid(id)) {
@@ -148,7 +148,7 @@ exports.updateStatus = async (req, res) => {
       return res.status(404).json({ message: "Contacto no encontrado" });
     }
 
-    const isAdmin     = req.user.role === "ADMIN";
+    const isAdmin = req.user.role === "ADMIN";
     const sameAccount = contact.account_id?.toString() === req.user.account_id?.toString();
 
     if (contact.is_template && !isAdmin) {
@@ -159,16 +159,16 @@ exports.updateStatus = async (req, res) => {
       return res.status(403).json({ message: "Sin permisos para modificar este contacto" });
     }
 
-    contact.status            = status;
+    contact.status = status;
     contact.status_changed_at = new Date();
 
     if (!["lost", "discarded"].includes(status)) {
-      contact.lost_limit_at      = null;
+      contact.lost_limit_at = null;
       contact.discarded_limit_at = null;
-      contact.status_changed_at  = null;
+      contact.status_changed_at = null;
     }
 
-    if (status === "lost")                               contact.completed = false;
+    if (status === "lost") contact.completed = false;
     if (status === "contacted" || status === "qualified") contact.completed = true;
 
     await contact.save({ session });
@@ -208,7 +208,7 @@ exports.updateStatus = async (req, res) => {
     // ── Pusher ────────────────────────────────────────────────────────────────
     // Payload ligero: solo id + nuevo status (evita enviar el doc completo)
     sendToAccount(contact.account_id, "contact-status-updated", {
-      id:     contact._id,
+      id: contact._id,
       status: contact.status
     });
     // ─────────────────────────────────────────────────────────────────────────
@@ -250,7 +250,7 @@ exports.updateLimits = async (req, res) => {
       return res.status(404).json({ message: "Contacto no encontrado" });
     }
 
-    const isAdmin     = req.user.role === "ADMIN";
+    const isAdmin = req.user.role === "ADMIN";
     const sameAccount = contact.account_id?.toString() === req.user.account_id?.toString();
 
     if (contact.is_template && !isAdmin) {
@@ -275,12 +275,12 @@ exports.updateLimits = async (req, res) => {
       return res.status(400).json({ message: "discarded_limit_at solo aplica para estado 'discarded'" });
     }
 
-    if (lost_limit_at !== undefined)      contact.lost_limit_at      = lost_limit_at      ? new Date(lost_limit_at)      : null;
-    if (discarded_limit_at !== undefined)  contact.discarded_limit_at = discarded_limit_at ? new Date(discarded_limit_at) : null;
+    if (lost_limit_at !== undefined) contact.lost_limit_at = lost_limit_at ? new Date(lost_limit_at) : null;
+    if (discarded_limit_at !== undefined) contact.discarded_limit_at = discarded_limit_at ? new Date(discarded_limit_at) : null;
 
     if (contact.status === "discarded") {
       if (discarded_reason !== undefined) contact.discarded_reason = discarded_reason || null;
-      if (discarded_notes  !== undefined) contact.discarded_notes  = discarded_notes?.trim() || null;
+      if (discarded_notes !== undefined) contact.discarded_notes = discarded_notes?.trim() || null;
     }
 
     await contact.save({ session });
@@ -344,9 +344,9 @@ exports.createManualContact = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 exports.updateContact = async (req, res) => {
   try {
-    const { id }     = req.params;
-    const accountId  = req.user.account_id;
-    const updates    = req.body;
+    const { id } = req.params;
+    const accountId = req.user.account_id;
+    const updates = req.body;
 
     if (!id || id === "null" || !mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: "ID de contacto inválido" });
@@ -404,7 +404,7 @@ exports.updateContact = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 exports.getContacts = async (req, res) => {
   try {
-    const accountId        = req.user.account_id;
+    const accountId = req.user.account_id;
     const { source, status, search } = req.query;
 
     const filter = {
@@ -424,7 +424,7 @@ exports.getContacts = async (req, res) => {
 
     if (search) {
       const searchFilter = [
-        { name:  { $regex: search, $options: "i" } },
+        { name: { $regex: search, $options: "i" } },
         { email: { $regex: search, $options: "i" } },
         { phone: { $regex: search, $options: "i" } }
       ];
@@ -480,7 +480,7 @@ exports.getContacts = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 exports.deleteContact = async (req, res) => {
   try {
-    const { id }    = req.params;
+    const { id } = req.params;
     const accountId = req.user.account_id;
 
     const contact = await Contact.findOne({

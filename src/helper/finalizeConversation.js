@@ -3,6 +3,7 @@ const { sendConversationEmail } = require("../services/chatbotEmail.service");
 const Chatbot = require("../models/Chatbot");
 const Notification = require("../models/Notification");
 const { sendToAccount } = require("../services/pusher.service");
+const formatDateAMPM = require("../utils/formatDate");
 
 exports.finalizeConversation = async (session) => {
 
@@ -54,7 +55,9 @@ exports.finalizeConversation = async (session) => {
         email: contact.email,
         phone: contact.phone,
         source: contact.source || "chatbot",
-        status: contact.status
+        status: contact.status,
+        createdAt: contact.createdAt,                                    // ← agregar
+        createdAtFormatted: contact.createdAt ? formatDateAMPM(contact.createdAt) : null  // ← agregar
       });
     } catch (pusherErr) {
       console.error("❌ Error emitiendo contact-created:", pusherErr);
