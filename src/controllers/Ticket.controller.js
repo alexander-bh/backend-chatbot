@@ -58,6 +58,10 @@ exports.createTicket = async (req, res) => {
             return res.status(400).json({ message: "Datos incompletos" });
         }
 
+        if (!req.user?._id || !req.user?.account_id) {
+            return res.status(401).json({ message: "Usuario no autenticado" });
+        }
+
         let screenshot_url = null;
         let screenshot_public_id = null;
 
@@ -76,7 +80,7 @@ exports.createTicket = async (req, res) => {
             status: "abierto",
             screenshot_url,
             screenshot_public_id,
-            _id: req.user._id,
+            user_id: req.user._id,  
             account_id: req.user.account_id,
         });
 
