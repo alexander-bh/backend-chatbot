@@ -2,7 +2,8 @@ const mongoose = require("mongoose");
 const Ticket = require("../models/Ticket");
 const SupportConfig = require("../models/Supportconfig");
 const User = require("../models/User");
-const { sendToAccount } = require("../services/pusher.service");
+const { sendToAccount, sendToAdmin } = require("../services/pusher.service");
+const Notification = require("../models/Notification");
 const { deleteFromCloudinary } = require("../services/cloudinary.service");
 const formatDateAMPM = require("../utils/formatDate");
 const nodemailer = require("nodemailer");
@@ -59,7 +60,7 @@ exports.createTicket = async (req, res) => {
             return res.status(400).json({ message: "Datos incompletos" });
         }
 
-            console.log("USER_ID TYPE:", typeof req.user.id);
+        console.log("USER_ID TYPE:", typeof req.user.id);
         console.log("USER_ID VALUE:", req.user.id);
 
 
@@ -87,7 +88,31 @@ exports.createTicket = async (req, res) => {
 
         /* ────── NOTIFICACIÓN REALTIME AL ADMIN ────── */
         try {
-            await sendToAccount("admin", "new-ticket", {
+            const user = await User.findById(req.user._id).select("name email").lean();
+
+            // 1. Guardar notificación en BD para que persista en el panel admin
+            const notification = await Notification.create({
+                account_id: "admin",                    // valor fijo para distinguir notifs de admin
+                type: "new-ticket",
+                title: "Nuevo ticket de soporte",
+                body: `${user?.name ?? "Usuario"} abrió: ${ticket.subject}`,
+                metadata: {
+                    ticket_id: ticket.ticket_id,
+                    category: CATEGORY_LABELS[ticket.category] || ticket.category,
+                    priority: PRIORITY_LABELS[ticket.priority] || ticket.priority,
+                    channel: ticket.channel,
+                    user: {
+                        id: req.user._id,
+                        name: user?.name,
+                        email: user?.email,
+                    },
+                },
+                is_read: false,
+            });
+
+            // 2. Emitir al canal privado del admin en tiempo real
+            await sendToAdmin("new-ticket", {
+                notification_id: notification._id,
                 ticket_id: ticket.ticket_id,
                 subject: ticket.subject,
                 category: CATEGORY_LABELS[ticket.category] || ticket.category,
@@ -96,14 +121,14 @@ exports.createTicket = async (req, res) => {
                 created_at: ticket.created_at,
                 user: {
                     id: req.user._id,
-                    name: req.user.name,
-                    email: req.user.email,
+                    name: user?.name,
+                    email: user?.email,
                 },
             });
         } catch (pusherErr) {
-            console.error("Pusher error (ticket):", pusherErr.message);
+            console.error("Pusher/Notification error (ticket):", pusherErr.message);
         }
-
+        
         /* ────── NOTIFICACIÓN EMAIL AL ADMIN ────── */
         const { support_email } = await getSupportConfig();
 

@@ -1,10 +1,29 @@
 const Notification = require("../models/Notification");
-const { sendToAccount } = require("../services/pusher.service");
+const { sendToAccount, sendToAdmin } = require("../services/pusher.service");
 
-// Obtener notificaciones (con paginación)
+/* ─────────────────────────────────────
+   HELPER — resuelve el "canal" según rol
+   ADMIN  → account_id = "admin"
+   CLIENT → account_id = req.user.account_id
+───────────────────────────────────── */
+const resolveAccountId = (user) =>
+  user.role === "ADMIN" ? "admin" : String(user.account_id);
+
+/* ─────────────────────────────────────
+   HELPER — dispara el evento correcto
+   según el rol del usuario
+───────────────────────────────────── */
+const notify = (user, event, data) => {
+  if (user.role === "ADMIN") return sendToAdmin(event, data);
+  return sendToAccount(String(user.account_id), event, data);
+};
+
+/* ─────────────────────────────────────
+   GET — Obtener notificaciones (paginadas)
+───────────────────────────────────── */
 exports.getNotifications = async (req, res) => {
   try {
-    const accountId = req.user.account_id;
+    const accountId = resolveAccountId(req.user);
     const { page = 1, limit = 20, unread_only } = req.query;
 
     const filter = { account_id: accountId };
@@ -17,7 +36,7 @@ exports.getNotifications = async (req, res) => {
         .limit(Number(limit))
         .lean(),
       Notification.countDocuments(filter),
-      Notification.countDocuments({ account_id: accountId, is_read: false })
+      Notification.countDocuments({ account_id: accountId, is_read: false }),
     ]);
 
     res.json({ notifications, total, unread_count, page: Number(page) });
@@ -26,19 +45,25 @@ exports.getNotifications = async (req, res) => {
   }
 };
 
-// Marcar una como leída
+/* ─────────────────────────────────────
+   PATCH — Marcar una como leída
+───────────────────────────────────── */
 exports.markAsRead = async (req, res) => {
   try {
     const { id } = req.params;
-    const accountId = req.user.account_id;
+    const accountId = resolveAccountId(req.user);
 
-    await Notification.findOneAndUpdate(
+    const updated = await Notification.findOneAndUpdate(
       { _id: id, account_id: accountId },
-      { $set: { is_read: true } }
+      { $set: { is_read: true } },
+      { new: true }
     );
 
-    // Sincronizar otros tabs/dispositivos
-    sendToAccount(accountId, "notification-read", { id });
+    if (!updated) {
+      return res.status(404).json({ message: "Notificación no encontrada" });
+    }
+
+    notify(req.user, "notification-read", { id });
 
     res.json({ success: true });
   } catch (err) {
@@ -46,17 +71,19 @@ exports.markAsRead = async (req, res) => {
   }
 };
 
-// Marcar todas como leídas
+/* ─────────────────────────────────────
+   PATCH — Marcar todas como leídas
+───────────────────────────────────── */
 exports.markAllAsRead = async (req, res) => {
   try {
-    const accountId = req.user.account_id;
+    const accountId = resolveAccountId(req.user);
 
     await Notification.updateMany(
       { account_id: accountId, is_read: false },
       { $set: { is_read: true } }
     );
 
-    sendToAccount(accountId, "notifications-read-all", {});
+    notify(req.user, "notifications-read-all", {});
 
     res.json({ success: true });
   } catch (err) {
@@ -64,35 +91,42 @@ exports.markAllAsRead = async (req, res) => {
   }
 };
 
-// Conteo de no leídas
+/* ─────────────────────────────────────
+   GET — Conteo de no leídas
+───────────────────────────────────── */
 exports.getUnreadCount = async (req, res) => {
   try {
+    const accountId = resolveAccountId(req.user);
+
     const count = await Notification.countDocuments({
-      account_id: req.user.account_id,
-      is_read: false
+      account_id: accountId,
+      is_read: false,
     });
+
     res.json({ unread_count: count });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
 
-// Eliminar una
+/* ─────────────────────────────────────
+   DELETE — Eliminar una notificación
+───────────────────────────────────── */
 exports.deleteNotification = async (req, res) => {
   try {
     const { id } = req.params;
-    const accountId = req.user.account_id;
+    const accountId = resolveAccountId(req.user);
 
     const deleted = await Notification.findOneAndDelete({
       _id: id,
-      account_id: accountId
+      account_id: accountId,
     });
 
     if (!deleted) {
       return res.status(404).json({ message: "Notificación no encontrada" });
     }
 
-    sendToAccount(accountId, "notification-deleted", { id });
+    notify(req.user, "notification-deleted", { id });
 
     res.json({ success: true });
   } catch (err) {
@@ -100,14 +134,16 @@ exports.deleteNotification = async (req, res) => {
   }
 };
 
-// Eliminar todas
+/* ─────────────────────────────────────
+   DELETE — Eliminar todas
+───────────────────────────────────── */
 exports.deleteAllNotifications = async (req, res) => {
   try {
-    const accountId = req.user.account_id;
+    const accountId = resolveAccountId(req.user);
 
     const result = await Notification.deleteMany({ account_id: accountId });
 
-    sendToAccount(accountId, "notifications-deleted-all", {});
+    notify(req.user, "notifications-deleted-all", {});
 
     res.json({ success: true, deleted: result.deletedCount });
   } catch (err) {
