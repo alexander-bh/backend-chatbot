@@ -76,7 +76,7 @@ exports.createTicket = async (req, res) => {
             status: "abierto",
             screenshot_url,
             screenshot_public_id,
-            user_id: req.user._id,
+            _id: req.user._id,
             account_id: req.user.account_id,
         });
 
@@ -90,7 +90,7 @@ exports.createTicket = async (req, res) => {
                 channel: ticket.channel,
                 created_at: ticket.created_at,
                 user: {
-                    _id: req.user._id,
+                    id: req.user._id,
                     name: req.user.name,
                     email: req.user.email,
                 },
