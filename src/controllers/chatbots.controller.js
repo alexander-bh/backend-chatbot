@@ -543,7 +543,7 @@ exports.duplicateChatbotFull = async (req, res) => {
       position: original.position,
       show_branding: original.show_branding,
       status: "active",
-      is_enabled: false,
+      is_enabled: true,
       avatar: defaultAvatar.url,
       uploaded_avatars: []
     }], { session });

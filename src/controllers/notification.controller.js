@@ -1,5 +1,5 @@
 const Notification = require("../models/Notification");
-const { sendToAccount } = require("../services/pusher.service"); // ← nuevo
+const { sendToAccount } = require("../services/pusher.service");
 
 // Obtener notificaciones (con paginación)
 exports.getNotifications = async (req, res) => {
