@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Ticket = require("../models/Ticket");
 const SupportConfig = require("../models/Supportconfig");
 const User = require("../models/User");
@@ -50,7 +51,6 @@ const PRIORITY_LABELS = {
    CLIENT — CREAR TICKET
 ───────────────────────────────────── */
 exports.createTicket = async (req, res) => {
-    console.log("REQ.USER 👉", req.user);
     try {
         const { ticketId, subject, category, priority, description, channel } =
             req.body;
@@ -71,6 +71,9 @@ exports.createTicket = async (req, res) => {
             screenshot_public_id = req.file.filename;
         }
 
+        console.log("USER_ID TYPE:", typeof req.user.id);
+        console.log("USER_ID VALUE:", req.user.id);
+
         const ticket = await Ticket.create({
             ticket_id: ticketId,
             subject: subject.trim(),
@@ -81,8 +84,8 @@ exports.createTicket = async (req, res) => {
             status: "abierto",
             screenshot_url,
             screenshot_public_id,
-            user_id: req.user.id,
-            account_id: req.user.account_id,
+            user_id: new mongoose.Types.ObjectId(req.user.id),
+            account_id: new mongoose.Types.ObjectId(req.user.account_id),
         });
 
         /* ────── NOTIFICACIÓN REALTIME AL ADMIN ────── */
