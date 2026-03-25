@@ -41,91 +41,91 @@ router.post("/chatbots", role("ADMIN"), adminController.createChatbotForUser);
 router.get("/chatbots", role("ADMIN"), adminController.getAllChatbots);
 router.get("/chatbots/:id", role("ADMIN"), adminController.getChatbotDetail);
 router.put(
-  "/chatbots/:id",
-  role("ADMIN"),
-  upload.single("avatar"),
-  adminController.updateAnyChatbot
+   "/chatbots/:id",
+   role("ADMIN"),
+   upload.single("avatar"),
+   adminController.updateAnyChatbot
 );
 router.delete("/chatbots/:id", role("ADMIN"), adminController.deleteAnyChatbot);
 
 // ⚙️ acciones específicas
 router.patch("/chatbots/:id/toggle", role("ADMIN"), adminController.toggleChatbot);
 router.post(
-  "/chatbots/:publicId/token/regenerate",
-  role("ADMIN"),
-  adminController.regenerateInstallToken
+   "/chatbots/:publicId/token/regenerate",
+   role("ADMIN"),
+   adminController.regenerateInstallToken
 );
 
 /* =====================================================
    🎭 AVATARS POR CHATBOT (ADMIN)
 ===================================================== */
 router.get(
-  "/chatbots/:id/avatars",
-  role("ADMIN"),
-  adminController.getAvailableAvatars
+   "/chatbots/:id/avatars",
+   role("ADMIN"),
+   adminController.getAvailableAvatars
 );
 
 router.delete(
-  "/chatbots/:id/avatars",
-  role("ADMIN"),
-  adminController.deleteAvatar
+   "/chatbots/:id/avatars",
+   role("ADMIN"),
+   adminController.deleteAvatar
 );
 
 /* =====================================================
    🖼️ AVATARS GLOBALES (ADMIN)
 ===================================================== */
 router.post(
-  "/avatars",
-  role("ADMIN"),
-  upload.single("avatar"),
-  adminController.createAvatar
+   "/avatars",
+   role("ADMIN"),
+   upload.single("avatar"),
+   adminController.createAvatar
 );
 
 router.get("/avatars", role("ADMIN"), adminController.getAllAvatars);
 
 router.delete(
-  "/avatars/:id",
-  role("ADMIN"),
-  adminController.deleteAvatarGlobal
+   "/avatars/:id",
+   role("ADMIN"),
+   adminController.deleteAvatarGlobal
 );
 
 router.patch(
-  "/avatars/:id/default",
-  role("ADMIN"),
-  adminController.setDefaultAvatar
+   "/avatars/:id/default",
+   role("ADMIN"),
+   adminController.setDefaultAvatar
 );
 
 /* =====================================================
    📇 CONTACT TEMPLATES (ADMIN)
 ===================================================== */
 router.post(
-  "/contact-templates",
-  role("ADMIN"),
-  adminController.createDefaultContactTemplate
+   "/contact-templates",
+   role("ADMIN"),
+   adminController.createDefaultContactTemplate
 );
 
 router.get(
-  "/contact-templates",
-  role("ADMIN"),
-  adminController.getDefaultContactTemplates
+   "/contact-templates",
+   role("ADMIN"),
+   adminController.getDefaultContactTemplates
 );
 
 router.put(
-  "/contact-templates/:id",
-  role("ADMIN"),
-  adminController.updateDefaultContactTemplate
+   "/contact-templates/:id",
+   role("ADMIN"),
+   adminController.updateDefaultContactTemplate
 );
 
 router.delete(
-  "/contact-templates/:id",
-  role("ADMIN"),
-  adminController.deleteDefaultContactTemplate
+   "/contact-templates/:id",
+   role("ADMIN"),
+   adminController.deleteDefaultContactTemplate
 );
 
 /* =====================================================
    📜 AUDIT LOGS (ADMIN)
 ===================================================== */
-router.get("/audit-logs", role("ADMIN"), adminController.getAuditLogs);
+router.get("/audit", role("ADMIN"), adminController.getAuditLogs);
 
 /* =====================================================
    ⚙️ SYSTEM CONFIG (ADMIN)
@@ -138,20 +138,20 @@ router.delete("/config", role("ADMIN"), adminController.clearBccEmail);
    🆘 SUPPORT CONFIG (ADMIN)
 ===================================================== */
 router.get(
-  "/support-config",
-  adminController.getSupportConfig
+   "/support-config",
+   adminController.getSupportConfig
 );
 
 router.put(
-  "/support-config",
-  role("ADMIN"),
-  adminController.updateSupportConfig
+   "/support-config",
+   role("ADMIN"),
+   adminController.updateSupportConfig
 );
 
 router.delete(
-  "/support-config",
-  role("ADMIN"),
-  adminController.clearSupportConfig
+   "/support-config",
+   role("ADMIN"),
+   adminController.clearSupportConfig
 );
 
 module.exports = router;
