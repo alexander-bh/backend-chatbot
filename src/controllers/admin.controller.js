@@ -9,6 +9,7 @@ const FlowNode = require("../models/FlowNode");
 const AuditLog = require("../models/AuditLog");
 const Avatar = require("../models/Avatar");
 const Contact = require("../models/Contact");
+const Ticket = require("../models/Ticket");
 const auditService = require("../services/audit.service");
 const formatDateAMPM = require("../utils/formatDate");
 const { deleteFromCloudinary } = require("../services/cloudinary.service");
@@ -44,14 +45,30 @@ exports.getDashboard = async (req, res) => {
       return res.status(403).json({ message: "No autorizado" });
     }
 
-    const [users, accounts, chatbots, flows] = await Promise.all([
-      User.countDocuments(),
+    const [
+      totalAccounts,
+      totalUsers,
+      totalChatbots,
+      totalContacts,
+      totalTickets,
+    ] = await Promise.all([
       Account.countDocuments(),
+      User.countDocuments(),
       Chatbot.countDocuments(),
-      Flow.countDocuments()
+      Contact.countDocuments({ is_deleted: false }),
+      Ticket.countDocuments(),
     ]);
 
-    res.json({ admin, users, accounts, chatbots, flows });
+    res.json({
+      admin,
+      stats: {
+        totalAccounts,
+        totalUsers,
+        totalChatbots,
+        totalContacts,
+        totalTickets,
+      },
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
