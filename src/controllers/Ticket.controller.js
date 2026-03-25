@@ -50,6 +50,7 @@ const PRIORITY_LABELS = {
    CLIENT — CREAR TICKET
 ───────────────────────────────────── */
 exports.createTicket = async (req, res) => {
+    console.log("REQ.USER 👉", req.user);
     try {
         const { ticketId, subject, category, priority, description, channel } =
             req.body;
