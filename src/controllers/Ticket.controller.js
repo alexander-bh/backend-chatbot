@@ -80,7 +80,7 @@ exports.createTicket = async (req, res) => {
             status: "abierto",
             screenshot_url,
             screenshot_public_id,
-            user_id: req.user._id,  
+            user_id: req.user.id,
             account_id: req.user.account_id,
         });
 
