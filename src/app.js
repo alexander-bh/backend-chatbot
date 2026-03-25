@@ -42,6 +42,7 @@
   app.use("/api/accounts", require("./routes/account.routes.js"));
   app.use("/api/users", require("./routes/user.routes.js"));
   app.use("/api/admin", require("./routes/admin.routes.js"));
+  app.use("/api/ticket", require("./routes/support.routes.js"))
 
   app.use("/api/chatbot-integration",require("./routes/chatbotIntegration.routes.js"));
   app.use("/api/contacts", require("./routes/contact.routes"));

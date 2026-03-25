@@ -14,7 +14,24 @@ const formatDateAMPM = require("../utils/formatDate");
 const { deleteFromCloudinary } = require("../services/cloudinary.service");
 const { cloneTemplateToFlow, createFallbackFlow } = require("../services/flowNode.service");
 const slugify = require("../helper/slugify");
-const SystemConfig = require("../models/SystemConfig");
+const SystemConfig = require("../models/SystemConfig" );
+const SupportConfig = require("../models/Supportconfig");
+
+/* ─────────────────────────────────────
+   HELPER — obtiene (o crea) el único
+   documento de configuración de soporte
+───────────────────────────────────── */
+const getOrCreateConfig = async () => {
+  let config = await SupportConfig.findOne();
+  if (!config) {
+    config = await SupportConfig.create({
+      support_email:    process.env.ADMIN_SUPPORT_EMAIL ?? null,
+      support_whatsapp: process.env.SUPPORT_WHATSAPP    ?? null,
+    });
+  }
+  return config;
+};
+
 
 /* ─────────────────────────────────────
    DASHBOAR
@@ -39,6 +56,7 @@ exports.getDashboard = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
 
 /* ─────────────────────────────────────
    USERS
@@ -1312,7 +1330,6 @@ exports.createDefaultContactTemplate = async (req, res) => {
   }
 };
 
-// controllers/contact.controller.js
 exports.updateDefaultContactTemplate = async (req, res) => {
   try {
     /* =========================
@@ -1471,93 +1488,8 @@ exports.deleteDefaultContactTemplate = async (req, res) => {
   }
 };
 
-exports.getDeletedDefaultContactTemplates = async (req, res) => {
-  try {
-    if (req.user.role !== "ADMIN") {
-      return res.status(403).json({ message: "Solo ADMIN" });
-    }
-
-    const templates = await Contact.find({
-      is_template: true,
-      is_deleted: true
-    })
-      .sort({ updatedAt: -1 })
-      .lean();
-
-    const formattedTemplates = templates.map(template => ({
-      ...template,
-      createdAtFormatted: formatDateAMPM(template.createdAt),
-      updatedAtFormatted: formatDateAMPM(template.updatedAt)
-    }));
-
-    res.json({
-      total_deleted: formattedTemplates.length,
-      templates: formattedTemplates
-    });
-
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-exports.restoreDefaultContactTemplate = async (req, res) => {
-  try {
-    if (req.user.role !== "ADMIN") {
-      return res.status(403).json({ message: "Solo ADMIN" });
-    }
-
-    const { id } = req.params;
-
-    const restored = await Contact.findOneAndUpdate(
-      { _id: id, is_template: true, is_deleted: true },
-      { $set: { is_deleted: false } },
-      { new: true }
-    );
-
-    if (!restored) {
-      return res.status(404).json({ message: "Template no encontrado" });
-    }
-
-    res.json({
-      message: "Template restaurado correctamente",
-      template: restored
-    });
-
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-exports.permanentlyDeleteDefaultContactTemplate = async (req, res) => {
-  try {
-    if (req.user.role !== "ADMIN") {
-      return res.status(403).json({ message: "Solo ADMIN" });
-    }
-
-    const { id } = req.params;
-
-    const deleted = await Contact.findOneAndDelete({
-      _id: id,
-      is_template: true,
-      is_deleted: true
-    });
-
-    if (!deleted) {
-      return res.status(404).json({
-        message: "Template no encontrado o no está en papelera"
-      });
-    }
-
-    res.json({
-      message: "Template eliminado permanentemente"
-    });
-
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
 /* ─────────────────────────────────────
-   SYSTEM CONFIG (BCC y globales)
+   SYSTEM CONFIG (BCC)
 ───────────────────────────────────── */
 exports.getSystemConfig = async (req, res) => {
   try {
@@ -1626,6 +1558,111 @@ exports.clearBccEmail = async (req, res) => {
     res.json({ message: "BCC eliminado correctamente" });
   } catch (err) {
     console.error("CLEAR BCC EMAIL ERROR:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+/* ─────────────────────────────────────
+   GET  /api/admin/support-config
+───────────────────────────────────── */
+exports.getSupportConfig = async (req, res) => {
+  try {
+    const config = await getOrCreateConfig();
+
+    res.json({
+      config: {
+        support_email:    config.support_email,
+        support_whatsapp: config.support_whatsapp,
+      },
+    });
+  } catch (err) {
+    console.error("GET SUPPORT CONFIG ERROR:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+/* ─────────────────────────────────────
+   PUT  /api/admin/support-config
+───────────────────────────────────── */
+exports.updateSupportConfig = async (req, res) => {
+  try {
+    const { support_email, support_whatsapp } = req.body;
+
+    const config = await getOrCreateConfig();
+
+    /* ── validar email ── */
+    if (support_email !== undefined) {
+      if (support_email && support_email.trim() !== "") {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(support_email.trim())) {
+          return res.status(400).json({ message: "Formato de email inválido" });
+        }
+        config.support_email = support_email.trim();
+      } else {
+        config.support_email = null;
+      }
+    }
+
+    /* ── validar whatsapp (solo dígitos, 7–15 chars) ── */
+    if (support_whatsapp !== undefined) {
+      if (support_whatsapp && support_whatsapp.trim() !== "") {
+        const phoneClean = support_whatsapp.replace(/\D/g, "");
+        if (phoneClean.length < 7 || phoneClean.length > 15) {
+          return res.status(400).json({ message: "Número de WhatsApp inválido (7–15 dígitos)" });
+        }
+        config.support_whatsapp = phoneClean;
+      } else {
+        config.support_whatsapp = null;
+      }
+    }
+
+    await config.save();
+
+    res.json({
+      message: "Configuración de soporte actualizada correctamente",
+      config: {
+        support_email:    config.support_email,
+        support_whatsapp: config.support_whatsapp,
+      },
+    });
+  } catch (err) {
+    console.error("UPDATE SUPPORT CONFIG ERROR:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+/* ─────────────────────────────────────
+   DELETE  /api/admin/support-config?field=support_email
+           /api/admin/support-config?field=support_whatsapp
+           /api/admin/support-config          ← limpia ambos
+───────────────────────────────────── */
+exports.clearSupportConfig = async (req, res) => {
+  try {
+    const { field } = req.query;
+
+    const allowed = ["support_email", "support_whatsapp"];
+
+    if (field && !allowed.includes(field)) {
+      return res.status(400).json({ message: "Campo inválido. Usa: support_email o support_whatsapp" });
+    }
+
+    const config = await getOrCreateConfig();
+
+    if (field) {
+      config[field] = null;
+    } else {
+      config.support_email    = null;
+      config.support_whatsapp = null;
+    }
+
+    await config.save();
+
+    res.json({
+      message: field
+        ? `${field} eliminado correctamente`
+        : "Configuración de soporte eliminada correctamente",
+    });
+  } catch (err) {
+    console.error("CLEAR SUPPORT CONFIG ERROR:", err);
     res.status(500).json({ message: err.message });
   }
 };
