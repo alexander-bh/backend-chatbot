@@ -59,9 +59,9 @@ exports.createTicket = async (req, res) => {
             return res.status(400).json({ message: "Datos incompletos" });
         }
 
-        if (!req.user?._id || !req.user?.account_id) {
-            return res.status(401).json({ message: "Usuario no autenticado" });
-        }
+            console.log("USER_ID TYPE:", typeof req.user.id);
+        console.log("USER_ID VALUE:", req.user.id);
+
 
         let screenshot_url = null;
         let screenshot_public_id = null;
@@ -70,9 +70,6 @@ exports.createTicket = async (req, res) => {
             screenshot_url = req.file.path;
             screenshot_public_id = req.file.filename;
         }
-
-        console.log("USER_ID TYPE:", typeof req.user.id);
-        console.log("USER_ID VALUE:", req.user.id);
 
         const ticket = await Ticket.create({
             ticket_id: ticketId,
