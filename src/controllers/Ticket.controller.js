@@ -192,7 +192,7 @@ exports.createTicket = async (req, res) => {
 ───────────────────────────────────── */
 exports.getMyTickets = async (req, res) => {
     try {
-        const tickets = await Ticket.find({ user_id: req.user._id })
+        const tickets = await Ticket.find({ user_id: req.user.id })
             .sort({ created_at: -1 })
             .lean();
 
