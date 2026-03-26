@@ -175,8 +175,8 @@ ContactSchema.index(
   {
     unique: true,
     partialFilterExpression: {
-      email: { $exists: true, $ne: null },
-      is_template: { $eq: false }  // ← así en el schema también
+      email: { $exists: true },       // ← sin $ne: null
+      is_template: { $eq: false }
     }
   }
 );
@@ -186,8 +186,8 @@ ContactSchema.index(
   {
     unique: true,
     partialFilterExpression: {
-      phone: { $exists: true, $ne: null },
-      is_template: { $eq: false }  // ← así en el schema también
+      phone: { $exists: true },       // ← sin $ne: null
+      is_template: { $eq: false }
     }
   }
 );
