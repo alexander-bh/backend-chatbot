@@ -1,10 +1,9 @@
-// models/Notification.js
 const { Schema, model } = require("mongoose");
 
 const NotificationSchema = new Schema(
     {
         account_id: {
-            type: Schema.Types.ObjectId,
+            type: String,          // ← String en lugar de ObjectId
             ref: "Account",
             required: true,
             index: true
@@ -12,7 +11,11 @@ const NotificationSchema = new Schema(
 
         type: {
             type: String,
-            enum: ["contacts_deleted", "new_contact"],
+            enum: [
+                "contacts_deleted",
+                "new_contact",
+                "new-ticket",       // ← agregar el tipo que usa ticket.controller
+            ],
             required: true
         },
         title: {
@@ -22,7 +25,17 @@ const NotificationSchema = new Schema(
 
         message: {
             type: String,
-            required: true
+            required: false        // ← ticket.controller usa "body" no "message"
+        },
+
+        body: {
+            type: String,
+            required: false        // ← campo que usa ticket.controller
+        },
+
+        metadata: {
+            type: Object,
+            default: {}
         },
 
         data: {
