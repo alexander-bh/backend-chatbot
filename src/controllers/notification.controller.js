@@ -15,8 +15,37 @@ const resolveAccountId = (user) =>
 ───────────────────────────────────── */
 const notify = (user, event, data) => {
   if (user.role === "ADMIN") return sendToAdmin(event, data);
-  return sendToAccount(String(user.account_id), event, data);
+  return sendToAccount(String(user.account_id), event, data); 
 };
+
+exports.createAndEmitNotification = async ({ account_id, role, ...fields }) => {
+    const notification = await Notification.create({ account_id, ...fields })
+
+    const payload = {
+        _id: notification._id,
+        account_id,
+        type: notification.type,
+        title: notification.title,
+        message: notification.message,
+        body: notification.body,
+        metadata: notification.metadata,
+        data: notification.data,
+        is_read: false,
+        createdAt: notification.createdAt,
+    }
+
+    try {
+        if (role === "ADMIN" || account_id === "admin") {
+            await sendToAdmin("notification-new", payload)
+        } else {
+            await sendToAccount(String(account_id), "notification-new", payload)
+        }
+    } catch (e) {
+        console.error("Pusher emit error:", e.message)
+    }
+
+    return notification
+}
 
 /* ─────────────────────────────────────
    GET — Obtener notificaciones (paginadas)
