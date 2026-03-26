@@ -5,36 +5,21 @@ const webhook = require("../controllers/webhook.controller");
 const auth = require("../middlewares/auth.middleware");
 
 // Rutas publicas
-router.post("/",contactController.createContact);
+router.post("/", contactController.createContact);
 router.post("/webhooks/contacts-deleted", webhook.notifyContactsDeleted);
 
 // Dashboard privado
 
-router.get("/",auth,contactController.getContacts);
-router.post( "/manual",auth,contactController.createManualContact);
-router.put("/:id",auth,contactController.updateContact);
-router.delete("/:id",auth,contactController.deleteContact);
-router.patch("/:id/status",auth,contactController.updateStatus);
-router.patch("/:id/limits",auth,contactController.updateLimits);
-
-//funciones que ya on sirven 
-router.patch(
-  "/restore/:id",
-  auth,
-  contactController.restoreContact
-);
-
-router.delete(
-  "/force/:id",
-  auth,
-  contactController.permanentlyDeleteContact
-);
-
-router.get("/deleted",auth,contactController.getDeletedContacts);
-router.get("/:chatbot_id",auth,contactController.getContactsByChatbot);
+router.get("/", auth, contactController.getContacts);
+router.post("/manual", auth, contactController.createManualContact);
+router.put("/:id", auth, contactController.updateContact);
+router.delete("/:id", auth, contactController.deleteContact);
+router.patch("/:id/status", auth, contactController.updateStatus);
+router.patch("/:id/limits", auth, contactController.updateLimits);
+router.get("/:chatbot_id", auth, contactController.getContactsByChatbot);
 //Analisis 
-router.get("/metrics/:chatbot_id",auth,metricsController.getChatbotMetrics);
-router.get("/funnel/:chatbot_id",auth,metricsController.getNodeFunnel);
+router.get("/metrics/:chatbot_id", auth, metricsController.getChatbotMetrics);
+router.get("/funnel/:chatbot_id", auth, metricsController.getNodeFunnel);
 
 
 module.exports = router;
