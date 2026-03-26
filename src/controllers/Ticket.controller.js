@@ -92,10 +92,11 @@ exports.createTicket = async (req, res) => {
 
             // 1. Guardar notificación en BD para que persista en el panel admin
             const notification = await Notification.create({
-                account_id: "admin",                    // valor fijo para distinguir notifs de admin
+                account_id: "admin",              // ← string, ahora compatible con el schema
                 type: "new-ticket",
                 title: "Nuevo ticket de soporte",
-                body: `${user?.name ?? "Usuario"} abrió: ${ticket.subject}`,
+                body: `${user?.name ?? "Usuario"} abrió: ${ticket.subject}`,  // ← body
+                message: `${user?.name ?? "Usuario"} abrió: ${ticket.subject}`, // ← message (por si acaso)
                 metadata: {
                     ticket_id: ticket.ticket_id,
                     category: CATEGORY_LABELS[ticket.category] || ticket.category,
@@ -108,7 +109,7 @@ exports.createTicket = async (req, res) => {
                     },
                 },
                 is_read: false,
-            });
+            })
 
             // 2. Emitir al canal privado del admin en tiempo real
             await sendToAdmin("new-ticket", {
@@ -128,7 +129,7 @@ exports.createTicket = async (req, res) => {
         } catch (pusherErr) {
             console.error("Pusher/Notification error (ticket):", pusherErr.message);
         }
-        
+
         /* ────── NOTIFICACIÓN EMAIL AL ADMIN ────── */
         const { support_email } = await getSupportConfig();
 
