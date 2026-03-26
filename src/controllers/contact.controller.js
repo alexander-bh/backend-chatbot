@@ -493,143 +493,29 @@ exports.deleteContact = async (req, res) => {
       return res.status(404).json({ message: "Contacto no encontrado" });
     }
 
-    // ── Eliminar físicamente contacto y conversación ───────────────────────
     await Contact.deleteOne({ _id: contact._id });
 
-    if (contact.session_id) {
-      await ConversationSession.deleteOne({
-        _id: contact.session_id,
-        account_id: accountId
-      });
-    }
-    // ─────────────────────────────────────────────────────────────────────────
+    // ── Eliminar TODAS las sesiones vinculadas al contacto ─────────────────
+    const { deletedCount } = await ConversationSession.deleteMany({
+      account_id: accountId,
+      $or: [
+        { _id: contact.session_id },   // sesión original
+        { contact_id: contact._id }    // sesiones posteriores
+      ]
+    });
 
-    // ── Pusher ────────────────────────────────────────────────────────────────
+    console.log(`🗑️ Eliminadas ${deletedCount} sesiones del contacto ${contact._id}`);
+    // ──────────────────────────────────────────────────────────────────────
+
     sendToAccount(accountId, "contact-deleted", { id: contact._id });
-    // ─────────────────────────────────────────────────────────────────────────
 
     return res.json({
-      message: "Contacto y conversación eliminados correctamente",
+      message: "Contacto y conversaciones eliminados correctamente",
       contact: formatContact(contact)
     });
 
   } catch (error) {
     console.error("DELETE CONTACT ERROR:", error);
     res.status(500).json({ message: "Error al eliminar contacto" });
-  }
-};
-
-
-
-//Esta variables ya no se usan 
-exports.getDeletedContacts = async (req, res) => {
-  try {
-    const accountId = req.user.account_id;
-
-    // Obtener todos los contactos eliminados
-    const contacts = await Contact.find({
-      account_id: accountId,
-      is_deleted: true
-    })
-      .sort({ updatedAt: -1 })
-      .lean();
-
-    // Formatear contactos
-    const formatted = contacts.map(formatContact);
-
-    res.json({
-      total_deleted: formatted.length,
-      contacts: formatted
-    });
-
-  } catch (error) {
-    console.error("GET DELETED CONTACTS ERROR:", error);
-    res.status(500).json({
-      message: "Error al obtener contactos eliminados"
-    });
-  }
-};
-
-exports.restoreContact = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const accountId = req.user.account_id;
-
-    const contact = await Contact.findOne({
-      _id: id,
-      account_id: accountId,
-      is_deleted: true
-    });
-
-    if (!contact) {
-      return res.status(404).json({
-        message: "Contacto no encontrado o ya está activo"
-      });
-    }
-
-    contact.is_deleted = false;
-    await contact.save();
-
-    await ConversationSession.updateOne(
-      {
-        _id: contact.session_id,
-        account_id: accountId
-      },
-      {
-        $set: { is_deleted: false }
-      }
-    );
-    res.json({
-      message: "Contacto restaurado correctamente",
-      contact: formatContact(contact)
-    });
-
-  } catch (error) {
-    console.error("RESTORE CONTACT ERROR:", error);
-    res.status(500).json({
-      message: "Error al restaurar contacto"
-    });
-  }
-};
-
-exports.permanentlyDeleteContact = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const accountId = req.user.account_id;
-
-    const contact = await Contact.findOne({
-      _id: id,
-      account_id: accountId,
-      is_deleted: true
-    });
-
-    if (!contact) {
-      return res.status(404).json({
-        message: "Contacto no encontrado o no está en papelera"
-      });
-    }
-
-    /* ================= DELETE CONVERSATION ================= */
-
-    await ConversationSession.deleteOne({
-      _id: contact.session_id,
-      account_id: accountId
-    });
-
-    /* ================= DELETE CONTACT ================= */
-
-    await Contact.deleteOne({
-      _id: id
-    });
-
-    res.json({
-      message: "Contacto y conversación eliminados permanentemente"
-    });
-
-  } catch (error) {
-    console.error("HARD DELETE CONTACT ERROR:", error);
-    res.status(500).json({
-      message: "Error al eliminar definitivamente"
-    });
   }
 };
