@@ -1,4 +1,5 @@
 const validateNodeInput = require("../validators/validateNodeInput");
+const Contact = require("../models/Contact");
 
 module.exports = async function resolveInput(node, input, session, nodesMap) {
 
@@ -29,6 +30,50 @@ module.exports = async function resolveInput(node, input, session, nodesMap) {
         input_type: node.node_type
       };
     }
+
+    // ── VALIDACIÓN EMAIL DUPLICADO ──────────────────────────────────────────
+    if (node.node_type === "email" && session.account_id) {
+      const emailNormalized = input.toLowerCase().trim();
+      const exists = await Contact.exists({
+        account_id: session.account_id,
+        email: emailNormalized,
+        is_deleted: { $ne: true },
+        is_template: { $ne: true }
+      });
+
+      if (exists) {
+        return {
+          validation_error: true,
+          node_id: node._id,
+          node_type: node.node_type,
+          message: "Este correo ya está registrado. Por favor ingresa otro.",
+          input_type: node.node_type
+        };
+      }
+    }
+
+    // ── VALIDACIÓN TELÉFONO DUPLICADO ───────────────────────────────────────
+    if (node.node_type === "phone" && session.account_id) {
+      const phoneNormalized = input.replace(/\D/g, "").trim();
+      const exists = await Contact.exists({
+        account_id: session.account_id,
+        phone: phoneNormalized,
+        is_deleted: { $ne: true },
+        is_template: { $ne: true }
+      });
+
+      if (exists) {
+        return {
+          validation_error: true,
+          node_id: node._id,
+          node_type: node.node_type,
+          message: "Este teléfono ya está registrado. Por favor ingresa otro.",
+          input_type: node.node_type
+        };
+      }
+    }
+    // ───────────────────────────────────────────────────────────────────────
+
     session.history.push({ node_id: node._id, question: node.content, answer: input });
     session.markModified("history");
 
