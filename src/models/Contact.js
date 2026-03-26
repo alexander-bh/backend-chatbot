@@ -175,18 +175,20 @@ ContactSchema.index(
   {
     unique: true,
     partialFilterExpression: {
-      email: { $exists: true, $ne: null }
+      email: { $exists: true, $ne: null },
+      is_template: { $eq: false }  // ← así en el schema también
     }
   }
 );
+
 ContactSchema.index(
   { account_id: 1, phone: 1 },
   {
     unique: true,
     partialFilterExpression: {
-      phone: { $exists: true, $ne: null }
+      phone: { $exists: true, $ne: null },
+      is_template: { $eq: false }  // ← así en el schema también
     }
   }
 );
-
 module.exports = mongoose.model("Contact", ContactSchema);
