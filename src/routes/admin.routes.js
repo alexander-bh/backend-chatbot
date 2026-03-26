@@ -99,25 +99,25 @@ router.patch(
    📇 CONTACT TEMPLATES (ADMIN)
 ===================================================== */
 router.post(
-   "/contact-templates",
+   "/templates",
    role("ADMIN"),
    adminController.createDefaultContactTemplate
 );
 
 router.get(
-   "/contact-templates",
+   "/templates",
    role("ADMIN"),
    adminController.getDefaultContactTemplates
 );
 
 router.put(
-   "/contact-templates/:id",
+   "/templates/:id",
    role("ADMIN"),
    adminController.updateDefaultContactTemplate
 );
 
 router.delete(
-   "/contact-templates/:id",
+   "/templates/:id",
    role("ADMIN"),
    adminController.deleteDefaultContactTemplate
 );
