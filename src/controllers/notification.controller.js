@@ -41,6 +41,7 @@ exports.getNotifications = async (req, res) => {
 
     res.json({ notifications, total, unread_count, page: Number(page) });
   } catch (err) {
+    console.error("GET NOTIFICATIONS ERROR:", err.message) 
     res.status(500).json({ message: err.message });
   }
 };
