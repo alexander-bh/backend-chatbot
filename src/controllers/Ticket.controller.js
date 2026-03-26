@@ -3,7 +3,7 @@ const Ticket = require("../models/Ticket");
 const SupportConfig = require("../models/Supportconfig");
 const User = require("../models/User");
 const { sendToAccount, sendToAdmin } = require("../services/pusher.service");
-const Notification = require("../models/Notification");
+const { createAndEmitNotification } = require("../controllers/notification.controller")
 const { deleteFromCloudinary } = require("../services/cloudinary.service");
 const formatDateAMPM = require("../utils/formatDate");
 const nodemailer = require("nodemailer");
@@ -91,22 +91,19 @@ exports.createTicket = async (req, res) => {
             const user = await User.findById(req.user._id).select("name email").lean();
 
             // 1. Guardar notificación en BD para que persista en el panel admin
-            const notification = await Notification.create({
-                account_id: "admin",              // ← string, ahora compatible con el schema
+            const notification = await createAndEmitNotification({
+                account_id: "admin",
+                role: "ADMIN",
                 type: "new-ticket",
                 title: "Nuevo ticket de soporte",
-                body: `${user?.name ?? "Usuario"} abrió: ${ticket.subject}`,  // ← body
-                message: `${user?.name ?? "Usuario"} abrió: ${ticket.subject}`, // ← message (por si acaso)
+                body: `${user?.name ?? "Usuario"} abrió: ${ticket.subject}`,
+                message: `${user?.name ?? "Usuario"} abrió: ${ticket.subject}`,
                 metadata: {
                     ticket_id: ticket.ticket_id,
                     category: CATEGORY_LABELS[ticket.category] || ticket.category,
                     priority: PRIORITY_LABELS[ticket.priority] || ticket.priority,
                     channel: ticket.channel,
-                    user: {
-                        id: req.user._id,
-                        name: user?.name,
-                        email: user?.email,
-                    },
+                    user: { id: req.user._id, name: user?.name, email: user?.email },
                 },
                 is_read: false,
             })
