@@ -166,7 +166,7 @@ ContactSchema.index(
   {
     unique: true,
     partialFilterExpression: {
-      session_id: { $exists: true, $ne: null }
+      session_id: { $exists: true }
     }
   }
 );

@@ -1488,17 +1488,20 @@ exports.deleteDefaultContactTemplate = async (req, res) => {
 
     const { id } = req.params;
 
-    const deleted = await Contact.findOneAndUpdate(
-      { _id: id, is_template: true, is_deleted: false },
-      { $set: { is_deleted: true } },
-      { new: true }
-    );
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "ID inválido" });
+    }
+
+    const deleted = await Contact.findOneAndDelete({
+      _id: id,
+      is_template: true
+    });
 
     if (!deleted) {
       return res.status(404).json({ message: "Template no encontrado" });
     }
 
-    res.json({ message: "Template enviado a papelera" });
+    res.json({ message: "Template eliminado permanentemente" });
 
   } catch (error) {
     res.status(500).json({ message: error.message });
