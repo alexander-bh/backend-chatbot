@@ -10,6 +10,7 @@
         var ex = document.getElementById("chatbot_" + PID);
         if (ex) return;
     }
+    
     window[INSTANCE_KEY] = true;
 
     // ── Registro global de posiciones + cálculo de offset ──
@@ -19,8 +20,25 @@
     var FAB_GAP = 12;
     var FAB_BASE = 20;
 
+    // Cuántas instancias ya ocupan esta misma posición
     var sameCount = Object.values(window.__CHATBOT_REGISTRY__)
         .filter(function (p) { return p === POSITION; }).length;
+
+    // ── LÍMITES ──
+    var MAX_TOTAL = 3;
+    var MAX_PER_POSITION = 2;
+
+    var totalCount = Object.keys(window.__CHATBOT_REGISTRY__).length;
+
+    if (totalCount >= MAX_TOTAL) {
+        console.warn("[chatbot] Límite total de " + MAX_TOTAL + " chatbots alcanzado. PID ignorado:", PID);
+        return;
+    }
+
+    if (sameCount >= MAX_PER_POSITION) {
+        console.warn("[chatbot] Límite de " + MAX_PER_POSITION + " chatbots en posición '" + POSITION + "'. PID ignorado:", PID);
+        return;
+    }
 
     window.__CHATBOT_REGISTRY__[PID] = POSITION;
 
