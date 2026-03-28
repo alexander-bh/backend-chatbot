@@ -61,6 +61,23 @@ exports.getInstallScript = async (req, res) => {
   }
   window[INSTANCE_KEY] = true;
 
+  // ── Registro global de posiciones + cálculo de offset ──
+  if (!window.__CHATBOT_REGISTRY__) window.__CHATBOT_REGISTRY__ = {};
+
+  var FAB_SIZE = 80;
+  var FAB_GAP  = 12;
+  var FAB_BASE = 20;
+
+  // Cuántas instancias ya ocupan esta misma posición
+  var sameCount = Object.values(window.__CHATBOT_REGISTRY__)
+    .filter(function(p) { return p === POSITION; }).length;
+
+  // Registrar esta instancia
+  window.__CHATBOT_REGISTRY__[PID] = POSITION;
+
+  // Offset acumulado desde el borde
+  var STACK_OFFSET = FAB_BASE + (sameCount * (FAB_SIZE + FAB_GAP));
+
   var domain = window.location.hostname;
   if (window.location.port &&
       window.location.port !== "80" &&
@@ -77,7 +94,12 @@ exports.getInstallScript = async (req, res) => {
     var isLeft   = POSITION === "bottom-left";
     var isMiddle = POSITION === "middle-right";
     var hPos     = isLeft ? "left:112px" : "right:112px";
-    var vPos     = isMiddle ? "top:50%" : "bottom:34px";
+
+    // ── Offset vertical en la burbuja de bienvenida ──
+    var vPos = isMiddle
+      ? "top:50%;margin-top:" + (sameCount * (FAB_SIZE + FAB_GAP)) + "px"
+      : "bottom:" + (STACK_OFFSET + 14) + "px";
+
     var transformInit = isMiddle
       ? (isLeft
           ? "transform:translateX(-10px) translateY(-50%) scale(0.97)"
@@ -161,9 +183,19 @@ exports.getInstallScript = async (req, res) => {
       + "?d=" + encodeURIComponent(domain)
       + "&c=" + encodeURIComponent(challenge);
 
+    // ── Posición inicial del FAB con STACK_OFFSET ──
+    var initStyles;
+    if (POSITION === "bottom-left") {
+      initStyles = "bottom:" + STACK_OFFSET + "px;left:20px";
+    } else if (POSITION === "middle-right") {
+      initStyles = "top:calc(50% - 40px);margin-top:" + (sameCount * (FAB_SIZE + FAB_GAP)) + "px;right:20px";
+    } else {
+      initStyles = "bottom:" + STACK_OFFSET + "px;right:20px";
+    }
+
     iframe.style.cssText = [
       "position:fixed",
-      ${positionStyles},
+      initStyles,
       "width:80px","height:80px","border:none",
       "z-index:2147483647","background:transparent",
       "pointer-events:auto","overflow:hidden","border-radius:50%",
@@ -267,20 +299,23 @@ exports.getInstallScript = async (req, res) => {
       iframe.style.borderRadius = "50%";
       iframe.style.overflow     = "hidden";
       iframe.style.transform    = "";
+      iframe.style.marginTop    = "";
       iframe.style.top          = "";
 
+      // ── Volver a posición correcta con STACK_OFFSET ──
       if (POSITION === "bottom-left") {
-        iframe.style.bottom = "20px";
+        iframe.style.bottom = STACK_OFFSET + "px";
         iframe.style.left   = "20px";
         iframe.style.right  = "auto";
         iframe.style.top    = "auto";
       } else if (POSITION === "middle-right") {
-        iframe.style.top    = "calc(50% - 40px)";
-        iframe.style.right  = "20px";
-        iframe.style.bottom = "auto";
-        iframe.style.left   = "auto";
+        iframe.style.top       = "calc(50% - 40px)";
+        iframe.style.marginTop = (sameCount * (FAB_SIZE + FAB_GAP)) + "px";
+        iframe.style.right     = "20px";
+        iframe.style.bottom    = "auto";
+        iframe.style.left      = "auto";
       } else {
-        iframe.style.bottom = "20px";
+        iframe.style.bottom = STACK_OFFSET + "px";
         iframe.style.right  = "20px";
         iframe.style.left   = "auto";
         iframe.style.top    = "auto";
@@ -299,10 +334,10 @@ exports.getInstallScript = async (req, res) => {
       }, delay);
     }
 
-    // ── NEW: Escuchar si otra instancia se abrió → cerrarse ──
+    // ── Escuchar si otra instancia se abrió → cerrarse ──
     window.addEventListener("__CHATBOT_CLOSE_OTHERS__", function(evt) {
-      if (evt.detail.pid === PID) return; // soy yo quien se abrió, ignorar
-      if (!_chatOpen) return;             // ya estoy cerrado, nada que hacer
+      if (evt.detail.pid === PID) return;
+      if (!_chatOpen) return;
 
       _chatOpen = false;
       hideWelcome();
@@ -310,7 +345,6 @@ exports.getInstallScript = async (req, res) => {
       var isMobileClose = window.innerWidth <= 480;
 
       if (isMobileClose) {
-        // En móvil: primero llevar al tamaño completo y luego colapsar
         iframe.style.transition   = "none";
         iframe.style.width        = "100%";
         iframe.style.left         = "0";
@@ -334,7 +368,6 @@ exports.getInstallScript = async (req, res) => {
         sendFreezeUnfreeze(260);
       }
 
-      // Notificar al widget interno que se cierre visualmente
       try {
         iframe.contentWindow.postMessage({ type: "CHATBOT_FORCE_CLOSE", instanceId: PID }, "*");
       } catch(e) {}
@@ -382,7 +415,7 @@ exports.getInstallScript = async (req, res) => {
           _chatOpen = true;
           hideWelcome();
 
-          // ── NEW: cerrar todas las demás instancias ──
+          // ── Cerrar todas las demás instancias ──
           window.dispatchEvent(new CustomEvent("__CHATBOT_CLOSE_OTHERS__", {
             detail: { pid: PID }
           }));
@@ -397,6 +430,7 @@ exports.getInstallScript = async (req, res) => {
             iframe.style.left         = "0";
             iframe.style.right        = "auto";
             iframe.style.bottom       = "auto";
+            iframe.style.marginTop    = "";
 
             var targetH   = window.visualViewport ? window.visualViewport.height   : window.innerHeight;
             var targetTop = window.visualViewport ? window.visualViewport.offsetTop : 0;
@@ -411,6 +445,7 @@ exports.getInstallScript = async (req, res) => {
             iframe.style.transition   = "none";
             iframe.style.overflow     = "visible";
             iframe.style.borderRadius = "16px";
+            iframe.style.marginTop    = "";
 
             requestAnimationFrame(function() {
               iframe.style.transition = [
