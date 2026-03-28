@@ -145,7 +145,7 @@ exports.registerFirst = async (req, res, next) => {
 
     } catch (err) {
 
-      console.warn("⚠️ No hay flow global, creando flow básico");
+      console.warn("No hay flow global, creando flow básico");
 
       flow = await createFallbackFlow({
         chatbot_id: chatbotDoc._id,

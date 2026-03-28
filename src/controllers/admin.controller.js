@@ -10,29 +10,13 @@ const AuditLog = require("../models/AuditLog");
 const Avatar = require("../models/Avatar");
 const Contact = require("../models/Contact");
 const Ticket = require("../models/Ticket");
+const SystemConfig = require("../models/SystemConfig" );
 const auditService = require("../services/audit.service");
 const formatDateAMPM = require("../utils/formatDate");
 const { deleteFromCloudinary } = require("../services/cloudinary.service");
 const { cloneTemplateToFlow, createFallbackFlow } = require("../services/flowNode.service");
 const slugify = require("../helper/slugify");
-const SystemConfig = require("../models/SystemConfig" );
-const SupportConfig = require("../models/Supportconfig");
-
-/* ─────────────────────────────────────
-   HELPER — obtiene (o crea) el único
-   documento de configuración de soporte
-───────────────────────────────────── */
-const getOrCreateConfig = async () => {
-  let config = await SupportConfig.findOne();
-  if (!config) {
-    config = await SupportConfig.create({
-      support_email:    process.env.ADMIN_SUPPORT_EMAIL ?? null,
-      support_whatsapp: process.env.SUPPORT_WHATSAPP    ?? null,
-    });
-  }
-  return config;
-};
-
+const getOrCreateConfig = require("../helper/getOrCreateConfig");
 
 /* ─────────────────────────────────────
    DASHBOAR
@@ -691,8 +675,6 @@ exports.updateAnyChatbot = async (req, res) => {
     // 🔥 Si NO existe flow → crear fallback
     if (!flow) {
 
-      console.warn("⚠️ Chatbot sin flow (admin update), creando fallback");
-
       flow = await createFallbackFlow({
         chatbot_id: chatbot._id,
         account_id: chatbot.account_id,
@@ -702,11 +684,8 @@ exports.updateAnyChatbot = async (req, res) => {
 
     }
     else if (name !== undefined) {
-
-      // 🔥 Si cambió el nombre → actualizar flow
       flow.name = `Diálogo del chatbot - ${chatbot.name}`;
       await flow.save({ session });
-
     }
 
     /* ---------- AUDIT ---------- */
@@ -1194,10 +1173,6 @@ exports.deleteAvatarGlobal = async (req, res) => {
       { session }
     );
 
-    console.log(
-      `✅ ${result.modifiedCount} chatbots actualizados con avatar fallback`
-    );
-
     /* ───────── ELIMINAR CLOUDINARY ───────── */
 
     if (avatar.public_id) {
@@ -1221,7 +1196,6 @@ exports.deleteAvatarGlobal = async (req, res) => {
   } catch (error) {
     await session.abortTransaction();
     console.error("DELETE AVATAR GLOBAL ERROR:", error);
-
     res.status(400).json({
       message: error.message
     });

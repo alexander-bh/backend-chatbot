@@ -70,7 +70,7 @@ exports.createChatbot = async (req, res) => {
       show_welcome_on_mobile: show_welcome_on_mobile ?? true,
       status: "active",
       is_enabled: true,
-      avatar: avatarToUse // 🔥 AQUÍ
+      avatar: avatarToUse
     }], { session });
 
     const chatbotDoc = chatbot[0];
@@ -88,7 +88,7 @@ exports.createChatbot = async (req, res) => {
         flowName
       );
     } catch (err) {
-      console.warn("⚠️ No hay flow global, creando flow básico");
+      console.warn("No hay flow global, creando flow básico");
       flow = await createFallbackFlow({
         chatbot_id: chatbotDoc._id,
         account_id: req.user.account_id,
@@ -381,10 +381,9 @@ exports.updateChatbot = async (req, res) => {
       is_template: false
     }).session(session);
 
-    // 🔥 Si no existe flow → crear fallback
     if (!flow) {
 
-      console.warn("⚠️ Chatbot sin flow, creando fallback");
+      console.warn("Chatbot sin flow, creando fallback");
 
       flow = await createFallbackFlow({
         chatbot_id: chatbot._id,

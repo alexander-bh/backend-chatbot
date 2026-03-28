@@ -13,7 +13,6 @@ exports.notifyContactsDeleted = async (req, res) => {
       return res.status(400).json({ message: "Datos inválidos" });
     }
 
-    // ✅ Primero ejecutar, luego responder
     await sendContactsDeletedEmail({ accountId, deletedContacts });
 
     res.json({ received: true });

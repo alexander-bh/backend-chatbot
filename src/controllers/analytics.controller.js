@@ -4,6 +4,7 @@ const ConversationSession = require("../models/ConversationSession");
 const FlowNode = require("../models/FlowNode");
 const Contact = require("../models/Contact");
 const formatDateAMPM = require("../utils/formatDate");
+const fillMissingHours = require("../helper/fillMissingHours");
 
 exports.getFlowDropOff = async (req, res) => {
     try {
@@ -493,15 +494,3 @@ exports.getContactsDetail = async (req, res) => {
         });
     }
 };
-
-function fillMissingHours(data) {
-    const hours = Array.from({ length: 24 }, (_, i) => i);
-
-    return hours.map(hour => {
-        const found = data.find(d => d.hour === hour);
-        return {
-            hour,
-            total: found ? found.total : 0
-        };
-    });
-}

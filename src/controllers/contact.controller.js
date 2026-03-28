@@ -1,19 +1,8 @@
 const mongoose = require("mongoose");
 const Contact = require("../models/Contact");
-const formatDateAMPM = require("../utils/formatDate");
 const ConversationSession = require("../models/ConversationSession");
+const formatContact = require("../helper/formatContact"); 
 const { sendToAccount } = require("../services/pusher.service");
-
-const formatContact = (contact) => {
-  const obj = contact.toObject ? contact.toObject() : contact;
-
-  return {
-    ...obj,
-    source: obj.source || "chatbot",
-    createdAtFormatted: obj.createdAt ? formatDateAMPM(obj.createdAt) : null,
-    updatedAtFormatted: obj.updatedAt ? formatDateAMPM(obj.updatedAt) : null
-  };
-};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Chatbot contact (upsert)
@@ -503,10 +492,7 @@ exports.deleteContact = async (req, res) => {
         { contact_id: contact._id }    // sesiones posteriores
       ]
     });
-
-    console.log(`🗑️ Eliminadas ${deletedCount} sesiones del contacto ${contact._id}`);
-    // ──────────────────────────────────────────────────────────────────────
-
+    
     sendToAccount(accountId, "contact-deleted", { id: contact._id });
 
     return res.json({

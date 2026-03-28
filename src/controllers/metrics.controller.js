@@ -184,11 +184,6 @@ exports.getNodeFunnel = async (req, res) => {
       (a, b) => (a.position ?? 999) - (b.position ?? 999)
     );
 
-
-    console.log("FLOW ID:", flow._id);
-    console.log("NODE IDS FROM CONTACTS:", nodeIds);
-    console.log("FLOW NODES FOUND:", nodes.map(n => n._id));
-
     /* =============================
        5️⃣ RESPONSE
     ============================= */

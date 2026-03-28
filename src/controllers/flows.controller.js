@@ -3,10 +3,7 @@ const FlowNode = require("../models/FlowNode");
 const { acquireFlowLock } = require("../utils/flowLock.engine");
 const { validateFlow } = require("../validators/flow.validator");
 const { ensureFlowExists } = require("../services/flowNode.service");
-const withTransactionRetry = require("../utils/withTransactionRetry");
-const flowNodeService = require("../services/flowNode.service");
 const { clearFlowCache } = require("../services/flowCache.service");
-
 const {
   isValidUrl,
   isMediaUrl,
@@ -15,33 +12,9 @@ const {
   cleanUrl } = require("../helper/isValidUrl");
 const { extractMediaToDelete, groupNodesByBranch, buildUploadedFilesMap } = require("../helper/flow.helpers")
 const { deleteMediaBatch } = require("../helper/media.helpers");
-
-function detectOrphanNodes(nodes, startNodeId) {
-
-  const visited = new Set();
-
-  const nodeMap = new Map(
-    nodes.map(n => [String(n._id), n])
-  );
-
-  function walk(id) {
-
-    if (!id || visited.has(String(id))) return;
-
-    const node = nodeMap.get(String(id));
-
-    if (!node) return;
-
-    visited.add(String(id));
-
-    walk(node.next_node_id);
-
-  }
-
-  walk(startNodeId);
-
-  return nodes.filter(n => !visited.has(String(n._id)));
-}
+const withTransactionRetry = require("../utils/withTransactionRetry");
+const flowNodeService = require("../services/flowNode.service");
+const detectOrphanNodes = require("../helper/detectOrphanNodes");
 
 // Obtener nodos por flow
 exports.getNodesByFlow = async (req, res) => {
@@ -411,7 +384,7 @@ exports.saveFlow = async (req, res) => {
 
   } catch (error) {
 
-    console.log("🔥 FULL ERROR:", error);
+    console.log("FULL ERROR:", error);
 
     return res.status(400).json({
       success: false,
