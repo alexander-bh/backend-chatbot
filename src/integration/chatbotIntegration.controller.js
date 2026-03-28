@@ -18,7 +18,7 @@ const getWidgetBaseUrl = () => process.env.WIDGET_BASE_URL || "https://chatbot-w
 const WIDGET_BASE_URL = getWidgetBaseUrl();
 const WIDGET_DOMAIN = normalizeDomain(WIDGET_BASE_URL);
 const SCRIPT_TEMPLATE = fs.readFileSync(
-  path.join(__dirname, "installScript.template.js"),
+  path.join(__dirname, "./Installscript.template.js"),
   "utf8"
 );
 
