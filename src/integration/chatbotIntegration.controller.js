@@ -48,19 +48,18 @@ exports.getInstallScript = async (req, res) => {
     res.setHeader("Content-Security-Policy", `default-src 'none'`);
 
     res.send(`(function(){
-  // ── Bug 1 FIX: PID se declara PRIMERO, antes de usarlo ──
   var BASE           = "${baseUrl}";
   var PID            = "${public_id}";
   var POSITION       = "${position}";
   var SECONDARYCOLOR = "${secondaryColor}";
 
-  // ── Bug 1+2 FIX: lógica de instancia única corregida ──
+  // ── Instancia única ──
   var INSTANCE_KEY = "__CHATBOT_INSTALLED__" + PID;
   if (window[INSTANCE_KEY]) {
     var ex = document.getElementById("chatbot_" + PID);
-    if (ex) return; // ya montado, salir sin hacer nada
+    if (ex) return;
   }
-  window[INSTANCE_KEY] = true; // Bug 2 FIX: usar la key con PID, no la global
+  window[INSTANCE_KEY] = true;
 
   var domain = window.location.hostname;
   if (window.location.port &&
@@ -219,7 +218,6 @@ exports.getInstallScript = async (req, res) => {
     function notifyScrollToBottom() {
       if (!_chatOpen) return;
       try {
-        // Bug 4 FIX: instanceId en todos los postMessage al iframe
         iframe.contentWindow.postMessage({ type: "CHATBOT_SCROLL_BOTTOM", instanceId: PID }, "*");
       } catch(e) {}
     }
@@ -248,12 +246,104 @@ exports.getInstallScript = async (req, res) => {
       }
     });
 
+    // ── Función reutilizable: resetear iframe al estado FAB cerrado ──
+    function resetIframeToClosed(animated) {
+      if (animated) {
+        iframe.style.transition = [
+          "width 0.24s cubic-bezier(0.4,0,1,1)",
+          "height 0.24s cubic-bezier(0.4,0,1,1)",
+          "top 0.24s cubic-bezier(0.4,0,1,1)",
+          "right 0.24s cubic-bezier(0.4,0,1,1)",
+          "bottom 0.24s cubic-bezier(0.4,0,1,1)",
+          "left 0.24s cubic-bezier(0.4,0,1,1)",
+          "border-radius 0.24s cubic-bezier(0.4,0,1,1)"
+        ].join(",");
+      } else {
+        iframe.style.transition = "none";
+      }
+
+      iframe.style.width        = "80px";
+      iframe.style.height       = "80px";
+      iframe.style.borderRadius = "50%";
+      iframe.style.overflow     = "hidden";
+      iframe.style.transform    = "";
+      iframe.style.top          = "";
+
+      if (POSITION === "bottom-left") {
+        iframe.style.bottom = "20px";
+        iframe.style.left   = "20px";
+        iframe.style.right  = "auto";
+        iframe.style.top    = "auto";
+      } else if (POSITION === "middle-right") {
+        iframe.style.top    = "calc(50% - 40px)";
+        iframe.style.right  = "20px";
+        iframe.style.bottom = "auto";
+        iframe.style.left   = "auto";
+      } else {
+        iframe.style.bottom = "20px";
+        iframe.style.right  = "20px";
+        iframe.style.left   = "auto";
+        iframe.style.top    = "auto";
+      }
+    }
+
+    // ── Función reutilizable: enviar freeze+unfreeze al widget ──
+    function sendFreezeUnfreeze(delay) {
+      setTimeout(function() {
+        try {
+          iframe.contentWindow.postMessage({ type: "CHATBOT_FAB_FREEZE",   instanceId: PID }, "*");
+          setTimeout(function() {
+            iframe.contentWindow.postMessage({ type: "CHATBOT_FAB_UNFREEZE", instanceId: PID }, "*");
+          }, 50);
+        } catch(e) {}
+      }, delay);
+    }
+
+    // ── NEW: Escuchar si otra instancia se abrió → cerrarse ──
+    window.addEventListener("__CHATBOT_CLOSE_OTHERS__", function(evt) {
+      if (evt.detail.pid === PID) return; // soy yo quien se abrió, ignorar
+      if (!_chatOpen) return;             // ya estoy cerrado, nada que hacer
+
+      _chatOpen = false;
+      hideWelcome();
+
+      var isMobileClose = window.innerWidth <= 480;
+
+      if (isMobileClose) {
+        // En móvil: primero llevar al tamaño completo y luego colapsar
+        iframe.style.transition   = "none";
+        iframe.style.width        = "100%";
+        iframe.style.left         = "0";
+        iframe.style.right        = "auto";
+        iframe.style.bottom       = "auto";
+        iframe.style.borderRadius = "0";
+        iframe.style.overflow     = "hidden";
+        iframe.style.transform    = "";
+
+        var hClose   = window.visualViewport ? window.visualViewport.height   : window.innerHeight;
+        var topClose = window.visualViewport ? window.visualViewport.offsetTop : 0;
+        iframe.style.height = hClose + "px";
+        iframe.style.top    = topClose + "px";
+
+        setTimeout(function() {
+          resetIframeToClosed(false);
+          sendFreezeUnfreeze(0);
+        }, 320);
+      } else {
+        resetIframeToClosed(true);
+        sendFreezeUnfreeze(260);
+      }
+
+      // Notificar al widget interno que se cierre visualmente
+      try {
+        iframe.contentWindow.postMessage({ type: "CHATBOT_FORCE_CLOSE", instanceId: PID }, "*");
+      } catch(e) {}
+    });
+
     var _welcomeShownThisLoad = false;
 
-    // ── Bug 5 FIX: filtrar todos los mensajes por instanceId ──
     window.addEventListener("message", function(e) {
       if (!e.data || !e.data.type) return;
-      // Ignorar mensajes de otras instancias de chatbot
       if (e.data.instanceId && e.data.instanceId !== PID) return;
 
       /* ── Welcome messages ── */
@@ -271,7 +361,6 @@ exports.getInstallScript = async (req, res) => {
       }
 
       if (e.data.type === "CHATBOT_WELCOME_REQUEST") {
-        // Bug 6 FIX: incluir instanceId en la respuesta al widget
         iframe.contentWindow.postMessage({
           type:       "CHATBOT_WELCOME_PERMISSION",
           instanceId: PID,
@@ -292,6 +381,11 @@ exports.getInstallScript = async (req, res) => {
         if (e.data.open) {
           _chatOpen = true;
           hideWelcome();
+
+          // ── NEW: cerrar todas las demás instancias ──
+          window.dispatchEvent(new CustomEvent("__CHATBOT_CLOSE_OTHERS__", {
+            detail: { pid: PID }
+          }));
 
           var isMobile = window.innerWidth <= 480;
 
@@ -374,83 +468,18 @@ exports.getInstallScript = async (req, res) => {
               iframe.style.top    = topClose + "px";
 
               setTimeout(function() {
-                iframe.style.transition   = "none";
-                iframe.style.width        = "80px";
-                iframe.style.height       = "80px";
-                iframe.style.borderRadius = "50%";
-                iframe.style.overflow     = "hidden";
-                iframe.style.transform    = "";
-                iframe.style.top          = "auto";
-                iframe.style.left         = "auto";
-                iframe.style.right        = "auto";
-                iframe.style.bottom       = "auto";
-
-                if (POSITION === "bottom-left") {
-                    iframe.style.bottom = "20px";
-                    iframe.style.left   = "20px";
-                } else if (POSITION === "middle-right") {
-                    iframe.style.top   = "calc(50% - 40px)";
-                    iframe.style.right = "20px";
-                } else {
-                    iframe.style.bottom = "20px";
-                    iframe.style.right  = "20px";
-                }
-
-                // Bug 4 FIX: instanceId en FAB_FREEZE / FAB_UNFREEZE
-                iframe.contentWindow.postMessage({ type: "CHATBOT_FAB_FREEZE", instanceId: PID }, "*");
-                setTimeout(function() {
-                    iframe.contentWindow.postMessage({ type: "CHATBOT_FAB_UNFREEZE", instanceId: PID }, "*");
-                }, 50);
+                resetIframeToClosed(false);
+                sendFreezeUnfreeze(0);
               }, 320);
             } else {
-              iframe.style.transition = [
-                "width 0.24s cubic-bezier(0.4,0,1,1)",
-                "height 0.24s cubic-bezier(0.4,0,1,1)",
-                "top 0.24s cubic-bezier(0.4,0,1,1)",
-                "right 0.24s cubic-bezier(0.4,0,1,1)",
-                "bottom 0.24s cubic-bezier(0.4,0,1,1)",
-                "left 0.24s cubic-bezier(0.4,0,1,1)",
-                "border-radius 0.24s cubic-bezier(0.4,0,1,1)"
-              ].join(",");
-
-              iframe.style.width        = "80px";
-              iframe.style.height       = "80px";
-              iframe.style.borderRadius = "50%";
-              iframe.style.overflow     = "hidden";
-              iframe.style.transform    = "";
-              iframe.style.top          = "";
-
-              if (POSITION === "bottom-left") {
-                iframe.style.bottom = "20px";
-                iframe.style.left   = "20px";
-                iframe.style.right  = "auto";
-                iframe.style.top    = "auto";
-              } else if (POSITION === "middle-right") {
-                iframe.style.top    = "calc(50% - 40px)";
-                iframe.style.right  = "20px";
-                iframe.style.bottom = "auto";
-                iframe.style.left   = "auto";
-              } else {
-                iframe.style.bottom = "20px";
-                iframe.style.right  = "20px";
-                iframe.style.left   = "auto";
-                iframe.style.top    = "auto";
-              }
-
-              // Bug 4 FIX: instanceId en FAB_FREEZE / FAB_UNFREEZE
-              setTimeout(function() {
-                iframe.contentWindow.postMessage({ type: "CHATBOT_FAB_FREEZE", instanceId: PID }, "*");
-                setTimeout(function() {
-                  iframe.contentWindow.postMessage({ type: "CHATBOT_FAB_UNFREEZE", instanceId: PID }, "*");
-                }, 50);
-              }, 260);
+              resetIframeToClosed(true);
+              sendFreezeUnfreeze(260);
             }
           });
         }
       }
     }); /* ── fin addEventListener("message") ── */
 
-    // Bug 3 FIX: usar el id correcto "chatbot_" + PID
     var _chatbotObserver = new MutationObserver(function() {
       if (!document.getElementById("chatbot_" + PID)) {
         document.body.appendChild(iframe);
