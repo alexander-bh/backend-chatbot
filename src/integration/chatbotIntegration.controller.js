@@ -95,7 +95,6 @@ exports.getInstallScript = async (req, res) => {
     var isMiddle = POSITION === "middle-right";
     var hPos     = isLeft ? "left:112px" : "right:112px";
 
-    // ── Offset vertical en la burbuja de bienvenida ──
     var vPos = isMiddle
       ? "top:50%;margin-top:" + (sameCount * (FAB_SIZE + FAB_GAP)) + "px"
       : "bottom:" + (STACK_OFFSET + 14) + "px";
@@ -160,6 +159,109 @@ exports.getInstallScript = async (req, res) => {
     setTimeout(function() { if (el.parentNode) el.remove(); }, 400);
   }
 
+  // ── Estado del chat declarado al nivel del IIFE ──
+  var _chatOpen = false;
+
+  // ── Listener registrado INMEDIATAMENTE, antes del XHR ──
+  // Así siempre está activo sin importar el timing del challenge
+  window.addEventListener("__CHATBOT_CLOSE_OTHERS__", function(evt) {
+    if (evt.detail.pid === PID) return;
+
+    // Ocultar welcome bubble siempre, aunque el chat esté cerrado
+    hideWelcome();
+
+    if (!_chatOpen) return;
+    _chatOpen = false;
+
+    // Buscar el iframe por ID (puede no existir si el XHR aún no completó)
+    var iframe = document.getElementById("chatbot_" + PID);
+    if (!iframe) return;
+
+    var isMobileClose = window.innerWidth <= 480;
+
+    if (isMobileClose) {
+      iframe.style.transition   = "none";
+      iframe.style.width        = "100%";
+      iframe.style.left         = "0";
+      iframe.style.right        = "auto";
+      iframe.style.bottom       = "auto";
+      iframe.style.borderRadius = "0";
+      iframe.style.overflow     = "hidden";
+      iframe.style.transform    = "";
+
+      var hClose   = window.visualViewport ? window.visualViewport.height   : window.innerHeight;
+      var topClose = window.visualViewport ? window.visualViewport.offsetTop : 0;
+      iframe.style.height = hClose + "px";
+      iframe.style.top    = topClose + "px";
+
+      setTimeout(function() {
+        resetIframeToClosed(iframe, false);
+        sendFreezeUnfreeze(iframe, 0);
+      }, 320);
+    } else {
+      resetIframeToClosed(iframe, true);
+      sendFreezeUnfreeze(iframe, 260);
+    }
+
+    try {
+      iframe.contentWindow.postMessage({ type: "CHATBOT_FORCE_CLOSE", instanceId: PID }, "*");
+    } catch(e) {}
+  });
+
+  // ── Helpers que ahora reciben iframe como parámetro ──
+  function resetIframeToClosed(iframe, animated) {
+    if (animated) {
+      iframe.style.transition = [
+        "width 0.24s cubic-bezier(0.4,0,1,1)",
+        "height 0.24s cubic-bezier(0.4,0,1,1)",
+        "top 0.24s cubic-bezier(0.4,0,1,1)",
+        "right 0.24s cubic-bezier(0.4,0,1,1)",
+        "bottom 0.24s cubic-bezier(0.4,0,1,1)",
+        "left 0.24s cubic-bezier(0.4,0,1,1)",
+        "border-radius 0.24s cubic-bezier(0.4,0,1,1)"
+      ].join(",");
+    } else {
+      iframe.style.transition = "none";
+    }
+
+    iframe.style.width        = "80px";
+    iframe.style.height       = "80px";
+    iframe.style.borderRadius = "50%";
+    iframe.style.overflow     = "hidden";
+    iframe.style.transform    = "";
+    iframe.style.marginTop    = "";
+    iframe.style.top          = "";
+
+    if (POSITION === "bottom-left") {
+      iframe.style.bottom = STACK_OFFSET + "px";
+      iframe.style.left   = "20px";
+      iframe.style.right  = "auto";
+      iframe.style.top    = "auto";
+    } else if (POSITION === "middle-right") {
+      iframe.style.top       = "calc(50% - 40px)";
+      iframe.style.marginTop = (sameCount * (FAB_SIZE + FAB_GAP)) + "px";
+      iframe.style.right     = "20px";
+      iframe.style.bottom    = "auto";
+      iframe.style.left      = "auto";
+    } else {
+      iframe.style.bottom = STACK_OFFSET + "px";
+      iframe.style.right  = "20px";
+      iframe.style.left   = "auto";
+      iframe.style.top    = "auto";
+    }
+  }
+
+  function sendFreezeUnfreeze(iframe, delay) {
+    setTimeout(function() {
+      try {
+        iframe.contentWindow.postMessage({ type: "CHATBOT_FAB_FREEZE",   instanceId: PID }, "*");
+        setTimeout(function() {
+          iframe.contentWindow.postMessage({ type: "CHATBOT_FAB_UNFREEZE", instanceId: PID }, "*");
+        }, 50);
+      } catch(e) {}
+    }, delay);
+  }
+
   /* ── Challenge → mount iframe ── */
   var xhr = new XMLHttpRequest();
   xhr.open("GET", BASE + "/api/chatbot-integration/" + PID + "/challenge?d=" + encodeURIComponent(domain), true);
@@ -183,7 +285,6 @@ exports.getInstallScript = async (req, res) => {
       + "?d=" + encodeURIComponent(domain)
       + "&c=" + encodeURIComponent(challenge);
 
-    // ── Posición inicial del FAB con STACK_OFFSET ──
     var initStyles;
     if (POSITION === "bottom-left") {
       initStyles = "bottom:" + STACK_OFFSET + "px;left:20px";
@@ -217,8 +318,6 @@ exports.getInstallScript = async (req, res) => {
     });
 
     document.body.appendChild(iframe);
-
-    var _chatOpen = false;
 
     function applyViewportFix() {
       if (!_chatOpen) return;
@@ -278,105 +377,21 @@ exports.getInstallScript = async (req, res) => {
       }
     });
 
-    // ── Función reutilizable: resetear iframe al estado FAB cerrado ──
-    function resetIframeToClosed(animated) {
-      if (animated) {
-        iframe.style.transition = [
-          "width 0.24s cubic-bezier(0.4,0,1,1)",
-          "height 0.24s cubic-bezier(0.4,0,1,1)",
-          "top 0.24s cubic-bezier(0.4,0,1,1)",
-          "right 0.24s cubic-bezier(0.4,0,1,1)",
-          "bottom 0.24s cubic-bezier(0.4,0,1,1)",
-          "left 0.24s cubic-bezier(0.4,0,1,1)",
-          "border-radius 0.24s cubic-bezier(0.4,0,1,1)"
-        ].join(",");
-      } else {
-        iframe.style.transition = "none";
-      }
-
-      iframe.style.width        = "80px";
-      iframe.style.height       = "80px";
-      iframe.style.borderRadius = "50%";
-      iframe.style.overflow     = "hidden";
-      iframe.style.transform    = "";
-      iframe.style.marginTop    = "";
-      iframe.style.top          = "";
-
-      // ── Volver a posición correcta con STACK_OFFSET ──
-      if (POSITION === "bottom-left") {
-        iframe.style.bottom = STACK_OFFSET + "px";
-        iframe.style.left   = "20px";
-        iframe.style.right  = "auto";
-        iframe.style.top    = "auto";
-      } else if (POSITION === "middle-right") {
-        iframe.style.top       = "calc(50% - 40px)";
-        iframe.style.marginTop = (sameCount * (FAB_SIZE + FAB_GAP)) + "px";
-        iframe.style.right     = "20px";
-        iframe.style.bottom    = "auto";
-        iframe.style.left      = "auto";
-      } else {
-        iframe.style.bottom = STACK_OFFSET + "px";
-        iframe.style.right  = "20px";
-        iframe.style.left   = "auto";
-        iframe.style.top    = "auto";
-      }
-    }
-
-    // ── Función reutilizable: enviar freeze+unfreeze al widget ──
-    function sendFreezeUnfreeze(delay) {
-      setTimeout(function() {
-        try {
-          iframe.contentWindow.postMessage({ type: "CHATBOT_FAB_FREEZE",   instanceId: PID }, "*");
-          setTimeout(function() {
-            iframe.contentWindow.postMessage({ type: "CHATBOT_FAB_UNFREEZE", instanceId: PID }, "*");
-          }, 50);
-        } catch(e) {}
-      }, delay);
-    }
-
-    // ── Escuchar si otra instancia se abrió → cerrarse ──
-    window.addEventListener("__CHATBOT_CLOSE_OTHERS__", function(evt) {
-      if (evt.detail.pid === PID) return;
-      hideWelcome();
-      if (!_chatOpen) return;
-      _chatOpen = false;
-
-      var isMobileClose = window.innerWidth <= 480;
-
-      if (isMobileClose) {
-        iframe.style.transition   = "none";
-        iframe.style.width        = "100%";
-        iframe.style.left         = "0";
-        iframe.style.right        = "auto";
-        iframe.style.bottom       = "auto";
-        iframe.style.borderRadius = "0";
-        iframe.style.overflow     = "hidden";
-        iframe.style.transform    = "";
-
-        var hClose   = window.visualViewport ? window.visualViewport.height   : window.innerHeight;
-        var topClose = window.visualViewport ? window.visualViewport.offsetTop : 0;
-        iframe.style.height = hClose + "px";
-        iframe.style.top    = topClose + "px";
-
-        setTimeout(function() {
-          resetIframeToClosed(false);
-          sendFreezeUnfreeze(0);
-        }, 320);
-      } else {
-        resetIframeToClosed(true);
-        sendFreezeUnfreeze(260);
-      }
-
-      try {
-        iframe.contentWindow.postMessage({ type: "CHATBOT_FORCE_CLOSE", instanceId: PID }, "*");
-      } catch(e) {}
-    });
-
     var _welcomeShownThisLoad = false;
 
     window.addEventListener("message", function(e) {
       if (!e.data || !e.data.type) return;
       if (e.data.instanceId && e.data.instanceId !== PID) return;
+
+      /* ── FAB freeze/unfreeze ── */
+      if (e.data.type === "CHATBOT_FAB_FREEZE") {
+        document.querySelector(".chat-fab")?.classList.add("no-transition");
+        return;
+      }
+      if (e.data.type === "CHATBOT_FAB_UNFREEZE") {
+        document.querySelector(".chat-fab")?.classList.remove("no-transition");
+        return;
+      }
 
       /* ── Welcome messages ── */
       if (e.data.type === "CHATBOT_WELCOME") {
@@ -502,12 +517,12 @@ exports.getInstallScript = async (req, res) => {
               iframe.style.top    = topClose + "px";
 
               setTimeout(function() {
-                resetIframeToClosed(false);
-                sendFreezeUnfreeze(0);
+                resetIframeToClosed(iframe, false);
+                sendFreezeUnfreeze(iframe, 0);
               }, 320);
             } else {
-              resetIframeToClosed(true);
-              sendFreezeUnfreeze(260);
+              resetIframeToClosed(iframe, true);
+              sendFreezeUnfreeze(iframe, 260);
             }
           });
         }
