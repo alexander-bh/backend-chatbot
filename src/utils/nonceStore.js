@@ -107,7 +107,6 @@ async function getStore() {
       await client.ping();
 
       _store = new RedisStore(client);
-      console.log("✅ NonceStore: usando Redis (Upstash REST)");
     } catch (err) {
       console.warn("⚠️ NonceStore: Redis falló, usando memoria:", err.message);
       _store = new MemoryStore();

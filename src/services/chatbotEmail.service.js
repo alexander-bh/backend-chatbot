@@ -193,10 +193,7 @@ exports.sendConversationEmail = async (session) => {
       subject: asunto,
       html: htmlContent,
     };
-
     await transporter.sendMail(mailOptions);
-    console.log(`📧 Email enviado a ${toEmails.length} destinatario(s): ${toEmails.join(", ")}`);
-
   } catch (err) {
     console.error("❌ Error enviando email:", err);
   }

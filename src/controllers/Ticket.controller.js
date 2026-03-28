@@ -1,52 +1,13 @@
 const mongoose = require("mongoose");
 const Ticket = require("../models/Ticket");
-const SupportConfig = require("../models/Supportconfig");
 const User = require("../models/User");
 const { sendToAccount, sendToAdmin } = require("../services/pusher.service");
 const { createAndEmitNotification } = require("../controllers/notification.controller")
 const { deleteFromCloudinary } = require("../services/cloudinary.service");
+const { CATEGORY_LABELS, PRIORITY_LABELS } = require("../shared/ticket.enums")
 const formatDateAMPM = require("../utils/formatDate");
-const nodemailer = require("nodemailer");
-
-/* ─────────────────────────────────────
-   HELPERS
-───────────────────────────────────── */
-const getTransporter = () =>
-    nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: Number(process.env.SMTP_PORT) || 587,
-        secure: process.env.SMTP_SECURE === "true",
-        auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS,
-        },
-    });
-
-/**
- * Lee email y whatsapp directamente del modelo SupportConfig.
- * Si no existe el documento usa fallback a .env
- */
-const getSupportConfig = async () => {
-    const config = await SupportConfig.findOne().lean();
-    return {
-        support_email: config?.support_email ?? process.env.ADMIN_SUPPORT_EMAIL ?? null,
-        support_whatsapp: config?.support_whatsapp ?? process.env.SUPPORT_WHATSAPP ?? null,
-    };
-};
-
-const CATEGORY_LABELS = {
-    bug: "Bug / Error",
-    duda: "Duda de uso",
-    mejora: "Sugerencia de mejora",
-    acceso: "Problema de acceso",
-    otro: "Otro",
-};
-
-const PRIORITY_LABELS = {
-    baja: "Baja",
-    media: "Media",
-    alta: "Alta",
-};
+const getTransporter = require("../helper/getTransporter");
+const getSupportConfig = require("../helper/getSupportConfig");
 
 /* ─────────────────────────────────────
    CLIENT — CREAR TICKET
@@ -59,10 +20,6 @@ exports.createTicket = async (req, res) => {
         if (!ticketId || !subject || !category || !description || !channel) {
             return res.status(400).json({ message: "Datos incompletos" });
         }
-
-        console.log("USER_ID TYPE:", typeof req.user.id);
-        console.log("USER_ID VALUE:", req.user.id);
-
 
         let screenshot_url = null;
         let screenshot_public_id = null;
@@ -86,10 +43,13 @@ exports.createTicket = async (req, res) => {
             account_id: new mongoose.Types.ObjectId(req.user.account_id),
         });
 
+        const user = await User.findById(req.user._id)
+            .select("name email")
+            .lean()
+            .catch(() => null);
+
         /* ────── NOTIFICACIÓN REALTIME AL ADMIN ────── */
         try {
-            const user = await User.findById(req.user._id).select("name email").lean();
-
             // 1. Guardar notificación en BD para que persista en el panel admin
             const notification = await createAndEmitNotification({
                 account_id: "admin",
@@ -133,8 +93,6 @@ exports.createTicket = async (req, res) => {
         if (support_email) {
             try {
                 const transporter = getTransporter();
-                const user = await User.findById(req.user._id).select("name email").lean();
-
                 await transporter.sendMail({
                     from: `"Soporte App" <${process.env.SMTP_USER}>`,
                     to: support_email,
@@ -319,7 +277,8 @@ exports.getTicketDetail = async (req, res) => {
             created_at_formatted: formatDateAMPM(ticket.created_at),
         });
     } catch (err) {
-        res.status(400).json({ message: err.message });
+        const status = err.name === "CastError" ? 400 : 500;
+        res.status(status).json({ message: err.message });
     }
 };
 
@@ -352,7 +311,15 @@ exports.updateTicket = async (req, res) => {
         await ticket.save();
 
         /* ── notificar al usuario dueño del ticket ── */
+
         try {
+            await createAndEmitNotification({
+                account_id: ticket.account_id,
+                type: "ticket-updated",
+                title: "Tu ticket fue actualizado",
+                body: `El estado de tu ticket ${ticket.ticket_id} cambió a: ${ticket.status}`,
+                metadata: { ticket_id: ticket.ticket_id, status: ticket.status },
+            });
             await sendToAccount(String(ticket.account_id), "ticket-updated", {
                 ticket_id: ticket.ticket_id,
                 status: ticket.status,
@@ -363,7 +330,7 @@ exports.updateTicket = async (req, res) => {
 
         res.json({ message: "Ticket actualizado", ticket });
     } catch (err) {
-        res.status(400).json({ message: err.message });
+        res.status(500).json({ message: err.message });
     }
 };
 

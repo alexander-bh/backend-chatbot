@@ -1,22 +1,7 @@
 const Notification = require("../models/Notification");
 const { sendToAccount, sendToAdmin } = require("../services/pusher.service");
-
-/* ─────────────────────────────────────
-   HELPER — resuelve el "canal" según rol
-   ADMIN  → account_id = "admin"
-   CLIENT → account_id = req.user.account_id
-───────────────────────────────────── */
-const resolveAccountId = (user) =>
-  user.role === "ADMIN" ? "admin" : String(user.account_id);
-
-/* ─────────────────────────────────────
-   HELPER — dispara el evento correcto
-   según el rol del usuario
-───────────────────────────────────── */
-const notify = (user, event, data) => {
-  if (user.role === "ADMIN") return sendToAdmin(event, data);
-  return sendToAccount(String(user.account_id), event, data); 
-};
+const resolveAccountId = require("../helper/resolveAccountId");
+const notify = require("../helper/notify");
 
 exports.createAndEmitNotification = async ({ account_id, role, ...fields }) => {
     const notification = await Notification.create({ account_id, ...fields })

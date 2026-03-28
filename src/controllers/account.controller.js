@@ -122,7 +122,7 @@ exports.toggleNotificationEmails = async (req, res) => {
     const account = await Account.findByIdAndUpdate(
       req.user.account_id,
       { $set: { notification_emails_enabled: enabled } },
-      { returnDocument: "after" }  // ← aquí
+      { returnDocument: "after" }
     );
     if (!account) return res.status(404).json({ message: "Cuenta no encontrada" });
 

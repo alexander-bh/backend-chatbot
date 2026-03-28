@@ -48,17 +48,19 @@ exports.getInstallScript = async (req, res) => {
     res.setHeader("Content-Security-Policy", `default-src 'none'`);
 
     res.send(`(function(){
-  if (window.__CHATBOT_INSTALLED__) {
-    var ex = document.getElementById('__chatbot_iframe__');
-    if (ex) return;
-    window.__CHATBOT_INSTALLED__ = false;
-  }
-  window.__CHATBOT_INSTALLED__ = true;
-
+  // ── Bug 1 FIX: PID se declara PRIMERO, antes de usarlo ──
   var BASE           = "${baseUrl}";
   var PID            = "${public_id}";
   var POSITION       = "${position}";
   var SECONDARYCOLOR = "${secondaryColor}";
+
+  // ── Bug 1+2 FIX: lógica de instancia única corregida ──
+  var INSTANCE_KEY = "__CHATBOT_INSTALLED__" + PID;
+  if (window[INSTANCE_KEY]) {
+    var ex = document.getElementById("chatbot_" + PID);
+    if (ex) return; // ya montado, salir sin hacer nada
+  }
+  window[INSTANCE_KEY] = true; // Bug 2 FIX: usar la key con PID, no la global
 
   var domain = window.location.hostname;
   if (window.location.port &&
@@ -155,17 +157,11 @@ exports.getInstallScript = async (req, res) => {
 
   function mountIframe(challenge) {
     var iframe = document.createElement("iframe");
-    iframe.id  = "__chatbot_iframe__";
+    iframe.id  = "chatbot_" + PID;
     iframe.src = BASE + "/api/chatbot-integration/embed/" + PID
       + "?d=" + encodeURIComponent(domain)
       + "&c=" + encodeURIComponent(challenge);
 
-    /* ── Estilos base del iframe ──
-     * En desktop arranca como FAB circular (80x80, border-radius:50%).
-     * En móvil también arranca igual; cuando se abre el CSS interno
-     * maneja la animación slide-up vía translateY — el JS solo fija
-     * las dimensiones del viewport sin competir con la transición CSS.
-     */
     iframe.style.cssText = [
       "position:fixed",
       ${positionStyles},
@@ -191,28 +187,15 @@ exports.getInstallScript = async (req, res) => {
 
     document.body.appendChild(iframe);
 
-    /* ─────────────────────────────────────────────────────────────
-     * FIX TECLADO VIRTUAL — visualViewport API
-     *
-     * En iOS Safari el viewport NO se redimensiona cuando aparece
-     * el teclado. Usamos window.visualViewport para detectar el
-     * cambio de altura real y empujar el iframe hacia arriba,
-     * de modo que el footer (input) siempre quede visible.
-     *
-     * En Android Chrome el viewport SÍ se redimensiona, por lo que
-     * dvh en el CSS ya lo maneja; el listener de abajo es inofensivo.
-     * ───────────────────────────────────────────────────────────── */
     var _chatOpen = false;
 
     function applyViewportFix() {
       if (!_chatOpen) return;
       var isMobile = window.innerWidth <= 480;
       if (!isMobile) return;
-
       if (window.visualViewport) {
         var vvHeight = window.visualViewport.height;
         var vvOffset = window.visualViewport.offsetTop;
-
         iframe.style.height = vvHeight + "px";
         iframe.style.top    = vvOffset + "px";
         iframe.style.bottom = "auto";
@@ -233,11 +216,11 @@ exports.getInstallScript = async (req, res) => {
       window.visualViewport.addEventListener("scroll", applyViewportFix);
     }
 
-    /* ── Notificar scroll al último mensaje cuando sube el teclado ── */
     function notifyScrollToBottom() {
       if (!_chatOpen) return;
       try {
-        iframe.contentWindow.postMessage({ type: "CHATBOT_SCROLL_BOTTOM" }, "*");
+        // Bug 4 FIX: instanceId en todos los postMessage al iframe
+        iframe.contentWindow.postMessage({ type: "CHATBOT_SCROLL_BOTTOM", instanceId: PID }, "*");
       } catch(e) {}
     }
 
@@ -248,7 +231,6 @@ exports.getInstallScript = async (req, res) => {
       if (_chatOpen) notifyScrollToBottom();
     });
 
-    /* ── Fallback iOS: restaurar posición cuando el teclado baja ── */
     var _inputFocused = false;
     window.addEventListener("focusin", function(e) {
       var tag = e.target && e.target.tagName;
@@ -268,8 +250,11 @@ exports.getInstallScript = async (req, res) => {
 
     var _welcomeShownThisLoad = false;
 
+    // ── Bug 5 FIX: filtrar todos los mensajes por instanceId ──
     window.addEventListener("message", function(e) {
       if (!e.data || !e.data.type) return;
+      // Ignorar mensajes de otras instancias de chatbot
+      if (e.data.instanceId && e.data.instanceId !== PID) return;
 
       /* ── Welcome messages ── */
       if (e.data.type === "CHATBOT_WELCOME") {
@@ -286,9 +271,11 @@ exports.getInstallScript = async (req, res) => {
       }
 
       if (e.data.type === "CHATBOT_WELCOME_REQUEST") {
+        // Bug 6 FIX: incluir instanceId en la respuesta al widget
         iframe.contentWindow.postMessage({
-          type:    "CHATBOT_WELCOME_PERMISSION",
-          allowed: !_welcomeShownThisLoad
+          type:       "CHATBOT_WELCOME_PERMISSION",
+          instanceId: PID,
+          allowed:    !_welcomeShownThisLoad
         }, "*");
         if (!_welcomeShownThisLoad) _welcomeShownThisLoad = true;
         return;
@@ -309,17 +296,6 @@ exports.getInstallScript = async (req, res) => {
           var isMobile = window.innerWidth <= 480;
 
           if (isMobile) {
-            /* ════════════════════════════════════════
-             * MÓVIL — ABRIR
-             *
-             * El CSS interno del widget maneja la animación slide-up
-             * via translateY(100%) → translateY(0) con curva spring.
-             * El JS SOLO fija las dimensiones del viewport para que
-             * el iframe ocupe la pantalla completa correctamente.
-             * NO usamos rAF con transiciones aquí para evitar que
-             * las mutaciones de layout compitan con la transición CSS
-             * y causen jank.
-             * ════════════════════════════════════════ */
             iframe.style.transition   = "none";
             iframe.style.borderRadius = "0";
             iframe.style.overflow     = "visible";
@@ -335,13 +311,6 @@ exports.getInstallScript = async (req, res) => {
             iframe.style.top    = targetTop + "px";
 
           } else {
-            /* ════════════════════════════════════════
-             * DESKTOP / TABLET — ABRIR
-             * Paso 1: cambios de layout SIN transición
-             *         (evita reflow forzado pre-animación)
-             * Paso 2: en rAF aplica dimensiones finales
-             *         + transición spring
-             * ════════════════════════════════════════ */
             var w = Math.min(420, window.innerWidth - 40);
             var h = Math.min(680, window.innerHeight - 60);
 
@@ -374,7 +343,6 @@ exports.getInstallScript = async (req, res) => {
                 iframe.style.left      = "auto";
                 iframe.style.transform = "translateY(-50%)";
               } else {
-                /* bottom-right (default) */
                 iframe.style.bottom    = "20px";
                 iframe.style.right     = "20px";
                 iframe.style.left      = "auto";
@@ -385,20 +353,12 @@ exports.getInstallScript = async (req, res) => {
           }
 
         } else {
-          /* ════════════════════════════════════════
-           * CERRAR
-           * ════════════════════════════════════════ */
           _chatOpen = false;
 
           var isMobileClose = window.innerWidth <= 480;
 
           requestAnimationFrame(function() {
             if (isMobileClose) {
-              /* ── Móvil: el CSS interno anima el cierre (slide-down).
-               * Paso 1: mantenemos el iframe a pantalla completa mientras
-               *         la transición CSS (280ms) transcurre.
-               * Paso 2: después de la transición, lo restauramos a las
-               *         dimensiones y posición del FAB original. */
               iframe.style.transition   = "none";
               iframe.style.width        = "100%";
               iframe.style.left         = "0";
@@ -413,7 +373,6 @@ exports.getInstallScript = async (req, res) => {
               iframe.style.height = hClose + "px";
               iframe.style.top    = topClose + "px";
 
-              /* ── Paso 2: restaurar FAB tras animación CSS (~300ms) ── */
               setTimeout(function() {
                 iframe.style.transition   = "none";
                 iframe.style.width        = "80px";
@@ -437,15 +396,13 @@ exports.getInstallScript = async (req, res) => {
                     iframe.style.right  = "20px";
                 }
 
-                /* ← AQUÍ: freeze justo cuando el iframe recupera su tamaño */
-                iframe.contentWindow.postMessage({ type: "CHATBOT_FAB_FREEZE" }, "*");
+                // Bug 4 FIX: instanceId en FAB_FREEZE / FAB_UNFREEZE
+                iframe.contentWindow.postMessage({ type: "CHATBOT_FAB_FREEZE", instanceId: PID }, "*");
                 setTimeout(function() {
-                    iframe.contentWindow.postMessage({ type: "CHATBOT_FAB_UNFREEZE" }, "*");
+                    iframe.contentWindow.postMessage({ type: "CHATBOT_FAB_UNFREEZE", instanceId: PID }, "*");
                 }, 50);
               }, 320);
             } else {
-              /* ── Desktop / tablet: panel flotante → FAB ── */
-              
               iframe.style.transition = [
                 "width 0.24s cubic-bezier(0.4,0,1,1)",
                 "height 0.24s cubic-bezier(0.4,0,1,1)",
@@ -480,23 +437,22 @@ exports.getInstallScript = async (req, res) => {
                 iframe.style.top    = "auto";
               }
 
-              /* ← AGREGA ESTO: freeze en desktop también */
+              // Bug 4 FIX: instanceId en FAB_FREEZE / FAB_UNFREEZE
               setTimeout(function() {
-                iframe.contentWindow.postMessage({ type: "CHATBOT_FAB_FREEZE" }, "*");
+                iframe.contentWindow.postMessage({ type: "CHATBOT_FAB_FREEZE", instanceId: PID }, "*");
                 setTimeout(function() {
-                  iframe.contentWindow.postMessage({ type: "CHATBOT_FAB_UNFREEZE" }, "*");
+                  iframe.contentWindow.postMessage({ type: "CHATBOT_FAB_UNFREEZE", instanceId: PID }, "*");
                 }, 50);
-              }, 260); /* ← después de que termina la transición de 0.24s */
+              }, 260);
             }
           });
         }
       }
     }); /* ── fin addEventListener("message") ── */
 
-    /* ── MutationObserver: evita que frameworks (React/Vue/etc.)
-     *    eliminen el iframe o el welcome del DOM al re-renderizar ── */
+    // Bug 3 FIX: usar el id correcto "chatbot_" + PID
     var _chatbotObserver = new MutationObserver(function() {
-      if (!document.getElementById('__chatbot_iframe__')) {
+      if (!document.getElementById("chatbot_" + PID)) {
         document.body.appendChild(iframe);
       }
       if (welcomeEl && !document.body.contains(welcomeEl)) {
@@ -704,15 +660,6 @@ exports.verifyConfigSignature = async (req, res) => {
     const requestOrigin = normalizeDomain(
       req.headers.origin || req.headers.referer || ""
     );
-
-    // ✅ Log aquí, donde todas las variables ya existen
-    console.log("VERIFY attempt", {
-      nonce: config.nonce?.slice(0, 8),
-      age: Date.now() - config.ts,
-      nonceValid: valid,
-      origin: req.headers.origin,
-      requestOrigin
-    });
 
     if (!valid)
       return res.status(403).json({ error: "Nonce inválido o ya utilizado" });
