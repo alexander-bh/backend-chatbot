@@ -107,7 +107,7 @@ exports.renderEmbed = async (req, res) => {
 
     // 2. Verificar TTL (30s) y dominio
     const parsed = JSON.parse(challengePayload);
-    const CHALLENGE_TTL = 30_000;
+    const CHALLENGE_TTL = 120_000;
     if (Date.now() - parsed.ts > CHALLENGE_TTL) {
       return res.status(403).send("Challenge expirado");
     }
