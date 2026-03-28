@@ -109,7 +109,7 @@ exports.getInstallScript = async (req, res) => {
           : "transform:translateX(10px) scale(0.97)");
 
     el.style.cssText = [
-      "position:fixed","z-index:2147483648","max-width:260px",
+      "position:fixed","z-index:2147483646","max-width:260px",
       "padding:14px 18px","background:white","color:" + SECONDARYCOLOR,
       "font-size:14px","font-weight:600",
       "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
@@ -337,10 +337,9 @@ exports.getInstallScript = async (req, res) => {
     // ── Escuchar si otra instancia se abrió → cerrarse ──
     window.addEventListener("__CHATBOT_CLOSE_OTHERS__", function(evt) {
       if (evt.detail.pid === PID) return;
-      if (!_chatOpen) return;
-
-      _chatOpen = false;
       hideWelcome();
+      if (!_chatOpen) return;
+      _chatOpen = false;
 
       var isMobileClose = window.innerWidth <= 480;
 
