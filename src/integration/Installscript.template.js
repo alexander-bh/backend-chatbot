@@ -292,19 +292,32 @@
        Challenge → mount iframe
     ──────────────────────────────────────── */
     var xhr = new XMLHttpRequest();
-    xhr.open("GET", BASE + "/api/chatbot-integration/" + PID + "/challenge?d=" + encodeURIComponent(domain), true);
-    xhr.onreadystatechange = function () {
-        if (xhr.readyState !== 4) return;
-        if (xhr.status !== 200) {
-            console.warn("[chatbot] dominio no autorizado:", domain);
-            return;
+    var _retries = 0;
+    var MAX_RETRIES = 2;
+    var _observer = null;
+
+    function doChallenge() {
+        if (_observer) {          // ← nuevo
+            _observer.disconnect();
+            _observer = null;
         }
-        var data;
-        try { data = JSON.parse(xhr.responseText); } catch (e) { return; }
-        if (!data.challenge) return;
-        mountIframe(data.challenge);
-    };
-    xhr.send();
+        xhr = new XMLHttpRequest();
+        xhr.open("GET", BASE + "/api/chatbot-integration/" + PID + "/challenge?d=" + encodeURIComponent(domain), true);
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState !== 4) return;
+            if (xhr.status !== 200) {
+                console.warn("[chatbot] dominio no autorizado:", domain);
+                return;
+            }
+            var data;
+            try { data = JSON.parse(xhr.responseText); } catch (e) { return; }
+            if (!data.challenge) return;
+            mountIframe(data.challenge);
+        };
+        xhr.send();
+    }
+
+    doChallenge();
 
     /* ────────────────────────────────────────
        Mount iframe
@@ -397,6 +410,16 @@
         var _welcomeShownThisLoad = false;
 
         window.addEventListener("message", function (e) {
+            if (e.data && e.data.type === "CHATBOT_CHALLENGE_EXPIRED") {
+                if (e.data.instanceId && e.data.instanceId !== PID) return;
+                var old = document.getElementById("chatbot_" + PID);
+                if (old) old.remove();
+                if (_retries < MAX_RETRIES) {
+                    _retries++;
+                    setTimeout(doChallenge, 500);
+                }
+                return;
+            }
             if (!e.data || !e.data.type) return;
             if (e.data.instanceId && e.data.instanceId !== PID) return;
 
@@ -471,11 +494,11 @@
         });
 
         /* ── Observer: evitar que el iframe sea removido del DOM ── */
-        new MutationObserver(function () {
+        _observer = new MutationObserver(function () {
             if (!document.getElementById("chatbot_" + PID)) document.body.appendChild(iframe);
             if (welcomeEl && !document.body.contains(welcomeEl)) document.body.appendChild(welcomeEl);
-        }).observe(document.body, { childList: true });
+        });
+        _observer.observe(document.body, { childList: true });
 
     } /* ── fin mountIframe ── */
-
 })();
