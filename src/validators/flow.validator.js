@@ -8,7 +8,7 @@ exports.validateFlow = function (nodes, branches = [], start_node_id) {
   const nodeMap = new Map();
   const ids = new Set();
 
-  // 🔥 1️⃣ Unificar todos los nodos (main + ramas)
+  //Unificar todos los nodos (main + ramas)
   const allNodes = [
     ...nodes,
     ...branches.flatMap(b => b.nodes || [])
@@ -34,7 +34,7 @@ exports.validateFlow = function (nodes, branches = [], start_node_id) {
     }
   });
 
-  /* ✅ Validar start_node */
+  // Validar start_node 
   if (!nodeMap.has(String(start_node_id))) {
     throw new Error("start_node_id inválido");
   }
@@ -61,13 +61,13 @@ exports.validateFlow = function (nodes, branches = [], start_node_id) {
       throw new Error(`Nodo sin salida: ${node._id}`);
     }
 
-    // 🔥 VALIDAR next_node_id
+    //VALIDAR next_node_id
     if (node.next_node_id &&
       !nodeMap.has(String(node.next_node_id))) {
       throw new Error(`next_node_id inválido en ${node._id}`);
     }
 
-    // 🔥 VALIDAR options.next_node_id
+    //VALIDAR options.next_node_id
     if (Array.isArray(node.options)) {
       node.options.forEach(opt => {
         if (opt.next_node_id &&

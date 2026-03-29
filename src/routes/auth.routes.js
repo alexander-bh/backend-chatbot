@@ -12,7 +12,8 @@ router.post("/reset-password", authCtrl.resetPassword);
 router.post("/login", authCtrl.login);
 // Crear la primera cuenta 
 router.post("/register-first", authCtrl.registerFirst);
-// Sesión
+
+//---> ruta privada
 router.post("/logout", auth ,authCtrl.logout);
 router.post("/change-password", auth, role("ADMIN", "CLIENT"), authCtrl.changePassword);
 
