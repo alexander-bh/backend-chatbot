@@ -44,7 +44,6 @@ const OBJETIVO = {
   }
 };
 
-// 🔑 helpers para mongoose
 const USO_HERRAMIENTA_KEYS = Object.values(USO_HERRAMIENTA).map(
   item => item.key
 );
