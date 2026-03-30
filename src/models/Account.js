@@ -7,12 +7,12 @@ const AccountSchema = new Schema({
   status: { type: String, enum: ["active", "suspended"], default: "active" },
 
 
-  notification_emails_enabled: {  // ← nuevo campo booleano
+  notification_emails_enabled: {
     type: Boolean,
     default: false
   },
 
-  notification_emails: {   // ← cambiado a array
+  notification_emails: {
     type: [String],
     default: []
   },
