@@ -27,5 +27,3 @@ router.get("/:chatbotId/email-settings", auth, chatbotController.getEmailSetting
 router.patch("/:chatbotId/email-settings", auth, chatbotController.updateEmailSettings);
 
 module.exports = router;
-
-module.exports = router;

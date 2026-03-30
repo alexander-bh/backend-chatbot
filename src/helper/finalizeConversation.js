@@ -56,8 +56,8 @@ exports.finalizeConversation = async (session) => {
         phone: contact.phone,
         source: contact.source || "chatbot",
         status: contact.status,
-        createdAt: contact.createdAt,                                    // ← agregar
-        createdAtFormatted: contact.createdAt ? formatDateAMPM(contact.createdAt) : null  // ← agregar
+        createdAt: contact.createdAt,                                  
+        createdAtFormatted: contact.createdAt ? formatDateAMPM(contact.createdAt) : null
       });
     } catch (pusherErr) {
       console.error("❌ Error emitiendo contact-created:", pusherErr);

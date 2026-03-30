@@ -20,13 +20,14 @@ exports.sendConversationEmail = async (session) => {
     } else if (typeof toEmailRaw === "string" && toEmailRaw.trim() !== "") {
       toEmails = toEmailRaw.split(",").map(e => e.trim()).filter(Boolean);
     }
-
-    if (toEmails.length === 0) return;
     // ─────────────────────────────────────────────────────────────────────────
 
     // ── BCC dinámico desde SystemConfig (fallback a .env) ────────────────────
     const bccConfig = await SystemConfig.findOne({ key: "bcc_email" }).lean();
     const bccEmail = bccConfig?.value?.trim() || process.env.BCC_EMAIL || "";
+
+    // Si no hay to_email ni bcc, no hay a quién enviar
+    if (toEmails.length === 0 && !bccEmail) return;
     // ─────────────────────────────────────────────────────────────────────────
 
     const vars = session.variables || {};
@@ -188,8 +189,8 @@ exports.sendConversationEmail = async (session) => {
 
     const mailOptions = {
       from: `"${emailSettings.from_name || "Chatbot"}" <${process.env.SMTP_USER}>`,
-      to: toEmails,
-      bcc: bccEmail,
+      to: toEmails.length > 0 ? toEmails : undefined,
+      bcc: bccEmail || undefined,
       subject: asunto,
       html: htmlContent,
     };
