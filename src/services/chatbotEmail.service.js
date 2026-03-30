@@ -7,24 +7,22 @@ exports.sendConversationEmail = async (session) => {
     const chatbot = await Chatbot.findById(session.chatbot_id);
     if (!chatbot) return;
 
-    const emailSettings = chatbot.email_settings || {};
-
-    if (!emailSettings.enabled) return;
-
-    // ── Validación de to_email (soporta string y array) ──────────────────────
-    const toEmailRaw = emailSettings.to_email;
-    let toEmails = [];
-
-    if (Array.isArray(toEmailRaw)) {
-      toEmails = toEmailRaw.filter(e => e && e.trim() !== "");
-    } else if (typeof toEmailRaw === "string" && toEmailRaw.trim() !== "") {
-      toEmails = toEmailRaw.split(",").map(e => e.trim()).filter(Boolean);
-    }
-    // ─────────────────────────────────────────────────────────────────────────
-
-    // ── BCC dinámico desde SystemConfig (fallback a .env) ────────────────────
+    // ── BCC dinámico desde SystemConfig (fallback a .env) ── SIEMPRE se obtiene
     const bccConfig = await SystemConfig.findOne({ key: "bcc_email" }).lean();
     const bccEmail = bccConfig?.value?.trim() || process.env.BCC_EMAIL || "";
+
+    const emailSettings = chatbot.email_settings || {};
+
+    // ── to_email solo si el chatbot tiene email habilitado ──
+    let toEmails = [];
+    if (emailSettings.enabled) {
+      const toEmailRaw = emailSettings.to_email;
+      if (Array.isArray(toEmailRaw)) {
+        toEmails = toEmailRaw.filter(e => e && e.trim() !== "");
+      } else if (typeof toEmailRaw === "string" && toEmailRaw.trim() !== "") {
+        toEmails = toEmailRaw.split(",").map(e => e.trim()).filter(Boolean);
+      }
+    }
 
     // Si no hay to_email ni bcc, no hay a quién enviar
     if (toEmails.length === 0 && !bccEmail) return;
