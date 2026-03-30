@@ -5,10 +5,6 @@ const role = require("../middlewares/role.middleware");
 const nodeTypeController = require("../controllers/nodeType.controller");
 
 router.use(auth);
-/* =========================
-   NODE TYPE ROUTES
-========================= */
-
 // Crear
 router.post("/", role("ADMIN"), nodeTypeController.createNodeType);
 
