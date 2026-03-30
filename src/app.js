@@ -55,6 +55,7 @@ app.use("/api/flows", require("./routes/flows.routes.js"));
 app.use("/api/media", require("./routes/media.routes.js"));
 
 app.use("/api/meta", require("./routes/meta.routes.js"));
+app.use("/api/crm-fields", require("./routes/crmfields.routes.js"));
 
 
 // ───────── ERROR HANDLERS (AL FINAL SIEMPRE) ─────────
