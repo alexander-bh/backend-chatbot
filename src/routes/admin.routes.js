@@ -90,7 +90,7 @@ router.delete(
 );
 
 router.patch(
-   "/avatars/:id/default",
+   "/avatars/:id/set-default",
    role("ADMIN"),
    adminController.setDefaultAvatar
 );
