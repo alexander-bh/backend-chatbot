@@ -3,7 +3,6 @@ const Flow = require("../models/Flow");
 const FlowNode = require("../models/FlowNode");
 const Chatbot = require("../models/Chatbot");
 
-// services/flowNode.service.js
 exports.getNodesByFlow = async (flowId, user) => {
 
   // 🛑 ADMIN nunca recibe nodos
@@ -47,7 +46,6 @@ exports.getNodesByFlow = async (flowId, user) => {
   return nodes || [];
 };
 
-// services/cloneFlow + Node 
 exports.cloneTemplateToFlow = async (chatbot_id, user_id, session,name) => {
 
   if (!mongoose.Types.ObjectId.isValid(chatbot_id)) {
@@ -151,7 +149,6 @@ exports.cloneTemplateToFlow = async (chatbot_id, user_id, session,name) => {
   return newFlow;
 };
 
-// sercice/flowFallback
 exports.createFallbackFlow = async ({
   chatbot_id,
   account_id,
