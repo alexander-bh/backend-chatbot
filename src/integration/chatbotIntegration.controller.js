@@ -65,7 +65,7 @@ exports.getInstallScript = async (req, res) => {
 };
 
 /* =======================================================
-   3) RENDER EMBED (HTML)
+   2) RENDER EMBED (HTML)
    
    PROTECCIONES NUEVAS:
    ✅ Nonce de un solo uso (90s TTL)
@@ -208,7 +208,7 @@ exports.renderEmbed = async (req, res) => {
 };
 
 /* =======================================================
-   8) VERIFICAR FIRMA DE CONFIG  (endpoint del widget)
+   3) VERIFICAR FIRMA DE CONFIG  (endpoint del widget)
    
    PROTECCIONES NUEVAS:
    ✅ Nonce consumido (un solo uso, atómico en Redis)
@@ -387,33 +387,8 @@ exports.InstallationCode = async (req, res) => {
 };
 
 /* =======================================================
-   7) REGENERAR TOKEN DE INSTALACIÓN — BUG 1 CORREGIDO
+  7) Evita que terceros utilicen el widget desde dominios no registrados.
 ======================================================= */
-exports.regenerateInstallToken = async (req, res) => {
-  try {
-    if (!req.user?.account_id) {
-      return res.status(401).json({ message: "Usuario no autenticado" });
-    }
-
-    const { public_id } = req.params;
-    const chatbot = await Chatbot.findOne({ public_id, account_id: req.user.account_id });
-    if (!chatbot) return res.status(404).json({ message: "Chatbot no encontrado" });
-
-    chatbot.installation_status = "pending";
-    await chatbot.save();
-
-    // FIX Bug 1: respuesta que faltaba
-    return res.json({ message: "Estado de instalación reseteado correctamente" });
-
-  } catch (err) {
-    console.error("REGENERATE TOKEN ERROR:", err);
-    // Solo responde si no se ha respondido ya
-    if (!res.headersSent) {
-      res.status(500).json({ message: "Error al resetear instalación" });
-    }
-  }
-};
-
 exports.getChallenge = async (req, res) => {
   try {
     const { public_id } = req.params;
