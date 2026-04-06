@@ -320,9 +320,12 @@ exports.login = async (req, res) => {
       account_id: account._id
     });
 
-    /* ================= ELIMINAR TOKENS ANTERIORES ================= */
+    /* ================= LIMPIAR SOLO TOKENS EXPIRADOS ================= */
 
-    await Token.deleteMany({ user_id: user._id });
+    await Token.deleteMany({
+      user_id: user._id,
+      expires_at: { $lt: new Date() }
+    });
 
     /* ================= GUARDAR TOKEN ================= */
 
