@@ -9,10 +9,9 @@ module.exports = async function resolveInput(node, input, session, nodesMap) {
   const isInputNode = INPUT_NODES.includes(node.node_type);
   const isInteractionNode = INTERACTION_NODES.includes(node.node_type);
 
-  // ✅ Sin input: solo avanzar si el nodo no requiere interacción
   if (input === undefined || input === null) {
     if (isInputNode || isInteractionNode) {
-      return { node }; // estos sí necesitan input, quedarse
+      return { node };
     }
     // text / media / link: avanzar al siguiente
     const next = nodesMap.get(String(node.next_node_id));

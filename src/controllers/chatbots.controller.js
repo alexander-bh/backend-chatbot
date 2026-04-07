@@ -62,6 +62,9 @@ exports.createChatbot = async (req, res) => {
       account_id: req.user.account_id,
       public_id: crypto.randomUUID(),
       name: name.trim(),
+      email_settings: {
+        from_name: `Chatbot ${name.trim()}`
+      },
       welcome_message:
         typeof welcome_message === "string" && welcome_message.trim()
           ? welcome_message
