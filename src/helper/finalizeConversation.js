@@ -1,6 +1,5 @@
 const upsertContactFromSession = require("../services/upsertContactFromSession.service");
 const { sendConversationEmail } = require("../services/chatbotEmail.service");
-const Chatbot = require("../models/Chatbot");
 const Notification = require("../models/Notification");
 const { sendToAccount } = require("../services/pusher.service");
 const formatDateAMPM = require("../utils/formatDate");
@@ -56,7 +55,7 @@ exports.finalizeConversation = async (session) => {
         phone: contact.phone,
         source: contact.source || "chatbot",
         status: contact.status,
-        createdAt: contact.createdAt,                                  
+        createdAt: contact.createdAt,
         createdAtFormatted: contact.createdAt ? formatDateAMPM(contact.createdAt) : null
       });
     } catch (pusherErr) {
@@ -68,24 +67,9 @@ exports.finalizeConversation = async (session) => {
 
   await session.save();
 
-  /* ================= VERIFICAR EMAIL SETTINGS ================= */
-
-  const chatbot = await Chatbot
-    .findById(session.chatbot_id)
-    .select("email_settings");
-
-  const emailSettings = chatbot?.email_settings || {};
-
-  const canSendEmail =
-    emailSettings.enabled === true &&
-    emailSettings.to_email &&
-    emailSettings.from_email;
-
-  /* ================= ENVIAR EMAIL SOLO SI ESTÁ HABILITADO ================= */
-
-  if (canSendEmail) {
-    await sendConversationEmail(session);
-  }
+  /* ================= ENVIAR EMAIL ================= */
+  // sendConversationEmail maneja internamente to_email (requiere enabled) y BCC
+  await sendConversationEmail(session);
 
   return contact;
 };

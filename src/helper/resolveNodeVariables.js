@@ -1,6 +1,4 @@
-/**
- * Reemplaza variables de plantilla en el contenido de un nodo.
- * 
+/** 
  * Variables soportadas:
  *   {{chatbot_name}} → nombre del chatbot
  * 

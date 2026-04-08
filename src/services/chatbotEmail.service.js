@@ -26,9 +26,14 @@ exports.sendConversationEmail = async (session) => {
 
     // Si no hay to_email ni bcc, no hay a quién enviar
     if (toEmails.length === 0 && !bccEmail) return;
+
+    // ── Evitar emails completamente vacíos de datos ──
+    const vars = session.variables || {};
+    const hasContactData = vars.name || vars.email || vars.phone;
+    if (!hasContactData && toEmails.length === 0) return;
+
     // ─────────────────────────────────────────────────────────────────────────
 
-    const vars = session.variables || {};
     const asunto = emailSettings.from_asunto
       || `Nueva conversación - ${chatbot.name}`;
 
@@ -153,11 +158,11 @@ exports.sendConversationEmail = async (session) => {
                                 padding:10px 14px;text-align:left;width:50%;">
                         🤖 Bot
                       </th>
-                    <th style="background:#034AA6;color:#ffffff;font-size:11px;font-weight:700;
-                          text-transform:uppercase;letter-spacing:0.5px;
-                          padding:10px 14px;text-align:left;width:50%;">
+                      <th style="background:#034AA6;color:#ffffff;font-size:11px;font-weight:700;
+                            text-transform:uppercase;letter-spacing:0.5px;
+                            padding:10px 14px;text-align:left;width:50%;">
                         👤 Usuario
-                    </th>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -167,6 +172,7 @@ exports.sendConversationEmail = async (session) => {
               </td>
             </tr>
             ` : ""}
+
             <!-- FOOTER -->
             <tr>
               <td style="background:#28403D;padding:14px;text-align:center;">
