@@ -1,14 +1,18 @@
-module.exports = function renderNode(node, session_id) {
+const resolveNodeVariables = require("../helper/resolveNodeVariables");
+
+module.exports = function renderNode(node, session_id, context = {}) {
 
   if (!node) {
     return { session_id, completed: true };
   }
 
+  const resolvedContent = resolveNodeVariables(node.content, context);
+
   const payload = {
     session_id,
     node_id: node._id ?? null,
     node_type: node.node_type,
-    content: node.content || null,
+    content: resolvedContent || null,
     typing_time: node.typing_time || 0,
     validation: node.validation || null,
     end_conversation: node.end_conversation || false,

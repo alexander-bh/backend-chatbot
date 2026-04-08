@@ -43,7 +43,6 @@ exports.startConversation = async (req, res) => {
     } else {
 
       chatbot = await Chatbot.findById(chatbot_id);
-
     }
 
     if (!chatbot) {
@@ -55,6 +54,8 @@ exports.startConversation = async (req, res) => {
         message: "Chatbot deshabilitado"
       });
     }
+
+    const chatbotContext = { chatbot_name: chatbot.name };
 
     /* ================= ACCOUNT RESOLUTION ================= */
 
@@ -129,7 +130,7 @@ exports.startConversation = async (req, res) => {
 
     /* ================= RESPONSE ================= */
 
-    return res.json(renderNode(startNode, session._id));
+    return res.json(renderNode(startNode, session._id, chatbotContext));
 
   } catch (error) {
 
@@ -179,14 +180,18 @@ exports.nextStep = async (req, res) => {
         account_id: session.account_id
       }).lean();
 
+      const chatbot = await Chatbot.findById(session.chatbot_id).lean();
+
       cache = {
-        nodesMap: new Map(nodes.map(n => [String(n._id), n]))
+        nodesMap: new Map(nodes.map(n => [String(n._id), n])),
+        chatbotContext: { chatbot_name: chatbot?.name || "" } // 👈
       };
 
       setFlowCache(session.flow_id, cache);
     }
 
     const nodesMap = cache.nodesMap;
+    const chatbotContext = cache.chatbotContext ?? {};
 
     /* ================= NODO ACTUAL ================= */
 
@@ -254,7 +259,7 @@ exports.nextStep = async (req, res) => {
 
       await session.save();
 
-      return res.json(renderNode(node, session._id));
+      return res.json(renderNode(node, session._id, chatbotContext));
     }
 
     /* ================= AUTO FLOW ================= */
@@ -296,7 +301,7 @@ exports.nextStep = async (req, res) => {
 
     await session.save();
 
-    return res.json(renderNode(finalNode, session._id));
+    return res.json(renderNode(finalNode, session._id, chatbotContext));
 
   } catch (error) {
     console.error("nextStep:", error);
