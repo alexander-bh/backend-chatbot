@@ -20,14 +20,11 @@
     var FAB_GAP = 12;
     var FAB_BASE = 20;
 
-    // Cuántas instancias ya ocupan esta misma posición
     var sameCount = Object.values(window.__CHATBOT_REGISTRY__)
         .filter(function (p) { return p === POSITION; }).length;
 
-    // ── LÍMITES ──
     var MAX_TOTAL = 3;
     var MAX_PER_POSITION = 2;
-
     var totalCount = Object.keys(window.__CHATBOT_REGISTRY__).length;
 
     if (totalCount >= MAX_TOTAL) {
@@ -171,12 +168,10 @@
         var isMobile = window.innerWidth <= 480;
 
         // ── Posición horizontal ──
-        // En mobile reservamos espacio para no solapar FABs de terceros (WhatsApp, etc.)
-        // El ancho máximo también se limita para no cubrir el botón del lado opuesto
         var hPos, maxWidth;
         if (isMobile) {
             if (isLeft) {
-                hPos = "left:14px;right:auto";   // burbuja a la izquierda, sobre el FAB
+                hPos = "left:14px;right:auto";
                 maxWidth = "calc(100vw - 110px)";
             } else {
                 hPos = "right:14px;left:auto";
@@ -188,10 +183,8 @@
         }
 
         // ── Posición vertical ──
-        // En mobile subimos más la burbuja para no tapar el botón de WhatsApp u otros FABs
         var bottomOffset;
         if (isMobile) {
-            // FAB_SIZE(80) + STACK_OFFSET(mín 20) + gap extra(16) = al menos 116px desde abajo
             bottomOffset = STACK_OFFSET + FAB_SIZE + 16;
         } else {
             bottomOffset = STACK_OFFSET + 14;
@@ -219,13 +212,37 @@
             vPos, hPos, transformInit
         ].join(";");
 
+        // ── Flecha ──
+        // MOBILE:  apunta hacia ABAJO → señala el FAB que está debajo de la burbuja
+        // DESKTOP: apunta al LADO   → señala el FAB que está a izquierda/derecha
         var arrow = document.createElement("div");
-        arrow.style.cssText = [
-            "position:absolute", "width:14px", "height:14px", "background:white",
-            isLeft
-                ? "left:-8px;top:50%;transform:translateY(-50%) rotate(45deg);border-left:1.5px solid #e2e8f0;border-bottom:1.5px solid #e2e8f0"
-                : "right:-8px;top:50%;transform:translateY(-50%) rotate(45deg);border-right:1.5px solid #e2e8f0;border-top:1.5px solid #e2e8f0"
-        ].join(";");
+
+        if (isMobile) {
+            var arrowHPos = isLeft
+                ? "left:20px;right:auto"   // alineada bajo el FAB izquierdo
+                : "right:20px;left:auto";  // alineada bajo el FAB derecho
+            arrow.style.cssText = [
+                "position:absolute",
+                "width:14px",
+                "height:14px",
+                "background:white",
+                "bottom:-8px",
+                "top:auto",
+                arrowHPos,
+                "transform:translateY(0) rotate(45deg)",
+                "border-right:1.5px solid #e2e8f0",
+                "border-bottom:1.5px solid #e2e8f0",
+                "border-top:none",
+                "border-left:none"
+            ].join(";");
+        } else {
+            arrow.style.cssText = [
+                "position:absolute", "width:14px", "height:14px", "background:white",
+                isLeft
+                    ? "left:-8px;top:50%;transform:translateY(-50%) rotate(45deg);border-left:1.5px solid #e2e8f0;border-bottom:1.5px solid #e2e8f0"
+                    : "right:-8px;top:50%;transform:translateY(-50%) rotate(45deg);border-right:1.5px solid #e2e8f0;border-top:1.5px solid #e2e8f0"
+            ].join(";");
+        }
 
         el.appendChild(arrow);
         var text = document.createElement("span");
@@ -293,7 +310,7 @@
     }
 
     /* ────────────────────────────────────────
-       Estado + listener global (antes del XHR)
+       Estado + listener global
     ──────────────────────────────────────── */
     var _chatOpen = false;
 
