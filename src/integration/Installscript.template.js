@@ -176,11 +176,11 @@
         var hPos, maxWidth;
         if (isMobile) {
             if (isLeft) {
-                hPos = "left:14px;right:auto";
-                maxWidth = "calc(100vw - 110px)"; // deja ~96px libre a la derecha para otros FABs
+                hPos = "left:14px;right:auto";   // burbuja a la izquierda, sobre el FAB
+                maxWidth = "calc(100vw - 110px)";
             } else {
                 hPos = "right:14px;left:auto";
-                maxWidth = "calc(100vw - 110px)"; // deja ~96px libre a la izquierda para el FAB propio
+                maxWidth = "calc(100vw - 110px)";
             }
         } else {
             hPos = isLeft ? "left:112px" : "right:112px";
