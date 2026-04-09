@@ -73,12 +73,10 @@
 
         var TRANSITION_PROPS = ["width", "height", "top", "right", "bottom", "left", "border-radius", "transform"];
 
-        // Transición
         iframe.style.transition = animated
             ? TRANSITION_PROPS.map(function (p) { return p + " 0.24s cubic-bezier(0.4,0,1,1)"; }).join(",")
             : "none";
 
-        // Estilos base del FAB cerrado
         Object.assign(iframe.style, {
             zIndex: "2147483647",
             width: "80px",
@@ -89,7 +87,6 @@
             transform: "scale(1)"
         });
 
-        // Estilos de posición según POSITION
         Object.assign(iframe.style, POSITION_STYLES[POSITION] || POSITION_STYLES["bottom-right"]);
     }
 
@@ -165,16 +162,44 @@
     ──────────────────────────────────────── */
     var welcomeEl = null;
     var pendingWelcome = null;
+    var welcomeAutoDismissTimer = null;
 
     function createWelcome(message) {
         var el = document.createElement("div");
         var isLeft = POSITION === "bottom-left";
         var isMiddle = POSITION === "middle-right";
-        var hPos = isLeft ? "left:112px" : "right:112px";
+        var isMobile = window.innerWidth <= 480;
+
+        // ── Posición horizontal ──
+        // En mobile reservamos espacio para no solapar FABs de terceros (WhatsApp, etc.)
+        // El ancho máximo también se limita para no cubrir el botón del lado opuesto
+        var hPos, maxWidth;
+        if (isMobile) {
+            if (isLeft) {
+                hPos = "left:14px;right:auto";
+                maxWidth = "calc(100vw - 110px)"; // deja ~96px libre a la derecha para otros FABs
+            } else {
+                hPos = "right:14px;left:auto";
+                maxWidth = "calc(100vw - 110px)"; // deja ~96px libre a la izquierda para el FAB propio
+            }
+        } else {
+            hPos = isLeft ? "left:112px" : "right:112px";
+            maxWidth = "260px";
+        }
+
+        // ── Posición vertical ──
+        // En mobile subimos más la burbuja para no tapar el botón de WhatsApp u otros FABs
+        var bottomOffset;
+        if (isMobile) {
+            // FAB_SIZE(80) + STACK_OFFSET(mín 20) + gap extra(16) = al menos 116px desde abajo
+            bottomOffset = STACK_OFFSET + FAB_SIZE + 16;
+        } else {
+            bottomOffset = STACK_OFFSET + 14;
+        }
 
         var vPos = isMiddle
             ? "top:50%;margin-top:" + (sameCount * (FAB_SIZE + FAB_GAP)) + "px"
-            : "bottom:" + (STACK_OFFSET + 14) + "px";
+            : "bottom:" + bottomOffset + "px";
 
         var transformInit = isMiddle
             ? (isLeft ? "transform:translateX(-10px) translateY(-50%) scale(0.97)"
@@ -183,9 +208,9 @@
                 : "transform:translateX(10px) scale(0.97)");
 
         el.style.cssText = [
-            "position:fixed", "z-index:2147483646", "max-width:260px",
+            "position:fixed", "z-index:2147483646", "max-width:" + maxWidth,
             "padding:14px 18px", "background:white", "color:" + SECONDARYCOLOR,
-            "font-size:14px", "font-weight:600",
+            "font-size:" + (isMobile ? "13px" : "14px"), "font-weight:600",
             "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
             "line-height:1.5", "border-radius:18px", "border:1.5px solid #e2e8f0",
             "box-shadow:0 4px 20px rgba(0,0,0,0.10),0 1px 4px rgba(0,0,0,0.06)",
@@ -212,8 +237,12 @@
 
     function showWelcome(message) {
         if (welcomeEl) { welcomeEl.remove(); welcomeEl = null; }
+        if (welcomeAutoDismissTimer) { clearTimeout(welcomeAutoDismissTimer); welcomeAutoDismissTimer = null; }
+
         welcomeEl = createWelcome(message);
+        var isMobile = window.innerWidth <= 480;
         var isMiddle = POSITION === "middle-right";
+
         requestAnimationFrame(function () {
             requestAnimationFrame(function () {
                 if (!welcomeEl) return;
@@ -223,9 +252,17 @@
                     : "translateX(0) scale(1)";
             });
         });
+
+        // En mobile auto-dismiss a los 4s para no bloquear contenido de terceros
+        if (isMobile) {
+            welcomeAutoDismissTimer = setTimeout(function () {
+                hideWelcome();
+            }, 4000);
+        }
     }
 
     function hideWelcome() {
+        if (welcomeAutoDismissTimer) { clearTimeout(welcomeAutoDismissTimer); welcomeAutoDismissTimer = null; }
         if (!welcomeEl) return;
         welcomeEl.style.opacity = "0";
         welcomeEl.style.pointerEvents = "none";
@@ -297,7 +334,7 @@
     var _observer = null;
 
     function doChallenge() {
-        if (_observer) {          // ← nuevo
+        if (_observer) {
             _observer.disconnect();
             _observer = null;
         }
