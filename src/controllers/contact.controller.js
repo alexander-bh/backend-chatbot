@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const Contact = require("../models/Contact");
 const ConversationSession = require("../models/ConversationSession");
-const formatContact = require("../helper/formatContact"); 
+const formatContact = require("../helper/formatContact");
 const { sendToAccount } = require("../services/pusher.service");
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -492,7 +492,7 @@ exports.deleteContact = async (req, res) => {
         { contact_id: contact._id }    // sesiones posteriores
       ]
     });
-    
+
     sendToAccount(accountId, "contact-deleted", { id: contact._id });
 
     return res.json({
@@ -503,5 +503,230 @@ exports.deleteContact = async (req, res) => {
   } catch (error) {
     console.error("DELETE CONTACT ERROR:", error);
     res.status(500).json({ message: "Error al eliminar contacto" });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Buscar contactos con filtros avanzados
+// GET /contacts/search?q=angel&status=new&source=chatbot&chatbot_id=...
+//     &completed=true&lead_score_min=50&lead_score_max=100
+//     &date_from=2026-01-01&date_to=2026-04-30&page=1&limit=20
+// ─────────────────────────────────────────────────────────────────────────────
+exports.searchContacts = async (req, res) => {
+  
+  try {
+    const accountId = req.user.account_id;
+
+    const {
+      q,                  // búsqueda general: name, email, phone, company
+      status,             // new | contacted | qualified | lost | discarded
+      source,             // chatbot | manual | system
+      chatbot_id,
+      completed,          // true | false
+      completed_goal,     // true | false
+      lead_score_min,
+      lead_score_max,
+      device,             // desktop | mobile | tablet | unknown
+      consent,            // accepted | rejected | pending
+      date_from,          // createdAt >=
+      date_to,            // createdAt <=
+      page = 1,
+      limit = 20,
+      sort_by = "createdAt",   // createdAt | lead_score | name
+      sort_order = "desc"
+    } = req.query;
+
+    // ── Filtro base (usa índice account_id + createdAt) ───────────────────────
+    const filter = {
+      account_id: new mongoose.Types.ObjectId(accountId),
+      is_deleted: false
+    };
+
+    // ── Filtros exactos (eficientes con índice) ───────────────────────────────
+    if (status) filter.status = status;
+    if (source) filter.source = source;
+    if (device) filter.device = device;
+    if (consent) filter.data_processing_consent = consent;
+
+    if (chatbot_id && mongoose.Types.ObjectId.isValid(chatbot_id)) {
+      filter.chatbot_id = new mongoose.Types.ObjectId(chatbot_id);
+    }
+
+    if (completed !== undefined) filter.completed = completed === "true";
+    if (completed_goal !== undefined) filter.completed_goal = completed_goal === "true";
+
+    // ── Rango de lead_score (usa índice account_id + lead_score) ──────────────
+    if (lead_score_min !== undefined || lead_score_max !== undefined) {
+      filter.lead_score = {};
+      if (lead_score_min !== undefined) filter.lead_score.$gte = Number(lead_score_min);
+      if (lead_score_max !== undefined) filter.lead_score.$lte = Number(lead_score_max);
+    }
+
+    // ── Rango de fechas ───────────────────────────────────────────────────────
+    if (date_from || date_to) {
+      filter.createdAt = {};
+      if (date_from) filter.createdAt.$gte = new Date(date_from);
+      if (date_to) {
+        const end = new Date(date_to);
+        end.setHours(23, 59, 59, 999);
+        filter.createdAt.$lte = end;
+      }
+    }
+
+    // ── Búsqueda de texto (q) — aplicada al final para no romper índices ──────
+    if (q && q.trim()) {
+      // Escapa caracteres especiales de regex
+      const escaped = q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = { $regex: escaped, $options: "i" }; // "i" = case insensitive
+
+      const searchConditions = [
+        { name: regex },
+        { last_name: regex },
+        { email: regex },
+        { phone: regex },
+        { company: regex },
+        { origin_url: regex }
+      ];
+
+      if (filter.$or) {
+        filter.$and = [{ $or: filter.$or }, { $or: searchConditions }];
+        delete filter.$or;
+      } else {
+        filter.$or = searchConditions;
+      }
+    }
+
+    // ── Paginación ────────────────────────────────────────────────────────────
+    const pageNum = Math.max(1, parseInt(page));
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
+    const skip = (pageNum - 1) * limitNum;
+
+    // ── Ordenamiento ──────────────────────────────────────────────────────────
+    const allowedSorts = { createdAt: 1, lead_score: 1, name: 1 };
+    const sortField = allowedSorts[sort_by] !== undefined ? sort_by : "createdAt";
+    const sortDir = sort_order === "asc" ? 1 : -1;
+
+    // ── Ejecutar consulta + conteo en paralelo ────────────────────────────────
+    const [contacts, total] = await Promise.all([
+      Contact.find(filter)
+        .sort({ [sortField]: sortDir })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Contact.countDocuments(filter)
+    ]);
+
+    return res.json({
+      total,
+      page: pageNum,
+      limit: limitNum,
+      total_pages: Math.ceil(total / limitNum),
+      contacts: contacts.map(formatContact)
+    });
+
+  } catch (error) {
+    console.error("SEARCH CONTACTS ERROR:", error);
+    return res.status(500).json({ message: "Error al buscar contactos" });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Buscar contactos por nombre de chatbot
+// GET /contacts/by-chatbot-name?name=mi%20chatbot&page=1&limit=20
+// ─────────────────────────────────────────────────────────────────────────────
+exports.getContactsByChatbotName = async (req, res) => {
+  try {
+    const accountId = req.user.account_id;
+    const {
+      name,
+      page = 1,
+      limit = 20,
+      status,
+      sort_by = "createdAt",
+      sort_order = "desc"
+    } = req.query;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ message: "El parámetro 'name' es requerido" });
+    }
+
+    // ── Paso 1: Buscar chatbots que coincidan con el nombre ───────────────────
+    const chatbots = await mongoose.model("Chatbot").find({
+      account_id: new mongoose.Types.ObjectId(accountId),
+      name: { $regex: name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" }
+    }).select("_id name").lean();
+
+    if (!chatbots.length) {
+      return res.json({
+        total: 0,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total_pages: 0,
+        chatbots_found: [],
+        contacts: []
+      });
+    }
+
+    const chatbotIds = chatbots.map(c => c._id);
+
+    // ── Paso 2: Filtro base de contactos ─────────────────────────────────────
+    const filter = {
+      account_id: new mongoose.Types.ObjectId(accountId),
+      chatbot_id: { $in: chatbotIds },
+      is_deleted: false
+    };
+
+    if (status) filter.status = status;
+
+    // ── Paginación y ordenamiento ─────────────────────────────────────────────
+    const pageNum  = Math.max(1, parseInt(page));
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
+    const skip     = (pageNum - 1) * limitNum;
+
+    const allowedSorts = { createdAt: 1, lead_score: 1, name: 1 };
+    const sortField = allowedSorts[sort_by] !== undefined ? sort_by : "createdAt";
+    const sortDir   = sort_order === "asc" ? 1 : -1;
+
+    // ── Paso 3: Buscar contactos + incluir nombre del chatbot ─────────────────
+    const pipeline = [
+      { $match: filter },
+      {
+        $lookup: {
+          from: "chatbots",
+          localField: "chatbot_id",
+          foreignField: "_id",
+          as: "chatbot",
+          pipeline: [{ $project: { name: 1, _id: 1 } }] // solo trae lo necesario
+        }
+      },
+      { $unwind: { path: "$chatbot", preserveNullAndEmptyArrays: true } },
+      { $addFields: { chatbot_name: "$chatbot.name" } },
+      { $project: { chatbot: 0 } },
+      { $sort: { [sortField]: sortDir } },
+      {
+        $facet: {
+          contacts: [{ $skip: skip }, { $limit: limitNum }],
+          total:    [{ $count: "count" }]
+        }
+      }
+    ];
+
+    const [result] = await Contact.aggregate(pipeline);
+
+    const contacts = result.contacts || [];
+    const total    = result.total[0]?.count || 0;
+
+    return res.json({
+      total,
+      page:          pageNum,
+      limit:         limitNum,
+      total_pages:   Math.ceil(total / limitNum),
+      chatbots_found: chatbots.map(c => ({ id: c._id, name: c.name })), // qué chatbots matchearon
+      contacts:      contacts.map(formatContact)
+    });
+
+  } catch (error) {
+    console.error("GET CONTACTS BY CHATBOT NAME ERROR:", error);
+    return res.status(500).json({ message: "Error al buscar contactos por chatbot" });
   }
 };
