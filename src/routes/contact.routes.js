@@ -13,6 +13,7 @@ router.get("/", auth, contactController.getContacts);
 router.get("/search", auth, contactController.searchContacts);
 router.get("/by-chatbot-name", auth, contactController.getContactsByChatbotName);
 router.get("/domains", auth, contactController.getAllDomains);
+router.get("/chatbots/names", auth, contactController.getChatbotNames);
 router.post("/manual", auth, contactController.createManualContact);
 
 

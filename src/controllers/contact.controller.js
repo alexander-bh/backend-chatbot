@@ -787,3 +787,30 @@ exports.getAllDomains = async (req, res) => {
     return res.status(500).json({ message: "Error al obtener dominios" });
   }
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Obtener solo nombres de chatbots de la cuenta
+// GET /chatbots/names
+// ─────────────────────────────────────────────────────────────────────────────
+exports.getChatbotNames = async (req, res) => {
+  try {
+    if (!req.user?.account_id) {
+      return res.status(401).json({ message: "Usuario no autenticado" });
+    }
+
+    const chatbots = await Chatbot.find({
+      account_id: req.user.account_id
+    })
+      .select("_id name")
+      .lean();
+
+    return res.json({
+      total: chatbots.length,
+      chatbots: chatbots.map(c => ({ id: c._id, name: c.name }))
+    });
+
+  } catch (error) {
+    console.error("GET CHATBOT NAMES ERROR:", error);
+    return res.status(500).json({ message: "Error al obtener nombres de chatbots" });
+  }
+};
