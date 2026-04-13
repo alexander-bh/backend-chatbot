@@ -167,30 +167,29 @@
         var isMiddle = POSITION === "middle-right";
 
         var BADGE_SIZE = 28;
-        // El badge se centra sobre la esquina: mitad dentro, mitad fuera del círculo
-        // FAB radio = 40px, badge radio = 14px
-        // Offset desde el borde del FAB = badge_radio = 14px → queda mitad/mitad
         var EDGE_OFFSET = BADGE_SIZE / 2; // 14px
 
         var posStyles;
 
         if (isLeft) {
-            // bottom-left: badge en esquina SUPERIOR-IZQUIERDA
+            // bottom-left: badge sobresale hacia la IZQUIERDA
             posStyles = [
                 "bottom:" + (STACK_OFFSET + FAB_SIZE - EDGE_OFFSET) + "px",
-                "left:" + (10 - EDGE_OFFSET) + "px"
+                "left:" + (45 - EDGE_OFFSET) + "px"  // Sobresale a la izquierda
             ].join(";");
         } else if (isMiddle) {
-            // middle-right: badge en esquina SUPERIOR-IZQUIERDA (lado exterior)
+            // middle-right: badge debe sobresalir hacia la DERECHA
+            // El FAB está en right:20px, entonces el badge debe estar MÁS a la derecha
+            var topPos = (window.innerHeight / 2) - 40 + (sameCount * (FAB_SIZE + FAB_GAP));
             posStyles = [
-                "top:calc(50% - 40px + " + (sameCount * (FAB_SIZE + FAB_GAP) - EDGE_OFFSET) + "px)",
-                "right:" + (45 + FAB_SIZE - EDGE_OFFSET) + "px"
+                "top:" + (topPos - EDGE_OFFSET) + "px",
+                "right:" + (45 - EDGE_OFFSET) + "px"  // ← CLAVE: Número más pequeño = más a la derecha
             ].join(";");
         } else {
-            // bottom-right: badge en esquina SUPERIOR-DERECHA
+            // bottom-right: badge sobresale hacia la DERECHA
             posStyles = [
                 "bottom:" + (STACK_OFFSET + FAB_SIZE - EDGE_OFFSET) + "px",
-                "right:" + (45 - EDGE_OFFSET) + "px"
+                "right:" + (45 - EDGE_OFFSET) + "px"  // Sobresale a la derecha
             ].join(";");
         }
 
