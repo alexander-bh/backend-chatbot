@@ -166,27 +166,31 @@
         var isLeft = POSITION === "bottom-left";
         var isMiddle = POSITION === "middle-right";
 
-        // El FAB es de 80px. Su esquina superior-derecha:
-        // bottom-right: bottom = STACK_OFFSET + 80px, right = 20px
-        // El badge (28px) debe solaparse ~50% sobre esa esquina
         var BADGE_SIZE = 28;
-        var OVERLAP = BADGE_SIZE / 2; // 14px de solapamiento
+        // El badge se centra sobre la esquina: mitad dentro, mitad fuera del círculo
+        // FAB radio = 40px, badge radio = 14px
+        // Offset desde el borde del FAB = badge_radio = 14px → queda mitad/mitad
+        var EDGE_OFFSET = BADGE_SIZE / 2; // 14px
 
         var posStyles;
-        if (isMiddle) {
+
+        if (isLeft) {
+            // bottom-left: badge en esquina SUPERIOR-IZQUIERDA
             posStyles = [
-                "top:calc(50% - 40px + " + (sameCount * (FAB_SIZE + FAB_GAP) - OVERLAP) + "px)",
-                "right:" + (20 - OVERLAP) + "px"
+                "bottom:" + (STACK_OFFSET + FAB_SIZE - EDGE_OFFSET) + "px",
+                "left:" + (10 - EDGE_OFFSET) + "px"
             ].join(";");
-        } else if (isLeft) {
+        } else if (isMiddle) {
+            // middle-right: badge en esquina SUPERIOR-IZQUIERDA (lado exterior)
             posStyles = [
-                "bottom:" + (STACK_OFFSET + FAB_SIZE - OVERLAP) + "px",
-                "left:" + (20 + FAB_SIZE - OVERLAP) + "px"
+                "top:calc(50% - 40px + " + (sameCount * (FAB_SIZE + FAB_GAP) - EDGE_OFFSET) + "px)",
+                "right:" + (45 + FAB_SIZE - EDGE_OFFSET) + "px"
             ].join(";");
         } else {
+            // bottom-right: badge en esquina SUPERIOR-DERECHA
             posStyles = [
-                "bottom:" + (STACK_OFFSET + FAB_SIZE - 25) + "px",
-                "right:20px"
+                "bottom:" + (STACK_OFFSET + FAB_SIZE - EDGE_OFFSET) + "px",
+                "right:" + (45 - EDGE_OFFSET) + "px"
             ].join(";");
         }
 
