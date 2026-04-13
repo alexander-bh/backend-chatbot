@@ -167,29 +167,34 @@
         var isMiddle = POSITION === "middle-right";
 
         var BADGE_SIZE = 28;
-        var EDGE_OFFSET = BADGE_SIZE / 2; // 14px
+
+        // --- AJUSTES PARA ACERCAR EL BADGE AL AVATAR ---
+        // Al aumentar de 16 a 24, lo metemos más hacia el centro del avatar
+        var X_OFFSET = 24;
+        // Al disminuir de 56 a 46, lo bajamos para que superponga el borde
+        var Y_OFFSET = 46;
 
         var posStyles;
 
         if (isLeft) {
-            // bottom-left: badge sobresale hacia la IZQUIERDA
+            // bottom-left: Badge en la esquina SUPERIOR IZQUIERDA del avatar
             posStyles = [
-                "bottom:" + (STACK_OFFSET + FAB_SIZE - EDGE_OFFSET) + "px",
-                "left:" + (45 - EDGE_OFFSET) + "px"  // Sobresale a la izquierda
+                "bottom:" + (STACK_OFFSET + Y_OFFSET) + "px",
+                "left:" + X_OFFSET + "px"
             ].join(";");
         } else if (isMiddle) {
-            // middle-right: badge debe sobresalir hacia la DERECHA
-            // El FAB está en right:20px, entonces el badge debe estar MÁS a la derecha
+            // middle-right: Badge en la esquina SUPERIOR DERECHA del avatar
+            // Sumamos +8 a la posición top para bajarlo y que solape mejor
             var topPos = (window.innerHeight / 2) - 40 + (sameCount * (FAB_SIZE + FAB_GAP));
             posStyles = [
-                "top:" + (topPos - EDGE_OFFSET) + "px",
-                "right:" + (45 - EDGE_OFFSET) + "px"  // ← CLAVE: Número más pequeño = más a la derecha
+                "top:" + (topPos + 8) + "px",
+                "right:" + X_OFFSET + "px"
             ].join(";");
         } else {
-            // bottom-right: badge sobresale hacia la DERECHA
+            // bottom-right: Badge en la esquina SUPERIOR DERECHA del avatar
             posStyles = [
-                "bottom:" + (STACK_OFFSET + FAB_SIZE - EDGE_OFFSET) + "px",
-                "right:" + (45 - EDGE_OFFSET) + "px"  // Sobresale a la derecha
+                "bottom:" + (STACK_OFFSET + Y_OFFSET) + "px",
+                "right:" + X_OFFSET + "px"
             ].join(";");
         }
 
@@ -222,7 +227,7 @@
         document.body.appendChild(el);
         return el;
     }
-
+    
     function updateBadge(count) {
         if (_chatOpen) { hideBadge(); return; }
         if (count <= 0) { hideBadge(); return; }
