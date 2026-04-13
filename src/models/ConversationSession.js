@@ -17,13 +17,11 @@ const ConversationSessionSchema = new mongoose.Schema(
     flow_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Flow",
-      required: true
     },
 
     current_node_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "FlowNode",
-      required: true
     },
 
     current_branch_id: {
@@ -50,12 +48,12 @@ const ConversationSessionSchema = new mongoose.Schema(
     history: [
       {
         node_id: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "FlowNode"
+          type: String,
+          default: null
         },
 
-        question: String,   // mensaje del bot
-        answer: String,     // respuesta del usuario
+        question: String,
+        answer: String,
         node_type: String,
         variable_key: String,
 

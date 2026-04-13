@@ -146,12 +146,103 @@
         iframe.style.right = "auto";
         iframe.style.bottom = "auto";
         iframe.style.borderRadius = "0";
-        iframe.style.overflow = "hidden";
+        iframe.style.overflow = "visible";
         iframe.style.transform = "scale(1)";
         var hClose = window.visualViewport ? window.visualViewport.height : window.innerHeight;
         var topClose = window.visualViewport ? window.visualViewport.offsetTop : 0;
         iframe.style.height = hClose + "px";
         iframe.style.top = topClose + "px";
+    }
+
+    /* ────────────────────────────────────────
+   Badge de notificaciones (fuera del iframe)
+──────────────────────────────────────── */
+    var badgeEl = null;
+
+    function createBadge() {
+        var el = document.createElement("div");
+        el.id = "chatbot_badge_" + PID;
+
+        var isLeft = POSITION === "bottom-left";
+        var isMiddle = POSITION === "middle-right";
+
+        // El FAB es de 80px. Su esquina superior-derecha:
+        // bottom-right: bottom = STACK_OFFSET + 80px, right = 20px
+        // El badge (28px) debe solaparse ~50% sobre esa esquina
+        var BADGE_SIZE = 28;
+        var OVERLAP = BADGE_SIZE / 2; // 14px de solapamiento
+
+        var posStyles;
+        if (isMiddle) {
+            posStyles = [
+                "top:calc(50% - 40px + " + (sameCount * (FAB_SIZE + FAB_GAP) - OVERLAP) + "px)",
+                "right:" + (20 - OVERLAP) + "px"
+            ].join(";");
+        } else if (isLeft) {
+            posStyles = [
+                "bottom:" + (STACK_OFFSET + FAB_SIZE - OVERLAP) + "px",
+                "left:" + (20 + FAB_SIZE - OVERLAP) + "px"
+            ].join(";");
+        } else {
+            posStyles = [
+                "bottom:" + (STACK_OFFSET + FAB_SIZE - 25) + "px",
+                "right:20px"
+            ].join(";");
+        }
+
+        el.setAttribute("style", [
+            "position:fixed",
+            "z-index:2147483648",
+            posStyles,
+            "min-width:" + BADGE_SIZE + "px",
+            "height:" + BADGE_SIZE + "px",
+            "padding:0",
+            "border-radius:50%",
+            "background:#ef4444",
+            "color:#ffffff",
+            "font-size:13px",
+            "font-weight:700",
+            "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif",
+            "display:flex",
+            "align-items:center",
+            "justify-content:center",
+            "box-sizing:border-box",
+            "border:2.5px solid #ffffff",
+            "box-shadow:0 2px 8px rgba(239,68,68,0.55)",
+            "pointer-events:none",
+            "opacity:0",
+            "transform:scale(0)",
+            "transition:opacity 0.22s ease,transform 0.28s cubic-bezier(0.34,1.56,0.64,1)",
+            "white-space:nowrap"
+        ].join(";"));
+
+        document.body.appendChild(el);
+        return el;
+    }
+
+    function updateBadge(count) {
+        if (_chatOpen) { hideBadge(); return; }
+        if (count <= 0) { hideBadge(); return; }
+
+        if (!badgeEl) badgeEl = createBadge();
+
+        // Limpiar y reasignar solo texto plano
+        while (badgeEl.firstChild) badgeEl.removeChild(badgeEl.firstChild);
+        badgeEl.appendChild(document.createTextNode(count > 9 ? "9+" : String(count)));
+
+        requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+                if (!badgeEl) return;
+                badgeEl.style.opacity = "1";
+                badgeEl.style.transform = "scale(1) translate(0,0)";
+            });
+        });
+    }
+
+    function hideBadge() {
+        if (!badgeEl) return;
+        badgeEl.style.opacity = "0";
+        badgeEl.style.transform = "scale(0)";
     }
 
     /* ────────────────────────────────────────
@@ -387,7 +478,7 @@
             "position:fixed", getFabInitStyles(),
             "width:80px", "height:80px", "border:none",
             "z-index:2147483647", "background:transparent",
-            "pointer-events:auto", "overflow:hidden", "border-radius:50%",
+            "pointer-events:auto", "overflow:visible", "border-radius:50%",
             "transform:scale(0)",
             "transition:border-radius 0.32s cubic-bezier(0.16,1,0.3,1),opacity 0.22s ease"
         ].join(";");
@@ -487,6 +578,10 @@
                     document.querySelector(".chat-fab")?.classList.remove("no-transition");
                     break;
 
+                case "CHATBOT_UNREAD":
+                    updateBadge(e.data.count || 0);
+                    break;
+
                 case "CHATBOT_WELCOME":
                     if (e.data.visible && e.data.message) {
                         if (!iframeLoaded) pendingWelcome = e.data.message;
@@ -512,6 +607,7 @@
                 case "CHATBOT_RESIZE":
                     if (e.data.open) {
                         _chatOpen = true;
+                        hideBadge()
                         hideWelcome();
                         iframe.style.zIndex = "2147483647";
 
@@ -551,6 +647,7 @@
         _observer = new MutationObserver(function () {
             if (!document.getElementById("chatbot_" + PID)) document.body.appendChild(iframe);
             if (welcomeEl && !document.body.contains(welcomeEl)) document.body.appendChild(welcomeEl);
+            if (badgeEl && !document.body.contains(badgeEl)) document.body.appendChild(badgeEl);
         });
         _observer.observe(document.body, { childList: true });
 

@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const Contact = require("../models/Contact");
+const Chatbot = require("../models/Chatbot");
 const ConversationSession = require("../models/ConversationSession");
 const formatContact = require("../helper/formatContact");
 const { sendToAccount } = require("../services/pusher.service");
@@ -439,7 +440,21 @@ exports.getContacts = async (req, res) => {
       },
       { $unwind: { path: "$conversation", preserveNullAndEmptyArrays: true } },
       { $addFields: { conversation_history: "$conversation.history" } },
-      { $project: { conversation: 0 } }
+      { $project: { conversation: 0 } },
+      // ── JOIN con chatbots ──────────────────────────────────────────────────
+      {
+        $lookup: {
+          from: "chatbots",
+          localField: "chatbot_id",
+          foreignField: "_id",
+          as: "chatbot",
+          pipeline: [{ $project: { name: 1, _id: 0 } }]
+        }
+      },
+      { $unwind: { path: "$chatbot", preserveNullAndEmptyArrays: true } },
+      { $addFields: { chatbot_name: { $ifNull: ["$chatbot.name", null] } } },
+      { $project: { chatbot: 0 } }
+      // ───────────────────────────────────────────────────────────────────────
     ]);
 
     const normalized = contacts.map(formatContact);
@@ -513,36 +528,33 @@ exports.deleteContact = async (req, res) => {
 //     &date_from=2026-01-01&date_to=2026-04-30&page=1&limit=20
 // ─────────────────────────────────────────────────────────────────────────────
 exports.searchContacts = async (req, res) => {
-  
   try {
     const accountId = req.user.account_id;
 
     const {
-      q,                  // búsqueda general: name, email, phone, company
-      status,             // new | contacted | qualified | lost | discarded
-      source,             // chatbot | manual | system
+      q,
+      status,
+      source,
       chatbot_id,
-      completed,          // true | false
-      completed_goal,     // true | false
+      completed,
+      completed_goal,
       lead_score_min,
       lead_score_max,
-      device,             // desktop | mobile | tablet | unknown
-      consent,            // accepted | rejected | pending
-      date_from,          // createdAt >=
-      date_to,            // createdAt <=
+      device,
+      consent,
+      date_from,
+      date_to,
       page = 1,
       limit = 20,
-      sort_by = "createdAt",   // createdAt | lead_score | name
+      sort_by = "createdAt",
       sort_order = "desc"
     } = req.query;
 
-    // ── Filtro base (usa índice account_id + createdAt) ───────────────────────
     const filter = {
       account_id: new mongoose.Types.ObjectId(accountId),
       is_deleted: false
     };
 
-    // ── Filtros exactos (eficientes con índice) ───────────────────────────────
     if (status) filter.status = status;
     if (source) filter.source = source;
     if (device) filter.device = device;
@@ -555,14 +567,12 @@ exports.searchContacts = async (req, res) => {
     if (completed !== undefined) filter.completed = completed === "true";
     if (completed_goal !== undefined) filter.completed_goal = completed_goal === "true";
 
-    // ── Rango de lead_score (usa índice account_id + lead_score) ──────────────
     if (lead_score_min !== undefined || lead_score_max !== undefined) {
       filter.lead_score = {};
       if (lead_score_min !== undefined) filter.lead_score.$gte = Number(lead_score_min);
       if (lead_score_max !== undefined) filter.lead_score.$lte = Number(lead_score_max);
     }
 
-    // ── Rango de fechas ───────────────────────────────────────────────────────
     if (date_from || date_to) {
       filter.createdAt = {};
       if (date_from) filter.createdAt.$gte = new Date(date_from);
@@ -573,11 +583,9 @@ exports.searchContacts = async (req, res) => {
       }
     }
 
-    // ── Búsqueda de texto (q) — aplicada al final para no romper índices ──────
     if (q && q.trim()) {
-      // Escapa caracteres especiales de regex
       const escaped = q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const regex = { $regex: escaped, $options: "i" }; // "i" = case insensitive
+      const regex = { $regex: escaped, $options: "i" };
 
       const searchConditions = [
         { name: regex },
@@ -596,32 +604,50 @@ exports.searchContacts = async (req, res) => {
       }
     }
 
-    // ── Paginación ────────────────────────────────────────────────────────────
-    const pageNum = Math.max(1, parseInt(page));
+    const pageNum  = Math.max(1, parseInt(page));
     const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
-    const skip = (pageNum - 1) * limitNum;
+    const skip     = (pageNum - 1) * limitNum;
 
-    // ── Ordenamiento ──────────────────────────────────────────────────────────
     const allowedSorts = { createdAt: 1, lead_score: 1, name: 1 };
     const sortField = allowedSorts[sort_by] !== undefined ? sort_by : "createdAt";
-    const sortDir = sort_order === "asc" ? 1 : -1;
+    const sortDir   = sort_order === "asc" ? 1 : -1;
 
-    // ── Ejecutar consulta + conteo en paralelo ────────────────────────────────
-    const [contacts, total] = await Promise.all([
-      Contact.find(filter)
-        .sort({ [sortField]: sortDir })
-        .skip(skip)
-        .limit(limitNum)
-        .lean(),
-      Contact.countDocuments(filter)
-    ]);
+    // ── Aggregate para incluir chatbot_name ────────────────────────────────────
+    const pipeline = [
+      { $match: filter },
+      {
+        $lookup: {
+          from: "chatbots",
+          localField: "chatbot_id",
+          foreignField: "_id",
+          as: "chatbot",
+          pipeline: [{ $project: { name: 1, _id: 0 } }]
+        }
+      },
+      { $unwind: { path: "$chatbot", preserveNullAndEmptyArrays: true } },
+      { $addFields: { chatbot_name: { $ifNull: ["$chatbot.name", null] } } },
+      { $project: { chatbot: 0 } },
+      { $sort: { [sortField]: sortDir } },
+      {
+        $facet: {
+          contacts:  [{ $skip: skip }, { $limit: limitNum }],
+          totalDocs: [{ $count: "count" }]
+        }
+      }
+    ];
+    // ─────────────────────────────────────────────────────────────────────────
+
+    const [result] = await Contact.aggregate(pipeline);
+
+    const contacts = result.contacts   || [];
+    const total    = result.totalDocs[0]?.count || 0;
 
     return res.json({
       total,
-      page: pageNum,
-      limit: limitNum,
+      page:        pageNum,
+      limit:       limitNum,
       total_pages: Math.ceil(total / limitNum),
-      contacts: contacts.map(formatContact)
+      contacts:    contacts.map(formatContact)
     });
 
   } catch (error) {
@@ -700,7 +726,7 @@ exports.getContactsByChatbotName = async (req, res) => {
         }
       },
       { $unwind: { path: "$chatbot", preserveNullAndEmptyArrays: true } },
-      { $addFields: { chatbot_name: "$chatbot.name" } },
+      { $addFields: { chatbot_name: { $ifNull: ["$chatbot.name", null] } } },
       { $project: { chatbot: 0 } },
       { $sort: { [sortField]: sortDir } },
       {
@@ -728,5 +754,36 @@ exports.getContactsByChatbotName = async (req, res) => {
   } catch (error) {
     console.error("GET CONTACTS BY CHATBOT NAME ERROR:", error);
     return res.status(500).json({ message: "Error al buscar contactos por chatbot" });
+  }
+};
+
+// ═══════════════════════════════════════════════════════════
+// OBTENER TODOS LOS DOMINIOS DE LOS CHATBOTS
+// GET /chatbots/domains
+// ═══════════════════════════════════════════════════════════
+exports.getAllDomains = async (req, res) => {
+  try {
+    if (!req.user?.account_id) {
+      return res.status(401).json({ message: "Usuario no autenticado" });
+    }
+
+    const chatbots = await Chatbot.find({
+      account_id: req.user.account_id
+    })
+      .select("allowed_domains")
+      .lean();
+
+    // Aplanar y deduplicar dominios de todos los chatbots
+    const allDomains = chatbots.flatMap(bot => bot.allowed_domains || []);
+    const uniqueDomains = [...new Set(allDomains.map(d => d.trim().toLowerCase()))].filter(Boolean);
+
+    return res.json({
+      total: uniqueDomains.length,
+      domains: uniqueDomains
+    });
+
+  } catch (error) {
+    console.error("GET ALL DOMAINS ERROR:", error);
+    return res.status(500).json({ message: "Error al obtener dominios" });
   }
 };
