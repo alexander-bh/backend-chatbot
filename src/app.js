@@ -34,6 +34,7 @@ app.use(require("./middlewares/mongo.middleware.js"));
 
 // ───────── RUTAS PÚBLICAS ─────────
 app.use("/api/public-chatbot", require("./routes/public-chatbot.routes.js"));
+app.use("/api/whatsapp", require("./routes/whatsapp.routes.js"));
 
 // ───────── RUTAS PRIVADAS ─────────
 app.use("/api/auth", require("./routes/auth.routes.js"));
