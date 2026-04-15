@@ -1,6 +1,5 @@
 const express = require("express");
 const router = express.Router();
-
 const auth = require("../middlewares/auth.middleware");
 const role = require("../middlewares/role.middleware");
 const upload = require("../middlewares/uploadAvatar.middleware");
@@ -47,7 +46,6 @@ router.put(
    adminController.updateAnyChatbot
 );
 router.delete("/chatbots/:id", role("ADMIN"), adminController.deleteAnyChatbot);
-
 // ⚙️ acciones específicas
 router.patch("/chatbots/:id/toggle", role("ADMIN"), adminController.toggleChatbot);
 router.post(
@@ -55,7 +53,6 @@ router.post(
    role("ADMIN"),
    adminController.regenerateInstallToken
 );
-
 /* =====================================================
    🎭 AVATARS POR CHATBOT (ADMIN)
 ===================================================== */
@@ -64,13 +61,11 @@ router.get(
    role("ADMIN"),
    adminController.getAvailableAvatars
 );
-
 router.delete(
    "/chatbots/:id/avatars",
    role("ADMIN"),
    adminController.deleteAvatar
 );
-
 /* =====================================================
    🖼️ AVATARS GLOBALES (ADMIN)
 ===================================================== */
@@ -80,21 +75,17 @@ router.post(
    upload.single("avatar"),
    adminController.createAvatar
 );
-
 router.get("/avatars", role("ADMIN"), adminController.getAllAvatars);
-
 router.delete(
    "/avatars/:id",
    role("ADMIN"),
    adminController.deleteAvatarGlobal
 );
-
 router.patch(
    "/avatars/:id/set-default",
    role("ADMIN"),
    adminController.setDefaultAvatar
 );
-
 /* =====================================================
    📇 CONTACT TEMPLATES (ADMIN)
 ===================================================== */
@@ -103,36 +94,32 @@ router.post(
    role("ADMIN"),
    adminController.createDefaultContactTemplate
 );
-
 router.get(
    "/templates",
    role("ADMIN"),
    adminController.getDefaultContactTemplates
 );
-
 router.put(
    "/templates/:id",
    role("ADMIN"),
    adminController.updateDefaultContactTemplate
 );
-
 router.delete(
    "/templates/:id",
    role("ADMIN"),
    adminController.deleteDefaultContactTemplate
 );
-
 /* =====================================================
    📜 AUDIT LOGS (ADMIN)
 ===================================================== */
 router.get("/audit", role("ADMIN"), adminController.getAuditLogs);
-
 /* =====================================================
    ⚙️ SYSTEM CONFIG (ADMIN)
 ===================================================== */
 router.get("/config", role("ADMIN"), adminController.getSystemConfig);
 router.put("/config", role("ADMIN"), adminController.updateSystemConfig);
-router.delete("/config", role("ADMIN"), adminController.clearBccEmail);
+router.delete("/config-bcc", role("ADMIN"), adminController.clearBccEmail);
+router.delete("/config-whatsapp", role("ADMIN"), adminController.clearWhatsappNotify);
 
 /* =====================================================
    🆘 SUPPORT CONFIG (ADMIN)
@@ -141,17 +128,14 @@ router.get(
    "/support-config",
    adminController.getSupportConfig
 );
-
 router.put(
    "/support-config",
    role("ADMIN"),
    adminController.updateSupportConfig
 );
-
 router.delete(
    "/support-config",
    role("ADMIN"),
    adminController.clearSupportConfig
 );
-
 module.exports = router;

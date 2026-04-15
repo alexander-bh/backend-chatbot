@@ -58,7 +58,6 @@ exports.getDashboard = async (req, res) => {
   }
 };
 
-
 /* ─────────────────────────────────────
    USERS
 ───────────────────────────────────── */
@@ -1489,16 +1488,21 @@ exports.getSystemConfig = async (req, res) => {
   try {
     const configs = await SystemConfig.find().lean();
 
-    // Construir objeto clave → valor
     const result = configs.reduce((acc, c) => {
       acc[c.key] = c.value;
       return acc;
     }, {});
 
-    // Fallback a .env si no hay valor en BD
-    result.bcc_email = result.bcc_email ?? process.env.BCC_EMAIL ?? null;
+    // ✅ BCC (email)
+    result.bcc_email =
+      result.bcc_email ?? process.env.BCC_EMAIL ?? null;
+
+    // ✅ WHATSAPP
+    result.whatsapp_notify =
+      result.whatsapp_notify ?? process.env.WHATSAPP_NOTIFY ?? null;
 
     res.json({ config: result });
+
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -1506,16 +1510,18 @@ exports.getSystemConfig = async (req, res) => {
 
 exports.updateSystemConfig = async (req, res) => {
   try {
-    const { bcc_email } = req.body;
+    const { bcc_email, whatsapp_notify } = req.body;
 
     const updates = [];
 
+    // ───────── EMAIL ─────────
     if (bcc_email !== undefined) {
-      // Validar formato si viene un valor
       if (bcc_email !== null && bcc_email !== "") {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(bcc_email.trim())) {
-          return res.status(400).json({ message: "Formato de BCC inválido" });
+          return res.status(400).json({
+            message: "Formato de BCC inválido"
+          });
         }
       }
 
@@ -1528,13 +1534,47 @@ exports.updateSystemConfig = async (req, res) => {
       );
     }
 
+    // ───────── WHATSAPP ─────────
+    if (whatsapp_notify !== undefined) {
+      if (whatsapp_notify !== null && whatsapp_notify !== "") {
+        const clean = String(whatsapp_notify).replace(/\D/g, "");
+
+        if (clean.length < 7 || clean.length > 15) {
+          return res.status(400).json({
+            message: "Número de WhatsApp inválido"
+          });
+        }
+
+        updates.push(
+          SystemConfig.findOneAndUpdate(
+            { key: "whatsapp_notify" },
+            { $set: { value: clean } },
+            { upsert: true, new: true }
+          )
+        );
+      } else {
+        updates.push(
+          SystemConfig.findOneAndUpdate(
+            { key: "whatsapp_notify" },
+            { $set: { value: null } },
+            { upsert: true }
+          )
+        );
+      }
+    }
+
     if (updates.length === 0) {
-      return res.status(400).json({ message: "No hay campos para actualizar" });
+      return res.status(400).json({
+        message: "No hay campos para actualizar"
+      });
     }
 
     await Promise.all(updates);
 
-    res.json({ message: "Configuración actualizada correctamente" });
+    res.json({
+      message: "Configuración actualizada correctamente"
+    });
+
   } catch (err) {
     console.error("UPDATE SYSTEM CONFIG ERROR:", err);
     res.status(500).json({ message: err.message });
@@ -1556,21 +1596,34 @@ exports.clearBccEmail = async (req, res) => {
   }
 };
 
+exports.clearWhatsappNotify = async (req, res) => {
+  try {
+    await SystemConfig.findOneAndUpdate(
+      { key: "whatsapp_notify" },
+      { $set: { value: null } },
+      { upsert: true, new: true }
+    );
+
+    res.json({ message: "WhatsApp eliminado correctamente" });
+
+  } catch (err) {
+    console.error("CLEAR WHATSAPP ERROR:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
 /* ─────────────────────────────────────
    GET  /api/admin/support-config
 ───────────────────────────────────── */
 exports.getSupportConfig = async (req, res) => {
   try {
-    const config = await getOrCreateConfig();
+    const config = await SupportConfig.findOne().lean();
 
     res.json({
-      config: {
-        support_email:    config.support_email,
-        support_whatsapp: config.support_whatsapp,
-      },
+      support_whatsapp: config?.support_whatsapp ?? null,
+      support_email: config?.support_email ?? null,
     });
   } catch (err) {
-    console.error("GET SUPPORT CONFIG ERROR:", err);
     res.status(500).json({ message: err.message });
   }
 };

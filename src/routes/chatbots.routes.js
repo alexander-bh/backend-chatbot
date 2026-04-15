@@ -22,8 +22,10 @@ router.get("/:id/avatars", auth, chatbotController.getAvailableAvatars);
 // Eliminar avatar 
 router.delete("/:id/deleteAvatar", auth, chatbotController.deleteAvatar);
 // Obtener configuración de email
-router.get("/:chatbotId/email-settings", auth, chatbotController.getEmailSettings);
+router.get("/:chatbotId/notification-settings", auth, chatbotController.getNotificationSettings);
 // Actualizar configuración de email
 router.patch("/:chatbotId/email-settings", auth, chatbotController.updateEmailSettings);
+// Actualizar configuración de teléfono
+router.patch("/:chatbotId/phone-settings", auth, chatbotController.updatePhoneSettings);
 
 module.exports = router;

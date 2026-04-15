@@ -1,6 +1,18 @@
 const { Schema, model, models } = require("mongoose");
 const crypto = require("crypto");
 
+// Agrega este sub-schema junto a EmailSettingsSchema
+const PhoneSettingsSchema = new Schema({
+  enabled: {
+    type: Boolean,
+    default: false
+  },
+  phone_numbers: {
+    type: [String],
+    default: []
+  }
+}, { _id: false });
+
 const EmailSettingsSchema = new Schema({
   enabled: {
     type: Boolean,
@@ -37,6 +49,11 @@ const ChatbotSchema = new Schema({
 
   email_settings: {
     type: EmailSettingsSchema,
+    default: () => ({})
+  },
+
+  phone_settings: {
+    type: PhoneSettingsSchema,
     default: () => ({})
   },
 
@@ -166,6 +183,21 @@ ChatbotSchema.pre("save", function () {
         this.email_settings.to_email
           .map(email => email.trim().toLowerCase())
           .filter(email => email.length > 0)
+      )
+    ];
+  }
+
+  // Normaliza y deduplica los teléfonos
+  if (this.phone_settings?.phone_numbers && Array.isArray(this.phone_settings.phone_numbers)) {
+    this.phone_settings.phone_numbers = [
+      ...new Set(
+        this.phone_settings.phone_numbers
+          .map(p => {
+            if (!p) return "";
+            let clean = String(p).replace(/\D/g, "");
+            return clean;
+          })
+          .filter(p => p.length > 0)
       )
     ];
   }

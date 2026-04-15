@@ -499,7 +499,7 @@ exports.duplicateChatbotFull = async (req, res) => {
           err.statusCode = 404; // 👈 esto hace que NO reintente
           throw err;
         }
-        
+
         let defaultAvatar = await Avatar.findOne({
           type: "SYSTEM",
           is_default: true
@@ -791,6 +791,36 @@ exports.deleteAvatar = async (req, res) => {
   }
 };
 
+// ═══════════════════════════════════════════════════════════
+// OBTENER CONFIGURACIÓN DE NOTIFICACIONES (email + teléfono)
+// ═══════════════════════════════════════════════════════════
+exports.getNotificationSettings = async (req, res) => {
+  try {
+    if (!req.user?.account_id) {
+      return res.status(401).json({ message: "Usuario no autenticado" });
+    }
+
+    const chatbot = await Chatbot.findOne(
+      { _id: req.params.chatbotId, account_id: req.user.account_id }
+    ).select("email_settings phone_settings");
+
+    if (!chatbot) {
+      return res.status(404).json({ message: "Chatbot no encontrado" });
+    }
+
+    res.json({
+      email_settings: chatbot.email_settings,
+      phone_settings: chatbot.phone_settings
+    });
+
+  } catch (error) {
+    console.error("GET NOTIFICATION SETTINGS ERROR:", error);
+    res.status(500).json({ message: "Error al obtener configuración de notificaciones" });
+  }
+};
+// ═══════════════════════════════════════════════════════════
+// ACTUALIZAR CONFIGURACIÓN DE TELÉFONO
+// ═══════════════════════════════════════════════════════════
 exports.updateEmailSettings = async (req, res) => {
   try {
 
@@ -882,9 +912,8 @@ exports.updateEmailSettings = async (req, res) => {
   }
 };
 
-exports.getEmailSettings = async (req, res) => {
+exports.updatePhoneSettings = async (req, res) => {
   try {
-
     if (!req.user?.account_id) {
       return res.status(401).json({
         message: "Usuario no autenticado"
@@ -892,13 +921,13 @@ exports.getEmailSettings = async (req, res) => {
     }
 
     const { chatbotId } = req.params;
+    const { enabled, phone_numbers } = req.body;
 
-    const chatbot = await Chatbot.findOne(
-      {
-        _id: chatbotId,
-        account_id: req.user.account_id
-      }
-    ).select("email_settings");
+    // 🔥 1. Obtener chatbot actual
+    const chatbot = await Chatbot.findOne({
+      _id: chatbotId,
+      account_id: req.user.account_id
+    });
 
     if (!chatbot) {
       return res.status(404).json({
@@ -906,17 +935,65 @@ exports.getEmailSettings = async (req, res) => {
       });
     }
 
+    const update = {};
+
+    // ─────────────────────────────────────────────
+    // ✅ TELÉFONOS (ACUMULAR)
+    // ─────────────────────────────────────────────
+    if (phone_numbers !== undefined) {
+
+      const list = Array.isArray(phone_numbers)
+        ? phone_numbers
+        : [phone_numbers];
+
+      const newPhones = list
+        .map(num => {
+          if (!num) return null;
+
+          let cleaned = String(num).replace(/\D/g, "");
+
+          if (cleaned.length === 10) {
+            cleaned = "52" + cleaned;
+          }
+
+          if (cleaned.length < 10 || cleaned.length > 15) {
+            throw new Error(`Número inválido: ${num}`);
+          }
+
+          return cleaned;
+        })
+        .filter(Boolean);
+
+      const existing = chatbot.phone_settings?.phone_numbers || [];
+
+      const combined = [
+        ...new Set([...existing, ...newPhones])
+      ];
+
+      update["phone_settings.phone_numbers"] = combined;
+    }
+
+    // ─────────────────────────────────────────────
+    // ENABLED
+    // ─────────────────────────────────────────────
+    if (enabled !== undefined) {
+      update["phone_settings.enabled"] = Boolean(enabled);
+    }
+    const updated = await Chatbot.findOneAndUpdate(
+      { _id: chatbotId, account_id: req.user.account_id },
+      { $set: update },
+      { returnDocument: "after" }
+    );
     res.json({
-      email_settings: chatbot.email_settings
+      message: "Configuración de teléfono actualizada",
+      phone_settings: updated.phone_settings
     });
 
   } catch (error) {
-
-    console.error("GET EMAIL SETTINGS ERROR:", error);
+    console.error("UPDATE PHONE SETTINGS ERROR:", error);
 
     res.status(500).json({
-      message: "Error al obtener configuración de correo"
+      message: error.message
     });
-
   }
 };

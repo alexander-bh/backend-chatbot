@@ -1,5 +1,6 @@
 const upsertContactFromSession = require("../services/upsertContactFromSession.service");
 const { sendConversationEmail } = require("../services/chatbotEmail.service");
+const { sendConversationWhatsApp } = require("../services/whatsapp.service");
 const Notification = require("../models/Notification");
 const { sendToAccount } = require("../services/pusher.service");
 const formatDateAMPM = require("../utils/formatDate");
@@ -70,6 +71,9 @@ exports.finalizeConversation = async (session) => {
   /* ================= ENVIAR EMAIL ================= */
   // sendConversationEmail maneja internamente to_email (requiere enabled) y BCC
   await sendConversationEmail(session);
+
+  /* ================= ENVIAR WHATSAPP ================= */
+  await sendConversationWhatsApp(session); // 👈 esta línea
 
   return contact;
 };
