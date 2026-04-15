@@ -1,14 +1,30 @@
 const { Schema, model, models } = require("mongoose");
 const crypto = require("crypto");
 
-// Agrega este sub-schema junto a EmailSettingsSchema
+/* ───────── PHONE NUMBER ───────── */
+const PhoneNumberSchema = new Schema({
+  lada: {
+    type: String,
+    default: "+52"
+  },
+  phone: {
+    type: String,
+    required: true
+  }
+}, { _id: false });
+
+/* ───────── PHONE SETTINGS ───────── */
 const PhoneSettingsSchema = new Schema({
   enabled: {
     type: Boolean,
     default: false
   },
+  phone_name: {
+    type: String,
+    default: "Chatbot"
+  },
   phone_numbers: {
-    type: [String],
+    type: [PhoneNumberSchema],
     default: []
   }
 }, { _id: false });
@@ -189,17 +205,15 @@ ChatbotSchema.pre("save", function () {
 
   // Normaliza y deduplica los teléfonos
   if (this.phone_settings?.phone_numbers && Array.isArray(this.phone_settings.phone_numbers)) {
-    this.phone_settings.phone_numbers = [
-      ...new Set(
-        this.phone_settings.phone_numbers
-          .map(p => {
-            if (!p) return "";
-            let clean = String(p).replace(/\D/g, "");
-            return clean;
-          })
-          .filter(p => p.length > 0)
-      )
-    ];
+    this.phone_settings.phone_numbers = this.phone_settings.phone_numbers
+      .map(p => {
+        if (!p?.phone) return null;
+        return {
+          lada: p.lada || "+52",
+          phone: String(p.phone).replace(/\D/g, "")
+        };
+      })
+      .filter(p => p && p.phone.length > 0);
   }
 
   if (!this.install_token) {

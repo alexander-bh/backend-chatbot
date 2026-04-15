@@ -921,9 +921,8 @@ exports.updatePhoneSettings = async (req, res) => {
     }
 
     const { chatbotId } = req.params;
-    const { enabled, phone_numbers } = req.body;
+    const { enabled, phone_numbers, phone_name } = req.body;
 
-    // 🔥 1. Obtener chatbot actual
     const chatbot = await Chatbot.findOne({
       _id: chatbotId,
       account_id: req.user.account_id
@@ -937,9 +936,16 @@ exports.updatePhoneSettings = async (req, res) => {
 
     const update = {};
 
-    // ─────────────────────────────────────────────
-    // ✅ TELÉFONOS (ACUMULAR)
-    // ─────────────────────────────────────────────
+    // ─────────────────────────────
+    // NOMBRE DEL TELÉFONO
+    // ─────────────────────────────
+    if (phone_name !== undefined) {
+      update["phone_settings.phone_name"] = String(phone_name).trim();
+    }
+
+    // ─────────────────────────────
+    // TELÉFONOS
+    // ─────────────────────────────
     if (phone_numbers !== undefined) {
 
       const list = Array.isArray(phone_numbers)
@@ -947,43 +953,49 @@ exports.updatePhoneSettings = async (req, res) => {
         : [phone_numbers];
 
       const newPhones = list
-        .map(num => {
-          if (!num) return null;
+        .map(p => {
+          if (!p) return null;
 
-          let cleaned = String(num).replace(/\D/g, "");
+          const lada = p.lada || "+52";
+          let phone = String(p.phone || "").replace(/\D/g, "");
 
-          if (cleaned.length === 10) {
-            cleaned = "52" + cleaned;
+          if (!phone) {
+            throw new Error(`Número inválido`);
           }
 
-          if (cleaned.length < 10 || cleaned.length > 15) {
-            throw new Error(`Número inválido: ${num}`);
+          if (phone.length < 7 || phone.length > 15) {
+            throw new Error(`Número inválido: ${phone}`);
           }
 
-          return cleaned;
+          return { lada, phone };
         })
         .filter(Boolean);
 
       const existing = chatbot.phone_settings?.phone_numbers || [];
 
-      const combined = [
-        ...new Set([...existing, ...newPhones])
-      ];
+      const map = new Map();
 
-      update["phone_settings.phone_numbers"] = combined;
+      [...existing, ...newPhones].forEach(p => {
+        const key = `${p.lada}${p.phone}`;
+        map.set(key, p);
+      });
+
+      update["phone_settings.phone_numbers"] = [...map.values()];
     }
 
-    // ─────────────────────────────────────────────
+    // ─────────────────────────────
     // ENABLED
-    // ─────────────────────────────────────────────
+    // ─────────────────────────────
     if (enabled !== undefined) {
       update["phone_settings.enabled"] = Boolean(enabled);
     }
+
     const updated = await Chatbot.findOneAndUpdate(
       { _id: chatbotId, account_id: req.user.account_id },
       { $set: update },
-      { returnDocument: "after" }
+      { new: true }
     );
+
     res.json({
       message: "Configuración de teléfono actualizada",
       phone_settings: updated.phone_settings

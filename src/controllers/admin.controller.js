@@ -10,7 +10,7 @@ const AuditLog = require("../models/AuditLog");
 const Avatar = require("../models/Avatar");
 const Contact = require("../models/Contact");
 const Ticket = require("../models/Ticket");
-const SystemConfig = require("../models/SystemConfig" );
+const SystemConfig = require("../models/SystemConfig");
 const auditService = require("../services/audit.service");
 const formatDateAMPM = require("../utils/formatDate");
 const { deleteFromCloudinary } = require("../services/cloudinary.service");
@@ -355,9 +355,9 @@ exports.createChatbotForUser = async (req, res) => {
       welcome_message: "Hola 👋 ¿en qué puedo ayudarte?",
       welcome_delay: 2,
       show_welcome_on_mobile: true,
-      status: "active",        
+      status: "active",
       is_enabled: false,
-      avatar: avatarToUse,      
+      avatar: avatarToUse,
       created_by_admin: req.user._id
     }], { session });
 
@@ -1536,10 +1536,13 @@ exports.updateSystemConfig = async (req, res) => {
 
     // ───────── WHATSAPP ─────────
     if (whatsapp_notify !== undefined) {
-      if (whatsapp_notify !== null && whatsapp_notify !== "") {
-        const clean = String(whatsapp_notify).replace(/\D/g, "");
 
-        if (clean.length < 7 || clean.length > 15) {
+      if (whatsapp_notify && whatsapp_notify.phone) {
+
+        const lada = whatsapp_notify.lada || "+52";
+        const phone = String(whatsapp_notify.phone).replace(/\D/g, "");
+
+        if (phone.length < 7 || phone.length > 15) {
           return res.status(400).json({
             message: "Número de WhatsApp inválido"
           });
@@ -1548,11 +1551,20 @@ exports.updateSystemConfig = async (req, res) => {
         updates.push(
           SystemConfig.findOneAndUpdate(
             { key: "whatsapp_notify" },
-            { $set: { value: clean } },
+            {
+              $set: {
+                value: {
+                  lada,
+                  phone
+                }
+              }
+            },
             { upsert: true, new: true }
           )
         );
+
       } else {
+
         updates.push(
           SystemConfig.findOneAndUpdate(
             { key: "whatsapp_notify" },
@@ -1560,6 +1572,7 @@ exports.updateSystemConfig = async (req, res) => {
             { upsert: true }
           )
         );
+
       }
     }
 
@@ -1611,6 +1624,7 @@ exports.clearWhatsappNotify = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
 
 /* ─────────────────────────────────────
    GET  /api/admin/support-config
@@ -1668,7 +1682,7 @@ exports.updateSupportConfig = async (req, res) => {
     res.json({
       message: "Configuración de soporte actualizada correctamente",
       config: {
-        support_email:    config.support_email,
+        support_email: config.support_email,
         support_whatsapp: config.support_whatsapp,
       },
     });
@@ -1697,7 +1711,7 @@ exports.clearSupportConfig = async (req, res) => {
     if (field) {
       config[field] = null;
     } else {
-      config.support_email    = null;
+      config.support_email = null;
       config.support_whatsapp = null;
     }
 
