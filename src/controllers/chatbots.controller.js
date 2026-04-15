@@ -993,7 +993,7 @@ exports.updatePhoneSettings = async (req, res) => {
     const updated = await Chatbot.findOneAndUpdate(
       { _id: chatbotId, account_id: req.user.account_id },
       { $set: update },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     res.json({
