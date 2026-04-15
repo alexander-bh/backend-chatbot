@@ -15,6 +15,7 @@ router.get("/by-chatbot-name", auth, contactController.getContactsByChatbotName)
 router.get("/domains", auth, contactController.getAllDomains);
 router.get("/chatbots/names", auth, contactController.getChatbotNames);
 router.post("/manual", auth, contactController.createManualContact);
+router.delete("/contacts-delete", auth, contactController.deleteContacts);
 
 
 // ── Métricas (segmento fijo "metrics" y "funnel" antes de /:id genérico) ──────
@@ -24,7 +25,6 @@ router.get("/funnel/:chatbot_id", auth, metricsController.getNodeFunnel);
 // ── Rutas con parámetros dinámicos (van al final) ─────────────────────────────
 router.get("/:chatbot_id", auth, contactController.getContactsByChatbot);
 router.put("/:id", auth, contactController.updateContact);
-router.delete("/:id", auth, contactController.deleteContact);
 router.patch("/:id/status", auth, contactController.updateStatus);
 router.patch("/:id/limits", auth, contactController.updateLimits);
 

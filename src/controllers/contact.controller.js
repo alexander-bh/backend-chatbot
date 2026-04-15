@@ -479,45 +479,67 @@ exports.getContacts = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Eliminar contacto (soft delete)
-// Evento: "contact-deleted"  →  { id }
+// Eliminar múltiples contactos
+// Evento: "contact-deleted" → { ids }
 // ─────────────────────────────────────────────────────────────────────────────
-exports.deleteContact = async (req, res) => {
+exports.deleteContacts = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { ids } = req.body;
     const accountId = req.user.account_id;
 
-    const contact = await Contact.findOne({
-      _id: id,
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        message: "Debes enviar un array de ids"
+      });
+    }
+
+    const objectIds = ids.map(id => new mongoose.Types.ObjectId(id));
+
+    // Buscar contactos válidos
+    const contacts = await Contact.find({
+      _id: { $in: objectIds },
       account_id: accountId,
       is_deleted: false
     });
 
-    if (!contact) {
-      return res.status(404).json({ message: "Contacto no encontrado" });
+    if (!contacts.length) {
+      return res.status(404).json({
+        message: "No se encontraron contactos"
+      });
     }
 
-    await Contact.deleteOne({ _id: contact._id });
+    const contactIds = contacts.map(c => c._id);
+    const sessionIds = contacts
+      .map(c => c.session_id)
+      .filter(Boolean);
 
-    // ── Eliminar TODAS las sesiones vinculadas al contacto ─────────────────
-    const { deletedCount } = await ConversationSession.deleteMany({
+    // ── eliminar contactos ─────────────────
+    await Contact.deleteMany({
+      _id: { $in: contactIds }
+    });
+
+    // ── eliminar sesiones vinculadas ─────────────────
+    await ConversationSession.deleteMany({
       account_id: accountId,
       $or: [
-        { _id: contact.session_id },   // sesión original
-        { contact_id: contact._id }    // sesiones posteriores
+        { _id: { $in: sessionIds } },
+        { contact_id: { $in: contactIds } }
       ]
     });
 
-    sendToAccount(accountId, "contact-deleted", { id: contact._id });
+    // ── evento en tiempo real ─────────────────
+    sendToAccount(accountId, "contact-deleted", { ids: contactIds });
 
     return res.json({
-      message: "Contacto y conversaciones eliminados correctamente",
-      contact: formatContact(contact)
+      message: "Contactos y conversaciones eliminados correctamente",
+      deleted: contactIds.length
     });
 
   } catch (error) {
-    console.error("DELETE CONTACT ERROR:", error);
-    res.status(500).json({ message: "Error al eliminar contacto" });
+    console.error("DELETE CONTACTS ERROR:", error);
+    res.status(500).json({
+      message: "Error al eliminar contactos"
+    });
   }
 };
 
@@ -604,13 +626,13 @@ exports.searchContacts = async (req, res) => {
       }
     }
 
-    const pageNum  = Math.max(1, parseInt(page));
+    const pageNum = Math.max(1, parseInt(page));
     const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
-    const skip     = (pageNum - 1) * limitNum;
+    const skip = (pageNum - 1) * limitNum;
 
     const allowedSorts = { createdAt: 1, lead_score: 1, name: 1 };
     const sortField = allowedSorts[sort_by] !== undefined ? sort_by : "createdAt";
-    const sortDir   = sort_order === "asc" ? 1 : -1;
+    const sortDir = sort_order === "asc" ? 1 : -1;
 
     // ── Aggregate para incluir chatbot_name ────────────────────────────────────
     const pipeline = [
@@ -630,7 +652,7 @@ exports.searchContacts = async (req, res) => {
       { $sort: { [sortField]: sortDir } },
       {
         $facet: {
-          contacts:  [{ $skip: skip }, { $limit: limitNum }],
+          contacts: [{ $skip: skip }, { $limit: limitNum }],
           totalDocs: [{ $count: "count" }]
         }
       }
@@ -639,15 +661,15 @@ exports.searchContacts = async (req, res) => {
 
     const [result] = await Contact.aggregate(pipeline);
 
-    const contacts = result.contacts   || [];
-    const total    = result.totalDocs[0]?.count || 0;
+    const contacts = result.contacts || [];
+    const total = result.totalDocs[0]?.count || 0;
 
     return res.json({
       total,
-      page:        pageNum,
-      limit:       limitNum,
+      page: pageNum,
+      limit: limitNum,
       total_pages: Math.ceil(total / limitNum),
-      contacts:    contacts.map(formatContact)
+      contacts: contacts.map(formatContact)
     });
 
   } catch (error) {
@@ -705,13 +727,13 @@ exports.getContactsByChatbotName = async (req, res) => {
     if (status) filter.status = status;
 
     // ── Paginación y ordenamiento ─────────────────────────────────────────────
-    const pageNum  = Math.max(1, parseInt(page));
+    const pageNum = Math.max(1, parseInt(page));
     const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
-    const skip     = (pageNum - 1) * limitNum;
+    const skip = (pageNum - 1) * limitNum;
 
     const allowedSorts = { createdAt: 1, lead_score: 1, name: 1 };
     const sortField = allowedSorts[sort_by] !== undefined ? sort_by : "createdAt";
-    const sortDir   = sort_order === "asc" ? 1 : -1;
+    const sortDir = sort_order === "asc" ? 1 : -1;
 
     // ── Paso 3: Buscar contactos + incluir nombre del chatbot ─────────────────
     const pipeline = [
@@ -732,7 +754,7 @@ exports.getContactsByChatbotName = async (req, res) => {
       {
         $facet: {
           contacts: [{ $skip: skip }, { $limit: limitNum }],
-          total:    [{ $count: "count" }]
+          total: [{ $count: "count" }]
         }
       }
     ];
@@ -740,15 +762,15 @@ exports.getContactsByChatbotName = async (req, res) => {
     const [result] = await Contact.aggregate(pipeline);
 
     const contacts = result.contacts || [];
-    const total    = result.total[0]?.count || 0;
+    const total = result.total[0]?.count || 0;
 
     return res.json({
       total,
-      page:          pageNum,
-      limit:         limitNum,
-      total_pages:   Math.ceil(total / limitNum),
+      page: pageNum,
+      limit: limitNum,
+      total_pages: Math.ceil(total / limitNum),
       chatbots_found: chatbots.map(c => ({ id: c._id, name: c.name })), // qué chatbots matchearon
-      contacts:      contacts.map(formatContact)
+      contacts: contacts.map(formatContact)
     });
 
   } catch (error) {

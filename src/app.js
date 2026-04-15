@@ -46,13 +46,8 @@ app.get("/terms", (req, res) => {
   `);
 });
 
-app.post("/delete-data", (req, res) => {
-  console.log("Solicitud de eliminación:", req.body);
-
-  res.json({
-    success: true,
-    message: "Solicitud de eliminación recibida. Procesaremos los datos."
-  });
+app.get("/delete-data", (req, res) => {
+  res.send("Para eliminar tus datos, envía una solicitud POST a este endpoint.");
 });
 
 // mongo (middleware normal)
