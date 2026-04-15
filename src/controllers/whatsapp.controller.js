@@ -1,5 +1,5 @@
 const axios = require("axios");
-const { sendConversationEmail } = require("../services/email.service");
+const { sendConversationEmail } = require("../services/chatbotEmail.service");
 
 const VERIFY_TOKEN = process.env.WA_VERIFY_TOKEN; 
 const WA_TOKEN    = process.env.WA_TOKEN;         
