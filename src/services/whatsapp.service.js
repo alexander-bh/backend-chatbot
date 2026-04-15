@@ -1,3 +1,4 @@
+const axios = require("axios");
 const Chatbot = require("../models/Chatbot");
 const SystemConfig = require("../models/SystemConfig");
 const WA_TOKEN = process.env.WA_TOKEN;
@@ -114,6 +115,7 @@ exports.sendConversationWhatsApp = async (session) => {
     }
 };
 
+
 /* ─────────────────────────────────────────────
    HELPER: enviar mensaje WhatsApp
 ───────────────────────────────────────────── */
@@ -140,6 +142,7 @@ async function sendWhatsAppMessage(to, text) {
 /* ─────────────────────────────────────────────
    HELPER: limpiar número
 ───────────────────────────────────────────── */
+
 function normalizePhone(raw) {
     return String(raw).replace(/\D/g, "");
 }
