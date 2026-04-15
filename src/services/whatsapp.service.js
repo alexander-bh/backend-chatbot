@@ -145,7 +145,7 @@ function normalizePhone(raw) {
   let num = String(raw).replace(/\D/g, "");
   // México: agregar "1" después de 52 si es número móvil
   if (num.startsWith("52") && num.length === 12) {
-    num = "521" + num.slice(2);
+    num = "52" + num.slice(2);
   }
   return num;
 }
