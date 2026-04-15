@@ -115,7 +115,6 @@ exports.sendConversationWhatsApp = async (session) => {
     }
 };
 
-
 /* ─────────────────────────────────────────────
    HELPER: enviar mensaje WhatsApp
 ───────────────────────────────────────────── */
@@ -142,7 +141,11 @@ async function sendWhatsAppMessage(to, text) {
 /* ─────────────────────────────────────────────
    HELPER: limpiar número
 ───────────────────────────────────────────── */
-
 function normalizePhone(raw) {
-    return String(raw).replace(/\D/g, "");
+  let num = String(raw).replace(/\D/g, "");
+  // México: agregar "1" después de 52 si es número móvil
+  if (num.startsWith("52") && num.length === 12) {
+    num = "521" + num.slice(2);
+  }
+  return num;
 }
