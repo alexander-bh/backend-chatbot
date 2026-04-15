@@ -29,6 +29,32 @@ app.get("/ping", (req, res) => {
   });
 });
 
+app.get("/privacy", (req, res) => {
+  res.send(`
+    <h1>Política de Privacidad</h1>
+    <p>Esta aplicación recopila información únicamente para brindar el servicio de chatbot.</p>
+    <p>No compartimos información con terceros.</p>
+    <p>Los datos se utilizan únicamente para mejorar la experiencia del usuario.</p>
+  `);
+});
+
+app.get("/terms", (req, res) => {
+  res.send(`
+    <h1>Términos y Condiciones</h1>
+    <p>Al usar este servicio, aceptas interactuar con un chatbot automatizado.</p>
+    <p>No nos hacemos responsables del uso indebido del sistema.</p>
+  `);
+});
+
+app.post("/delete-data", (req, res) => {
+  console.log("Solicitud de eliminación:", req.body);
+
+  res.json({
+    success: true,
+    message: "Solicitud de eliminación recibida. Procesaremos los datos."
+  });
+});
+
 // mongo (middleware normal)
 app.use(require("./middlewares/mongo.middleware.js"));
 

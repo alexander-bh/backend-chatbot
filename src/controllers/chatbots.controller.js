@@ -975,7 +975,7 @@ exports.updatePhoneSettings = async (req, res) => {
 
       const map = new Map();
 
-      [...existing, ...newPhones].forEach(p => {
+      newPhones.forEach(p => {
         const key = `${p.lada}${p.phone}`;
         map.set(key, p);
       });
