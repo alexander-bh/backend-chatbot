@@ -845,6 +845,113 @@ exports.toggleChatbot = async (req, res) => {
   }
 };
 
+// APLICAR FLOW TEMPLATE A CHATBOTS SELECCIONADOS (ADMIN)
+exports.applyTemplateToSelected = async (req, res) => {
+  if (req.user.role !== "ADMIN") {
+    return res.status(403).json({ message: "No autorizado" });
+  }
+
+  const { chatbot_ids } = req.body;
+
+  if (!Array.isArray(chatbot_ids) || chatbot_ids.length === 0) {
+    return res.status(400).json({ message: "chatbot_ids requerido (array)" });
+  }
+
+  // Validar que todos los IDs sean válidos
+  const invalidIds = chatbot_ids.filter(
+    id => !mongoose.Types.ObjectId.isValid(id)
+  );
+
+  if (invalidIds.length > 0) {
+    return res.status(400).json({
+      message: `IDs inválidos: ${invalidIds.join(", ")}`
+    });
+  }
+
+  // ── Verificar que existe el template global ──
+  const globalTemplate = await Flow.findOne({
+    is_template: true,
+    account_id: null,
+    chatbot_id: null
+  });
+
+  if (!globalTemplate) {
+    return res.status(404).json({ message: "No existe flow template global" });
+  }
+
+  const results = {
+    success: [],
+    failed: []
+  };
+
+  // ── Procesar cada chatbot ──
+  for (const chatbot_id of chatbot_ids) {
+    const session = await mongoose.startSession();
+
+    try {
+      session.startTransaction();
+
+      const chatbot = await Chatbot.findById(chatbot_id).session(session);
+
+      if (!chatbot) {
+        results.failed.push({ chatbot_id, reason: "Chatbot no encontrado" });
+        await session.abortTransaction();
+        session.endSession();
+        continue;
+      }
+
+      // 1️⃣ Obtener flows actuales del chatbot (no-template)
+      const existingFlows = await Flow.find({
+        chatbot_id: chatbot._id,
+        is_template: false
+      }).session(session);
+
+      const existingFlowIds = existingFlows.map(f => f._id);
+
+      // 2️⃣ Eliminar nodos y flows anteriores
+      await FlowNode.deleteMany(
+        { flow_id: { $in: existingFlowIds } },
+        { session }
+      );
+
+      await Flow.deleteMany(
+        { chatbot_id: chatbot._id, is_template: false },
+        { session }
+      );
+
+      // 3️⃣ Clonar el template global al chatbot
+      const newFlow = await cloneTemplateToFlow(
+        chatbot._id,
+        req.user._id,
+        session,
+        chatbot.name  // usa el nombre del chatbot para el flow
+      );
+
+      results.success.push({
+        chatbot_id,
+        chatbot_name: chatbot.name,
+        new_flow_id: newFlow._id
+      });
+
+      await session.commitTransaction();
+
+    } catch (err) {
+      await session.abortTransaction();
+      results.failed.push({ chatbot_id, reason: err.message });
+    } finally {
+      session.endSession();
+    }
+  }
+
+  return res.json({
+    message: "Proceso completado",
+    applied: results.success.length,
+    failed: results.failed.length,
+    results
+  });
+};
+
+//Eliminar el enpoint 
 exports.regenerateInstallToken = async (req, res) => {
   try {
     const { publicId } = req.params;

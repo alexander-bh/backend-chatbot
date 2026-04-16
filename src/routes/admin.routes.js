@@ -48,11 +48,12 @@ router.put(
 router.delete("/chatbots/:id", role("ADMIN"), adminController.deleteAnyChatbot);
 // ⚙️ acciones específicas
 router.patch("/chatbots/:id/toggle", role("ADMIN"), adminController.toggleChatbot);
-router.post(
-   "/chatbots/:publicId/token/regenerate",
+router.post("/chatbots/:publicId/token/regenerate", role("ADMIN"), adminController.regenerateInstallToken);
+router.post("/chatbots/apply-template",
    role("ADMIN"),
-   adminController.regenerateInstallToken
+   adminController.applyTemplateToSelected
 );
+
 /* =====================================================
    🎭 AVATARS POR CHATBOT (ADMIN)
 ===================================================== */

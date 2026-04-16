@@ -12,6 +12,7 @@ router.get("/embed/:public_id", ctrl.renderEmbed);
 router.get("/:public_id/install", ctrl.getInstallScript);
 router.post("/config/verify", ctrl.verifyConfigSignature);
 router.get("/:public_id/challenge", challengeLimiter, ctrl.getChallenge);
+router.post("/translate", ctrl.translateBundle);
 
 /* ================================
    🔒 RUTAS PRIVADAS (ADMIN BOT)
