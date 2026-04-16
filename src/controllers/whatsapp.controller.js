@@ -5,6 +5,13 @@ const VERIFY_TOKEN = process.env.WA_VERIFY_TOKEN;
 const WA_TOKEN    = process.env.WA_TOKEN;         
 const PHONE_ID    = process.env.WA_PHONE_ID;
 
+function normalizeMexicanPhone(phone) {
+  if (phone.startsWith("521") && phone.length === 13) {
+    return "52" + phone.slice(3);
+  }
+  return phone;
+}
+
 // ── GET: Meta verifica el webhook ──────────────────────────────────
 exports.verifyWebhook = (req, res) => {
   const mode      = req.query["hub.mode"];
@@ -24,29 +31,25 @@ exports.receiveMessage = async (req, res) => {
     const body = req.body;
     if (body.object !== "whatsapp_business_account") return res.sendStatus(404);
 
-    const entry    = body.entry?.[0];
-    const change   = entry?.changes?.[0]?.value;
-    const message  = change?.messages?.[0];
+    const entry   = body.entry?.[0];
+    const change  = entry?.changes?.[0]?.value;
+    const message = change?.messages?.[0];
     if (!message || message.type !== "text") return res.sendStatus(200);
 
-    const from = message.from;          // número del usuario
+    const from = normalizeMexicanPhone(message.from); // 👈 normalizar aquí
     const text = message.text?.body;
     const name = change.contacts?.[0]?.profile?.name || "Desconocido";
 
     console.log(`📩 Mensaje de ${name} (${from}): ${text}`);
 
-    // ── Construir sesión compatible con tu sendConversationEmail ──
     const session = {
-      chatbot_id: process.env.DEFAULT_CHATBOT_ID, // o detectar por número
+      chatbot_id: process.env.DEFAULT_CHATBOT_ID,
       origin_url: "WhatsApp",
       variables: { name, phone: from },
       history: [{ question: text, answer: "" }],
     };
 
-    // Guardar + notificar por email (tu función existente)
     await sendConversationEmail(session);
-
-    // ── Respuesta automática al usuario ───────────────────────────
     await sendWhatsAppMessage(from, `Hola ${name}, recibimos tu mensaje. Un asesor te contactará pronto.`);
 
     res.sendStatus(200);
@@ -74,5 +77,7 @@ async function sendWhatsAppMessage(to, text) {
     }
   );
 }
+
+
 
 
