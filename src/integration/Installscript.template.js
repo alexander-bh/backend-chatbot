@@ -227,7 +227,7 @@
         document.body.appendChild(el);
         return el;
     }
-    
+
     function updateBadge(count) {
         if (_chatOpen) { hideBadge(); return; }
         if (count <= 0) { hideBadge(); return; }
@@ -449,13 +449,23 @@
     var MAX_RETRIES = 2;
     var _observer = null;
 
+    // ── Reemplaza doChallenge() ──
     function doChallenge() {
-        if (_observer) {
-            _observer.disconnect();
-            _observer = null;
-        }
+        if (_observer) { _observer.disconnect(); _observer = null; }
+
+        // ✅ Precalentar conexión al servidor antes del XHR
+        var link = document.createElement("link");
+        link.rel = "preconnect";
+        link.href = BASE;
+        document.head.appendChild(link);
+
         xhr = new XMLHttpRequest();
-        xhr.open("GET", BASE + "/api/chatbot-integration/" + PID + "/challenge?d=" + encodeURIComponent(domain), true);
+        xhr.open("GET", BASE + "/api/chatbot-integration/" + PID
+            + "/challenge?d=" + encodeURIComponent(domain), true);
+
+        // ✅ Hint al browser para priorizar la respuesta
+        xhr.setRequestHeader("Purpose", "prefetch");
+
         xhr.onreadystatechange = function () {
             if (xhr.readyState !== 4) return;
             if (xhr.status !== 200) {
@@ -470,7 +480,14 @@
         xhr.send();
     }
 
-    doChallenge();
+    // ✅ Diferir ejecución hasta que el DOM esté listo pero sin esperar load completo
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", doChallenge);
+    } else {
+        // Ya cargó — ejecutar en siguiente tick para no bloquear el render
+        setTimeout(doChallenge, 0);
+    }
+
 
     /* ────────────────────────────────────────
        Mount iframe
@@ -481,6 +498,16 @@
         iframe.src = BASE + "/api/chatbot-integration/embed/" + PID
             + "?d=" + encodeURIComponent(domain)
             + "&c=" + encodeURIComponent(challenge);
+
+        // ✅ Hints al navegador
+        iframe.setAttribute("loading", "eager");
+        iframe.setAttribute("fetchpriority", "low"); // No compite con recursos críticos de la página
+
+        // ✅ Precargar el src del iframe antes de crearlo
+        var preload = document.createElement("link");
+        preload.rel = "prefetch";
+        preload.href = iframe.src;
+        document.head.appendChild(preload);
 
         iframe.style.cssText = [
             "position:fixed", getFabInitStyles(),

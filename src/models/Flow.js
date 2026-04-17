@@ -19,6 +19,11 @@ const FlowSchema = new Schema(
       default: false,
     },
 
+    is_global_backup: {
+      type: Boolean,
+      default: false
+    },
+
     name: {
       type: String,
       required: true
@@ -62,7 +67,7 @@ const FlowSchema = new Schema(
       default: null
     }
   },
-  { timestamps: true }  
+  { timestamps: true }
 );
 
 // Índices

@@ -53,6 +53,9 @@ router.post("/chatbots/apply-template",
    role("ADMIN"),
    adminController.applyTemplateToSelected
 );
+router.post("/flows/global/copy", auth, role("ADMIN"), adminController.copyGlobalFlow);
+
+router.post("/flows/global/restore", auth, role("ADMIN"), adminController.restoreGlobalFlow);
 
 /* =====================================================
    🎭 AVATARS POR CHATBOT (ADMIN)

@@ -845,6 +845,88 @@ exports.toggleChatbot = async (req, res) => {
   }
 };
 
+//Eliminar el enpoint 
+exports.regenerateInstallToken = async (req, res) => {
+  try {
+    const { publicId } = req.params;
+
+    const chatbot = await Chatbot.findOne({ public_id: publicId });
+
+    if (!chatbot) {
+      return res.status(404).json({ message: "Chatbot no encontrado" });
+    }
+
+    // 🔐 Control de acceso
+    if (
+      req.user.role !== "ADMIN" &&
+      String(chatbot.account_id) !== String(req.user.account_id)
+    ) {
+      return res.status(403).json({ message: "No autorizado" });
+    }
+
+    chatbot.install_token = crypto.randomUUID();
+    chatbot.allowed_domains = []; // opcional: invalidar dominios
+
+    await chatbot.save();
+
+    res.json({
+      success: true,
+      install_token: chatbot.install_token
+    });
+
+  } catch (error) {
+    console.error("REGENERATE TOKEN ERROR:", error);
+    res.status(500).json({ message: "Error regenerando token" });
+  }
+};
+
+/* ─────────────────────────────────────
+   FLOWS
+───────────────────────────────────── */
+exports.getFlowDetail = async (req, res) => {
+  try {
+
+    if (req.user.role !== "ADMIN") {
+      return res.json({
+        success: true,
+        flow: null,
+        nodes: []
+      });
+    }
+
+    const flow = await Flow.findOne({
+      is_template: true,
+      account_id: null,
+      chatbot_id: null
+    });
+
+    if (!flow) {
+      return res.json({
+        success: true,
+        flow: null,
+        nodes: []
+      });
+    }
+
+    const nodes = await FlowNode.find({
+      flow_id: flow._id
+    }).sort({ order: 1 });
+
+    res.json({
+      success: true,
+      flow,
+      nodes
+    });
+
+  } catch (error) {
+    console.error("GET FLOW DETAIL ERROR:", error);
+
+    res.status(500).json({
+      message: "Error obteniendo flow"
+    });
+  }
+};
+
 // APLICAR FLOW TEMPLATE A CHATBOTS SELECCIONADOS (ADMIN)
 exports.applyTemplateToSelected = async (req, res) => {
   if (req.user.role !== "ADMIN") {
@@ -951,86 +1033,215 @@ exports.applyTemplateToSelected = async (req, res) => {
   });
 };
 
-//Eliminar el enpoint 
-exports.regenerateInstallToken = async (req, res) => {
-  try {
-    const { publicId } = req.params;
+exports.copyGlobalFlow = async (req, res) => {
 
-    const chatbot = await Chatbot.findOne({ public_id: publicId });
+  const session = await mongoose.startSession();
 
-    if (!chatbot) {
-      return res.status(404).json({ message: "Chatbot no encontrado" });
-    }
-
-    // 🔐 Control de acceso
-    if (
-      req.user.role !== "ADMIN" &&
-      String(chatbot.account_id) !== String(req.user.account_id)
-    ) {
-      return res.status(403).json({ message: "No autorizado" });
-    }
-
-    chatbot.install_token = crypto.randomUUID();
-    chatbot.allowed_domains = []; // opcional: invalidar dominios
-
-    await chatbot.save();
-
-    res.json({
-      success: true,
-      install_token: chatbot.install_token
-    });
-
-  } catch (error) {
-    console.error("REGENERATE TOKEN ERROR:", error);
-    res.status(500).json({ message: "Error regenerando token" });
-  }
-};
-
-/* ─────────────────────────────────────
-   FLOWS
-───────────────────────────────────── */
-exports.getFlowDetail = async (req, res) => {
   try {
 
-    if (req.user.role !== "ADMIN") {
-      return res.json({
-        success: true,
-        flow: null,
-        nodes: []
-      });
-    }
+    session.startTransaction();
 
-    const flow = await Flow.findOne({
+    // 1️⃣ obtener flow global
+    const globalFlow = await Flow.findOne({
       is_template: true,
       account_id: null,
-      chatbot_id: null
-    });
+      chatbot_id: null,
+      is_global_backup: { $ne: true }
+    }).session(session);
 
-    if (!flow) {
-      return res.json({
-        success: true,
-        flow: null,
-        nodes: []
-      });
+    if (!globalFlow) {
+      throw new Error("No existe diálogo global");
     }
 
+    // 2️⃣ eliminar backup anterior
+    const oldBackup = await Flow.findOneAndDelete({
+      is_global_backup: true
+    }).session(session);
+
+    if (oldBackup) {
+      await FlowNode.deleteMany({
+        flow_id: oldBackup._id
+      }).session(session);
+    }
+
+    // 3️⃣ obtener nodos
     const nodes = await FlowNode.find({
-      flow_id: flow._id
-    }).sort({ order: 1 });
+      flow_id: globalFlow._id
+    }).lean().session(session);
+
+    // 4️⃣ crear backup
+    const backupFlow = await Flow.create([{
+      name: "GLOBAL BACKUP",
+      is_template: true,
+      is_global_backup: true,
+      account_id: null,
+      chatbot_id: null
+    }], { session });
+
+    const backupId = backupFlow[0]._id;
+
+    const idMap = new Map();
+
+    // 5️⃣ crear nuevos nodos
+    const newNodes = nodes.map(node => {
+
+      const newId = new mongoose.Types.ObjectId();
+
+      idMap.set(node._id.toString(), newId);
+
+      return {
+        ...node,
+        _id: newId,
+        flow_id: backupId
+      };
+
+    });
+
+    // 6️⃣ reparar referencias internas
+    for (const node of newNodes) {
+
+      if (node.next_node_id) {
+        const mapped = idMap.get(node.next_node_id.toString());
+        if (mapped) node.next_node_id = mapped;
+      }
+
+    }
+
+    // 7️⃣ insertar nodos
+    await FlowNode.insertMany(newNodes, { session });
+
+    // 8️⃣ start node
+    if (globalFlow.start_node_id) {
+
+      const newStart = idMap.get(globalFlow.start_node_id.toString());
+
+      await Flow.updateOne(
+        { _id: backupId },
+        { start_node_id: newStart },
+        { session }
+      );
+
+    }
+
+    await session.commitTransaction();
 
     res.json({
       success: true,
-      flow,
-      nodes
+      backup_id: backupId
     });
 
-  } catch (error) {
-    console.error("GET FLOW DETAIL ERROR:", error);
+  } catch (err) {
+
+    await session.abortTransaction();
 
     res.status(500).json({
-      message: "Error obteniendo flow"
+      message: err.message
     });
+
+  } finally {
+
+    session.endSession();
+
   }
+
+};
+
+exports.restoreGlobalFlow = async (req, res) => {
+
+  const session = await mongoose.startSession();
+
+  try {
+
+    session.startTransaction();
+
+    const backup = await Flow.findOne({
+      is_global_backup: true
+    }).session(session);
+
+    if (!backup) {
+      throw new Error("No existe backup");
+    }
+
+    const globalFlow = await Flow.findOne({
+      is_template: true,
+      account_id: null,
+      chatbot_id: null,
+      is_global_backup: { $ne: true }
+    }).session(session);
+
+    if (!globalFlow) {
+      throw new Error("No existe diálogo global");
+    }
+
+    // eliminar nodos actuales
+    await FlowNode.deleteMany({
+      flow_id: globalFlow._id
+    }).session(session);
+
+    const nodes = await FlowNode.find({
+      flow_id: backup._id
+    }).lean().session(session);
+
+    const idMap = new Map();
+
+    const newNodes = nodes.map(node => {
+
+      const newId = new mongoose.Types.ObjectId();
+
+      idMap.set(node._id.toString(), newId);
+
+      return {
+        ...node,
+        _id: newId,
+        flow_id: globalFlow._id
+      };
+
+    });
+
+    for (const node of newNodes) {
+
+      if (node.next_node_id) {
+        const mapped = idMap.get(node.next_node_id.toString());
+        if (mapped) node.next_node_id = mapped;
+      }
+
+    }
+
+    await FlowNode.insertMany(newNodes, { session });
+
+    if (backup.start_node_id) {
+
+      const newStart = idMap.get(backup.start_node_id.toString());
+
+      await Flow.updateOne(
+        { _id: globalFlow._id },
+        { start_node_id: newStart },
+        { session }
+      );
+
+    }
+
+    await session.commitTransaction();
+
+    res.json({
+      success: true,
+      message: "Diálogo global restaurado"
+    });
+
+  } catch (err) {
+
+    await session.abortTransaction();
+
+    res.status(500).json({
+      message: err.message
+    });
+
+  } finally {
+
+    session.endSession();
+
+  }
+
 };
 
 /* ─────────────────────────────────────
