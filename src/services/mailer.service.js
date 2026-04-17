@@ -17,7 +17,6 @@ const transporter = nodemailer.createTransport({
   greetingTimeout:   3000, // era 5000
   socketTimeout:     8000, // era 10000
 });
-
 transporter.verify((err) => {
   if (err) console.error("SMTP no disponible:", err.message);
   else console.log("SMTP listo");
