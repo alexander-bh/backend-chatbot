@@ -43,7 +43,6 @@ exports.sendConversationEmail = async (session) => {
   }
 };
 
-// ✅ Función pura — sin I/O, fácil de testear y de mantener
 function buildEmailHTML({ chatbot, emailSettings, session, vars }) {
   const asunto = emailSettings.from_asunto || `Nueva conversación - ${chatbot.name}`;
   const nombre = [vars.name, vars.last_name].filter(Boolean).join(" ") || "—";

@@ -1032,7 +1032,7 @@ exports.applyTemplateToSelected = async (req, res) => {
     results
   });
 };
-
+//copiar
 exports.copyGlobalFlow = async (req, res) => {
 
   const session = await mongoose.startSession();
@@ -1145,7 +1145,7 @@ exports.copyGlobalFlow = async (req, res) => {
   }
 
 };
-
+//restaurar
 exports.restoreGlobalFlow = async (req, res) => {
 
   const session = await mongoose.startSession();

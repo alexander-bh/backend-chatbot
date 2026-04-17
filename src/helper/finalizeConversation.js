@@ -7,8 +7,6 @@ const formatDateAMPM = require("../utils/formatDate");
 exports.finalizeConversation = async (session) => {
   session.is_completed = true;
   session.status = "completed";
-
-  // ✅ Paralelizar: contacto + guardado de sesión al mismo tiempo
   const [contact] = await Promise.all([
     upsertContactFromSession(session),
     session.save(),
@@ -19,7 +17,6 @@ exports.finalizeConversation = async (session) => {
 
     const nombre = [contact.name, contact.last_name].filter(Boolean).join(" ") || "Sin nombre";
 
-    // ✅ Notificación + Pusher contacto en paralelo, sin bloquear el flujo
     Promise.all([
       Notification.create({
         account_id: session.account_id,
@@ -52,9 +49,6 @@ exports.finalizeConversation = async (session) => {
       ),
     ]).catch((err) => console.error("❌ Error en notificaciones post-contacto:", err));
   }
-
-  // ✅ Fire-and-forget: no bloquea el return
   sendConversationEmail(session).catch(console.error);
-
   return contact;
 };
