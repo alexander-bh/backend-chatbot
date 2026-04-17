@@ -42,6 +42,7 @@ exports.sendConversationEmail = async (session) => {
     console.error("❌ Error enviando email:", err);
   }
 };
+
 function buildEmailHTML({ chatbot, emailSettings, session, vars }) {
   const asunto = emailSettings.from_asunto || `Nueva conversación - ${chatbot.name}`;
   const nombre = [vars.name, vars.last_name].filter(Boolean).join(" ") || "—";

@@ -3,7 +3,6 @@
     var PID = "{{PUBLIC_ID}}";
     var POSITION = "{{POSITION}}";
     var SECONDARYCOLOR = "{{SECONDARY_COLOR}}";
-
     // ── Instancia única ──
     var INSTANCE_KEY = "__CHATBOT_INSTALLED__" + PID;
     if (window[INSTANCE_KEY]) {
