@@ -233,15 +233,23 @@
 
         if (!badgeEl) badgeEl = createBadge();
 
-        // Limpiar y reasignar solo texto plano
         while (badgeEl.firstChild) badgeEl.removeChild(badgeEl.firstChild);
         badgeEl.appendChild(document.createTextNode(count > 9 ? "9+" : String(count)));
+
+        // FIX: forzar re-trigger de la animación de entrada
+        badgeEl.style.transition = "none";
+        badgeEl.style.opacity = "0";
+        badgeEl.style.transform = "scale(0)";
 
         requestAnimationFrame(function () {
             requestAnimationFrame(function () {
                 if (!badgeEl) return;
+                badgeEl.style.transition = [
+                    "opacity 0.22s ease",
+                    "transform 0.28s cubic-bezier(0.34,1.56,0.64,1)"
+                ].join(",");
                 badgeEl.style.opacity = "1";
-                badgeEl.style.transform = "scale(1) translate(0,0)";
+                badgeEl.style.transform = "scale(1)";
             });
         });
     }
@@ -451,8 +459,6 @@
     // ── Reemplaza doChallenge() ──
     function doChallenge() {
         if (_observer) { _observer.disconnect(); _observer = null; }
-
-        // ✅ Precalentar conexión al servidor antes del XHR
         var link = document.createElement("link");
         link.rel = "preconnect";
         link.href = BASE;
@@ -461,10 +467,7 @@
         xhr = new XMLHttpRequest();
         xhr.open("GET", BASE + "/api/chatbot-integration/" + PID
             + "/challenge?d=" + encodeURIComponent(domain), true);
-
-        // ✅ Hint al browser para priorizar la respuesta
         xhr.setRequestHeader("Purpose", "prefetch");
-
         xhr.onreadystatechange = function () {
             if (xhr.readyState !== 4) return;
             if (xhr.status !== 200) {
@@ -479,35 +482,24 @@
         xhr.send();
     }
 
-    // ✅ Diferir ejecución hasta que el DOM esté listo pero sin esperar load completo
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", doChallenge);
     } else {
-        // Ya cargó — ejecutar en siguiente tick para no bloquear el render
         setTimeout(doChallenge, 0);
     }
 
-
-    /* ────────────────────────────────────────
-       Mount iframe
-    ──────────────────────────────────────── */
     function mountIframe(challenge) {
         var iframe = document.createElement("iframe");
         iframe.id = "chatbot_" + PID;
         iframe.src = BASE + "/api/chatbot-integration/embed/" + PID
             + "?d=" + encodeURIComponent(domain)
             + "&c=" + encodeURIComponent(challenge);
-
-        // ✅ Hints al navegador
         iframe.setAttribute("loading", "eager");
-        iframe.setAttribute("fetchpriority", "low"); // No compite con recursos críticos de la página
-
-        // ✅ Precargar el src del iframe antes de crearlo
+        iframe.setAttribute("fetchpriority", "low");
         var preload = document.createElement("link");
         preload.rel = "prefetch";
         preload.href = iframe.src;
         document.head.appendChild(preload);
-
         iframe.style.cssText = [
             "position:fixed", getFabInitStyles(),
             "width:80px", "height:80px", "border:none",
@@ -676,7 +668,6 @@
                     break;
             }
         });
-
         /* ── Observer: evitar que el iframe sea removido del DOM ── */
         _observer = new MutationObserver(function () {
             if (!document.getElementById("chatbot_" + PID)) document.body.appendChild(iframe);

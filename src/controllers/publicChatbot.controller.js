@@ -87,7 +87,7 @@ exports.getFlowBundle = async (req, res) => {
 exports.finishConversation = async (req, res) => {
   try {
     const { public_id } = req.params;
-    const { history = [], variables = {}, origin_url, visitor_id, mode = "production" } = req.body;
+    const { history = [], variables = {}, origin_url, visitor_id, mode = "production", device = "unknown" } = req.body;
 
     // ── Validación básica ──
     if (!Array.isArray(history)) {
@@ -143,12 +143,13 @@ exports.finishConversation = async (req, res) => {
     const session = await ConversationSession.create({
       account_id: chatbot.account_id,
       chatbot_id: chatbot._id,
-      flow_id: null,           // no tenemos flow_id aquí; opcional: recibirlo en body
+      flow_id: null,
       current_node_id: null,
       variables,
       history,
       origin_url: origin_url || null,
       visitor_id: visitor_id || null,
+      device: device || "unknown",   // ✅ esta línea
       mode,
       is_completed: !isAbandoned,
       is_abandoned: isAbandoned,

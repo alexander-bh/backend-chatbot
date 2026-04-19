@@ -346,14 +346,8 @@ exports.InstallationCode = async (req, res) => {
         const snippet = `<script src='${scriptUrl}' async></script>`;
 
         res.json({
-            snippet,
-            scriptUrl,
-            allowed_domains: chatbot.allowed_domains || [],
-            verified_domains: chatbot.verified_domains || [],
-            installation_status: chatbot.installation_status || "pending",
-            position: chatbot.position || "bottom-right",
-            is_enabled: chatbot.is_enabled,
-            status: chatbot.status
+            scripts: [{ script: snippet }],
+            allowed_domains: chatbot.allowed_domains || []
         });
 
     } catch (err) {

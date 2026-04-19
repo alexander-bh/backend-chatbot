@@ -3,6 +3,7 @@ const { sendConversationEmail } = require("../services/chatbotEmail.service");
 const Notification = require("../models/Notification");
 const { sendToAccount } = require("../services/pusher.service");
 const formatDateAMPM = require("../utils/formatDate");
+
 exports.finalizeConversation = async (session) => {
   session.is_completed = true;
   session.status = "completed";
