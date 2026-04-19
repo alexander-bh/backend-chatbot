@@ -605,7 +605,7 @@
                     break;
 
                 case "CHATBOT_UNREAD":
-                    // updateBadge(e.data.count || 0);  ← COMENTAR O ELIMINAR esta línea
+                    updateBadge(e.data.count || 0);
                     break;
 
                 case "CHATBOT_WELCOME":
