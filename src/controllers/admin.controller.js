@@ -11,6 +11,7 @@ const Avatar = require("../models/Avatar");
 const Contact = require("../models/Contact");
 const Ticket = require("../models/Ticket");
 const SystemConfig = require("../models/SystemConfig");
+const SupportConfig = require("../models/Supportconfig");
 const auditService = require("../services/audit.service");
 const formatDateAMPM = require("../utils/formatDate");
 const { deleteFromCloudinary } = require("../services/cloudinary.service");
