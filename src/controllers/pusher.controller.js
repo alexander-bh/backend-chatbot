@@ -1,4 +1,3 @@
-// controllers/pusher.controller.js
 const { pusher } = require("../services/pusher.service");
 
 exports.auth = (req, res) => {
