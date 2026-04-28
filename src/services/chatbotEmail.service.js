@@ -1,98 +1,22 @@
-const axios = require("axios");
+// services/conversationMailer.service.js
+const transporter = require("./mailer.service");
 const Chatbot = require("../models/Chatbot");
 const SystemConfig = require("../models/SystemConfig");
 
-const BREVO_API_KEY = process.env.BREVO_API_KEY;
-const BREVO_TEMPLATE_ID = parseInt(process.env.BREVO_TEMPLATE_ID);
-
-// ─── Utilidad: log con timestamp ────────────────────────────────────────────
 const log = (level, msg, data = null) => {
   const ts = new Date().toISOString();
   const prefix = { info: "ℹ️", warn: "⚠️", error: "❌", ok: "✅", debug: "🔍" }[level] || "▪️";
-  if (data) {
-    console[level === "error" ? "error" : "log"](`${ts} ${prefix} [Brevo] ${msg}`, JSON.stringify(data, null, 2));
-  } else {
-    console[level === "error" ? "error" : "log"](`${ts} ${prefix} [Brevo] ${msg}`);
-  }
+  const out = data
+    ? `${ts} ${prefix} [ConvMail] ${msg} ${JSON.stringify(data, null, 2)}`
+    : `${ts} ${prefix} [ConvMail] ${msg}`;
+  level === "error" ? console.error(out) : console.log(out);
 };
 
-// ─── Envío con reintentos ────────────────────────────────────────────────────
-const sendWithRetry = async (payload, retries = 3) => {
-  for (let i = 0; i < retries; i++) {
-    const attempt = i + 1;
-    log("info", `Intento ${attempt}/${retries} — enviando a Brevo...`);
-
-    try {
-      const res = await axios.post("https://api.brevo.com/v3/smtp/email", payload, {
-        headers: {
-          "api-key": BREVO_API_KEY,
-          "Content-Type": "application/json",
-        },
-        timeout: 15000,
-      });
-
-      log("ok", `Email enviado en intento ${attempt}`, {
-        status: res.status,
-        messageId: res.data?.messageId,
-      });
-      return res;
-
-    } catch (err) {
-      const isLast = attempt === retries;
-
-      // ── Clasificar el tipo de error ──────────────────────────────────────
-      if (err.response) {
-        // Brevo respondió con un código HTTP de error
-        log("error", `Error HTTP de Brevo (intento ${attempt})`, {
-          status: err.response.status,
-          statusText: err.response.statusText,
-          data: err.response.data,
-          headers: err.response.headers,
-        });
-      } else if (err.request) {
-        // La petición salió pero no hubo respuesta
-        const netInfo = {
-          code: err.code,                   // ECONNRESET, ETIMEDOUT, ENOTFOUND…
-          message: err.message,
-          syscall: err.syscall || null,
-          address: err.address || null,
-          port: err.port || null,
-          timeout: err.config?.timeout,
-        };
-        log("error", `Sin respuesta del servidor (intento ${attempt})`, netInfo);
-      } else {
-        // Error antes de enviar (config, etc.)
-        log("error", `Error al armar la petición (intento ${attempt})`, {
-          message: err.message,
-          stack: err.stack,
-        });
-      }
-
-      if (isLast) {
-        log("error", `Todos los intentos fallaron (${retries}/${retries})`);
-        throw err;
-      }
-
-      const wait = attempt * 2000; // 2s, 4s
-      log("warn", `Reintentando en ${wait / 1000}s...`);
-      await new Promise((r) => setTimeout(r, wait));
-    }
-  }
-};
-
-// ─── Función principal ───────────────────────────────────────────────────────
 exports.sendConversationEmail = async (session) => {
   log("info", `Iniciando envío — session: ${session._id}`);
 
-  // 1. Variables de entorno
-  log("debug", "Variables de entorno", {
-    BREVO_API_KEY: BREVO_API_KEY ? `...${BREVO_API_KEY.slice(-6)}` : "❌ NO DEFINIDA",
-    BREVO_TEMPLATE_ID: BREVO_TEMPLATE_ID || "❌ NO DEFINIDO",
-  });
-
   try {
-    // 2. Consultas a DB
-    log("info", "Consultando DB (Chatbot + SystemConfig)...");
+    // 1. DB en paralelo
     const [chatbot, bccConfig] = await Promise.all([
       Chatbot.findById(session.chatbot_id).lean(),
       SystemConfig.findOne({ key: "bcc_email" }).lean(),
@@ -102,81 +26,50 @@ exports.sendConversationEmail = async (session) => {
       log("warn", `Chatbot no encontrado: ${session.chatbot_id}`);
       return;
     }
-    log("debug", "Chatbot encontrado", { id: chatbot._id, name: chatbot.name });
 
-    // 3. Destinatarios
+    // 2. Destinatarios
     const bccEmail = bccConfig?.value?.trim() || process.env.BCC_EMAIL || "";
-    const emailSettings = chatbot.email_settings || {};
-    const toEmailRaw = emailSettings.enabled ? emailSettings.to_email : null;
+    const settings = chatbot.email_settings || {};
+    const toEmailRaw = settings.enabled ? settings.to_email : null;
 
     const toEmails = Array.isArray(toEmailRaw)
-      ? toEmailRaw.filter((e) => e?.trim())
+      ? toEmailRaw.filter(Boolean)
       : typeof toEmailRaw === "string" && toEmailRaw.trim()
         ? toEmailRaw.split(",").map((e) => e.trim()).filter(Boolean)
         : [];
 
-    log("debug", "Destinatarios resueltos", {
-      emailSettings_enabled: emailSettings.enabled,
-      toEmails,
-      bccEmail: bccEmail || "(vacío)",
-    });
-
-    if (toEmails.length === 0 && !bccEmail) {
+    if (!toEmails.length && !bccEmail) {
       log("warn", "Sin destinatarios — se omite el envío");
       return;
     }
 
-    // 4. Variables del contacto
+    // 3. Params y HTML
     const vars = session.variables || {};
-    log("debug", "Variables de sesión", {
-      name: vars.name || null,
-      email: vars.email || null,
-      phone: vars.phone || null,
+    const params = buildParams({ chatbot, session, vars });
+
+    log("debug", "Destinatarios", { to: toEmails, bcc: bccEmail || "(vacío)" });
+
+    // 4. Enviar con el mismo transporter del sendTestEmail
+    const info = await transporter.sendMail({
+      from: `"ChatbotAnfeta" <info@weblab.com.mx>`,
+      to: toEmails.length ? toEmails.join(", ") : bccEmail,
+      ...(bccEmail && toEmails.length && { bcc: bccEmail }),
+      subject: `Nueva conversación — ${params.nombre}`,
+      html: buildHtml(params),
     });
 
-    if (!vars.name && !vars.email && !vars.phone && toEmails.length === 0) {
-      log("warn", "Sin variables de contacto ni destinatarios directos — se omite");
-      return;
-    }
-
-    // 5. Construir payload
-    const params = buildTemplateParams({ chatbot, emailSettings, session, vars });
-    const to = toEmails.length > 0
-      ? toEmails.map((e) => ({ email: e }))
-      : [{ email: bccEmail }];
-    const bcc = bccEmail && toEmails.length > 0 ? [{ email: bccEmail }] : undefined;
-
-    const payload = {
-      to,
-      ...(bcc && { bcc }),
-      templateId: BREVO_TEMPLATE_ID,
-      params,
-    };
-
-    log("debug", "Payload que se enviará a Brevo", {
-      to: payload.to,
-      bcc: payload.bcc,
-      templateId: payload.templateId,
-      params: {
-        ...payload.params,
-        mensaje: payload.params.mensaje?.slice(0, 100) + "…", // recortar para el log
-      },
-    });
-
-    // 6. Enviar
-    await sendWithRetry(payload);
+    log("ok", "Email enviado", { messageId: info.messageId });
 
   } catch (err) {
-    log("error", `Falla definitiva al enviar email para session ${session._id}`, {
-      code: err.code,
+    log("error", `Falla al enviar email para session ${session._id}`, {
       message: err.message,
-      brevoResponse: err.response?.data || null,
+      code: err.code || null,
     });
   }
 };
 
-// ─── Builder de parámetros (sin cambios) ────────────────────────────────────
-function buildTemplateParams({ chatbot, emailSettings, session, vars }) {
+// ─── Parámetros ──────────────────────────────────────────────────────────────
+function buildParams({ chatbot, session, vars }) {
   const nombre = [vars.name, vars.last_name].filter(Boolean).join(" ") || "—";
   const telefono = vars.phone || "—";
   const email = vars.email || "—";
@@ -188,13 +81,133 @@ function buildTemplateParams({ chatbot, emailSettings, session, vars }) {
   const phoneLink = phoneClean ? `tel:${phoneClean}` : "#";
   const emailLink = vars.email ? `mailto:${vars.email}` : "#";
 
-  const mensaje = (session.history || [])
-    .map((h) => `Bot: ${h.question || "—"}\nUsuario: ${h.answer || "—"}`)
-    .join("\n\n");
+  const conversacion = (session.history || [])
+    .map((h) => ({ bot: h.question || "—", usuario: h.answer || "—" }));
 
   return {
     nombre, email, telefono, fecha, origen,
-    whatsappLink, phoneLink, emailLink,
-    mensaje: mensaje || "Sin conversación registrada.",
+    whatsappLink, phoneLink, emailLink, conversacion
   };
+}
+
+// ─── HTML ────────────────────────────────────────────────────────────────────
+function buildHtml({ nombre, email, telefono, fecha, origen,
+  whatsappLink, phoneLink, emailLink, conversacion }) {
+
+  const mensaje = conversacion
+    .map(({ bot, usuario }) => `${bot}\n${usuario}`)
+    .join("\n\n");
+
+  return `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background:#ffffff;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+  <table width="560" cellpadding="0" cellspacing="0" border="0"
+         style="max-width:560px;margin:0 auto;padding:24px 16px;">
+    <tr>
+      <td align="left">
+
+        <!-- Encabezado -->
+        <p style="margin:0 0 4px 0;font-size:12px;color:#6B7280;text-transform:uppercase;">
+          WebLab
+        </p>
+        <h1 style="margin:0 0 20px 0;font-size:20px;font-weight:bold;color:#111827;">
+          Nuevo mensaje recibido
+        </h1>
+        <hr style="border:none;border-top:1px solid #E5E7EB;margin:0 0 20px 0;">
+
+        <!-- Datos del contacto -->
+        <p style="margin:0 0 10px 0;font-size:12px;color:#6B7280;text-transform:uppercase;">
+          Información del contacto
+        </p>
+        <p style="margin:0 0 6px 0;font-size:14px;"><strong>Nombre:</strong> ${nombre}</p>
+        <p style="margin:0 0 6px 0;font-size:14px;"><strong>Email:</strong> ${email}</p>
+        <p style="margin:0 0 6px 0;font-size:14px;"><strong>Teléfono:</strong> ${telefono}</p>
+        <p style="margin:0 0 6px 0;font-size:14px;"><strong>Fecha:</strong> ${fecha}</p>
+        <p style="margin:0 0 16px 0;font-size:14px;"><strong>Origen:</strong> ${origen}</p>
+
+        <hr style="border:none;border-top:1px solid #E5E7EB;margin:20px 0;">
+
+        <!-- Botones -->
+        <p style="margin:0 0 12px 0;font-size:13px;color:#6B7280;">Acciones rápidas:</p>
+
+        <table width="100%" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td align="center">
+              <table width="280" cellpadding="0" cellspacing="0" border="0">
+
+                <!-- WhatsApp -->
+                <tr>
+                  <td width="280" height="42" align="center" valign="middle"
+                      bgcolor="#16A34A"
+                      style="border-radius:6px;mso-padding-alt:0;">
+                    <a href="${whatsappLink}"
+                       style="display:block;padding:11px 20px;font-size:14px;font-weight:bold;
+                              color:#ffffff;text-decoration:none;font-family:Arial,Helvetica,sans-serif;">
+                      Escribir por WhatsApp
+                    </a>
+                  </td>
+                </tr>
+
+                <tr><td height="8"></td></tr>
+
+                <!-- Llamar -->
+                <tr>
+                  <td width="280" height="42" align="center" valign="middle"
+                      bgcolor="#1D4ED8"
+                      style="border-radius:6px;mso-padding-alt:0;">
+                    <a href="${phoneLink}"
+                       style="display:block;padding:11px 20px;font-size:14px;font-weight:bold;
+                              color:#ffffff;text-decoration:none;font-family:Arial,Helvetica,sans-serif;">
+                      Llamar por teléfono
+                    </a>
+                  </td>
+                </tr>
+
+                <tr><td height="8"></td></tr>
+
+                <!-- Email -->
+                <tr>
+                  <td width="280" height="42" align="center" valign="middle"
+                      bgcolor="#ffffff"
+                      style="border-radius:6px;border:1px solid #D1D5DB;mso-padding-alt:0;">
+                    <a href="${emailLink}"
+                       style="display:block;padding:11px 20px;font-size:14px;font-weight:bold;
+                              color:#374151;text-decoration:none;font-family:Arial,Helvetica,sans-serif;">
+                      Responder por email
+                    </a>
+                  </td>
+                </tr>
+
+              </table>
+            </td>
+          </tr>
+        </table>
+
+        <hr style="border:none;border-top:1px solid #E5E7EB;margin:20px 0;">
+
+        <!-- Conversación -->
+        <p style="margin:0 0 8px 0;font-size:12px;color:#6B7280;text-transform:uppercase;">
+          Conversación
+        </p>
+        <p style="margin:0 0 16px 0;font-size:14px;color:#374151;white-space:pre-line;line-height:1.6;">
+          ${mensaje}
+        </p>
+
+        <hr style="border:none;border-top:1px solid #E5E7EB;margin:20px 0;">
+
+        <!-- Footer -->
+        <p style="margin:0;font-size:12px;color:#9CA3AF;">
+          Mensaje automático generado por Chatbot WebLab.
+        </p>
+
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
 }
