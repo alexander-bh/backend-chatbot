@@ -1,3 +1,4 @@
+const ConversationSession = require("../models/ConversationSession");
 const upsertContactFromSession = require("../services/upsertContactFromSession.service");
 const { sendConversationEmail } = require("../services/chatbotEmail.service");
 const Notification = require("../models/Notification");
@@ -5,18 +6,24 @@ const { sendToAccount } = require("../services/pusher.service");
 const formatDateAMPM = require("../utils/formatDate");
 
 exports.finalizeConversation = async (session) => {
-  session.is_completed = true;
-  session.status = "completed";
+  // ── 1. Upsert contacto + marcar sesión completada en paralelo ──
   const [contact] = await Promise.all([
     upsertContactFromSession(session),
-    session.save(),
+    ConversationSession.findByIdAndUpdate(session._id, {
+      is_completed: true,
+      status: "completed",
+    }),
   ]);
 
+  // ── 2. Persistir contact_id en sesión si se creó contacto ──
   if (contact) {
-    session.contact_id = contact._id;
+    await ConversationSession.findByIdAndUpdate(session._id, {
+      contact_id: contact._id,
+    });
 
     const nombre = [contact.name, contact.last_name].filter(Boolean).join(" ") || "Sin nombre";
 
+    // ── 3. Notificaciones en background (no bloquean) ──
     Promise.all([
       Notification.create({
         account_id: session.account_id,
@@ -35,20 +42,33 @@ exports.finalizeConversation = async (session) => {
         sendToAccount(session.account_id, "new-notification", { notification: notif })
       ),
 
-      Promise.resolve(
-        sendToAccount(session.account_id, "contact-created", {
-          _id: contact._id,
-          name: contact.name,
-          email: contact.email,
-          phone: contact.phone,
-          source: contact.source || "chatbot",
-          status: contact.status,
-          createdAt: contact.createdAt,
-          createdAtFormatted: contact.createdAt ? formatDateAMPM(contact.createdAt) : null,
-        })
-      ),
-    ]).catch((err) => console.error("❌ Error en notificaciones post-contacto:", err));
+      sendToAccount(session.account_id, "contact-created", {
+        _id: contact._id,
+        name: contact.name,
+        email: contact.email,
+        phone: contact.phone,
+        source: contact.source || "chatbot",
+        status: contact.status,
+        createdAt: contact.createdAt,
+        createdAtFormatted: contact.createdAt ? formatDateAMPM(contact.createdAt) : null,
+      }),
+    ]).catch((err) =>
+      console.error("❌ Error en notificaciones post-contacto:", {
+        session_id: session._id,
+        contact_id: contact._id,
+        message: err.message,
+      })
+    );
   }
-  sendConversationEmail(session).catch(console.error);
+
+  // ── 4. Email en background (no bloquea) ──
+  sendConversationEmail(session).catch((err) =>
+    console.error("❌ Error en sendConversationEmail:", {
+      session_id: session._id,
+      message: err.message,
+      code: err.code,
+    })
+  );
+
   return contact;
 };

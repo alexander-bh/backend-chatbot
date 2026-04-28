@@ -8,7 +8,6 @@ const { finalizeConversation } = require("../helper/finalizeConversation");
 
 /**
  * GET /api/public-chatbot/chatbot-conversation/:public_id/bundle
- * Devuelve todos los nodos del flow publicado para ejecución local en el cliente.
  */
 exports.getFlowBundle = async (req, res) => {
   try {
@@ -31,10 +30,9 @@ exports.getFlowBundle = async (req, res) => {
       flow_id: flow._id,
       account_id: chatbot.account_id
     })
-      .select("-__v -account_id") // no exponer datos internos
+      .select("-__v -account_id")
       .lean();
 
-    // Solo los campos que necesita el cliente
     const safeNodes = nodes.map(n => ({
       _id: String(n._id),
       node_type: n.node_type,
@@ -45,7 +43,6 @@ exports.getFlowBundle = async (req, res) => {
       branch_id: n.branch_id ? String(n.branch_id) : null,
       variable_key: n.variable_key || null,
       validation: n.validation || null,
-      // opciones/policy solo con label+value+next, sin IDs internos expuestos
       options: Array.isArray(n.options) ? n.options.map(o => ({
         label: o.label,
         value: o.value ?? o.label,
@@ -79,15 +76,21 @@ exports.getFlowBundle = async (req, res) => {
 
 /**
  * POST /api/public-chatbot/chatbot-conversation/:public_id/finish
- * Recibe el historial y variables recopilados en el cliente,
- * crea la sesión y finaliza (upsert contacto, notificaciones, email).
- * 
- * Body: { history, variables, origin_url, visitor_id, mode? }
+ * Responde inmediatamente al cliente y procesa email en background.
  */
 exports.finishConversation = async (req, res) => {
+  const t0 = Date.now();
+  const { public_id } = req.params;
+
   try {
-    const { public_id } = req.params;
-    const { history = [], variables = {}, origin_url, visitor_id, mode = "production", device = "unknown" } = req.body;
+    const {
+      history = [],
+      variables = {},
+      origin_url,
+      visitor_id,
+      mode = "production",
+      device = "unknown"
+    } = req.body;
 
     // ── Validación básica ──
     if (!Array.isArray(history)) {
@@ -101,7 +104,7 @@ exports.finishConversation = async (req, res) => {
     const chatbot = await Chatbot.findOne({ public_id, status: "active" }).lean();
     if (!chatbot) return res.status(404).json({ message: "Chatbot no encontrado" });
 
-    // ── Validar email duplicado si viene en variables ──
+    // ── Validar email duplicado ──
     if (variables.email) {
       const emailNorm = variables.email.toLowerCase().trim();
       const exists = await Contact.exists({
@@ -111,14 +114,11 @@ exports.finishConversation = async (req, res) => {
         is_template: { $ne: true }
       });
       if (exists) {
-        return res.status(409).json({
-          message: "Este correo ya está registrado.",
-          field: "email"
-        });
+        return res.status(409).json({ message: "Este correo ya está registrado.", field: "email" });
       }
     }
 
-    // ── Validar teléfono duplicado si viene en variables ──
+    // ── Validar teléfono duplicado ──
     if (variables.phone) {
       const phoneNorm = String(variables.phone).replace(/\D/g, "").trim();
       const exists = await Contact.exists({
@@ -128,18 +128,14 @@ exports.finishConversation = async (req, res) => {
         is_template: { $ne: true }
       });
       if (exists) {
-        return res.status(409).json({
-          message: "Este teléfono ya está registrado.",
-          field: "phone"
-        });
+        return res.status(409).json({ message: "Este teléfono ya está registrado.", field: "phone" });
       }
     }
 
-    // ── Determinar si fue abandonado (rechazó política) ──
-    const consent = variables.data_processing_consent;
-    const isAbandoned = consent === "rejected";
+    // ── Determinar si fue abandonado ──
+    const isAbandoned = variables.data_processing_consent === "rejected";
 
-    // ── Crear sesión directamente completada ──
+    // ── Crear sesión ──
     const session = await ConversationSession.create({
       account_id: chatbot.account_id,
       chatbot_id: chatbot._id,
@@ -149,7 +145,7 @@ exports.finishConversation = async (req, res) => {
       history,
       origin_url: origin_url || null,
       visitor_id: visitor_id || null,
-      device: device || "unknown",   // ✅ esta línea
+      device,
       mode,
       is_completed: !isAbandoned,
       is_abandoned: isAbandoned,
@@ -158,22 +154,37 @@ exports.finishConversation = async (req, res) => {
       status: isAbandoned ? "abandoned" : "completed"
     });
 
-    // ── Si fue abandonado, no crear contacto ──
+    console.log(`ℹ️ [finish] Sesión creada en ${Date.now() - t0}ms — session: ${session._id}`);
+
+    // ── Abandonado: responder y salir ──
     if (isAbandoned) {
       return res.json({ completed: true, abandoned: true });
     }
 
-    // ── Finalizar: upsert contacto + notificaciones + email ──
-    const contact = await finalizeConversation(session);
+    // ── ✅ Responder al cliente INMEDIATAMENTE ──
+    // No esperamos a que finalizeConversation termine (email, notificaciones, etc.)
+    res.json({ completed: true, contact_id: null });
 
-    return res.json({
-      completed: true,
-      contact_id: contact?._id || null
-    });
+    // ── Procesar en background (sin bloquear la respuesta) ──
+    const tFinalize = Date.now();
+    finalizeConversation(session)
+      .then((contact) => {
+        console.log(`✅ [finish] finalizeConversation OK en ${Date.now() - tFinalize}ms — contact: ${contact?._id}`);
+      })
+      .catch((err) => {
+        console.error(`❌ [finish] Error en finalizeConversation (background) — session: ${session._id}`, {
+          message: err.message,
+          code: err.code,
+          stack: err.stack,
+        });
+      });
 
   } catch (err) {
-    console.error("finishConversation:", err);
-    return res.status(500).json({ message: "Error al finalizar conversación" });
+    console.error(`❌ [finish] Error general — ${Date.now() - t0}ms`, err);
+    // Solo responder si no se envió ya la respuesta
+    if (!res.headersSent) {
+      return res.status(500).json({ message: "Error al finalizar conversación" });
+    }
   }
 };
 
