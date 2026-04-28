@@ -12,6 +12,13 @@ const { cloneTemplateToFlow } = require("../services/flowNode.service");
 const { createFallbackFlow } = require("../services/flowNode.service");
 const formatDateAMPM = require("../utils/formatDate");
 const { mongoRetryOperation } = require("../utils/mongoRetry");
+const {
+  upsertBrevoContact,
+  removeBrevoContactFromList,
+  deleteBrevoContact
+} = require("../utils/brevo");
+
+const BREVO_LIST_ID = parseInt(process.env.BREVO_LIST_ID || "2");
 
 // ═══════════════════════════════════════════════════════════
 // CREAR CHATBOT (CLIENT)
@@ -819,27 +826,30 @@ exports.getNotificationSettings = async (req, res) => {
   }
 };
 // ═══════════════════════════════════════════════════════════
-// ACTUALIZAR CONFIGURACIÓN DE TELÉFONO
+// ACTUALIZAR CONFIGURACIÓN DE Email
 // ═══════════════════════════════════════════════════════════
 exports.updateEmailSettings = async (req, res) => {
   try {
-
     if (!req.user?.account_id) {
-      return res.status(401).json({
-        message: "Usuario no autenticado"
-      });
+      return res.status(401).json({ message: "Usuario no autenticado" });
     }
 
     const { chatbotId } = req.params;
+    const { enabled, from_name, from_email, to_email, from_asunto } = req.body;
 
-    const {
-      enabled,
-      from_name,
-      from_email,
-      to_email,
-      from_asunto
-    } = req.body;
+    // ── Obtener chatbot actual para comparar emails ───────────────────────────
+    const existing = await Chatbot.findOne({
+      _id: chatbotId,
+      account_id: req.user.account_id
+    });
 
+    if (!existing) {
+      return res.status(404).json({ message: "Chatbot no encontrado" });
+    }
+
+    const previousEmails = existing.email_settings?.to_email || [];
+
+    // ── Construir update ──────────────────────────────────────────────────────
     const update = {};
 
     if (from_name !== undefined) update["email_settings.from_name"] = from_name;
@@ -847,71 +857,84 @@ exports.updateEmailSettings = async (req, res) => {
     if (from_email !== undefined) update["email_settings.from_email"] = from_email;
     if (from_asunto !== undefined) update["email_settings.from_asunto"] = from_asunto;
 
-    // ── Normalización de to_email ──────────────────────────────────────────
+    // ── Normalización y diff de to_email ─────────────────────────────────────
+    let normalizedEmails = [];
+    let emailsToAdd = [];
+    let emailsToRemove = [];
+
     if (to_email !== undefined) {
-      let emails = [];
+      let raw = [];
 
       if (Array.isArray(to_email)) {
-        // Ya viene como array: ["a@x.com", "b@x.com"]
-        emails = to_email;
+        raw = to_email;
       } else if (typeof to_email === "string" && to_email.trim() !== "") {
-        // Viene como string separado por comas: "a@x.com, b@x.com"
-        emails = to_email.split(",");
+        raw = to_email.split(",");
       }
 
-      // Limpiar, normalizar y deduplicar
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      const normalized = [
-        ...new Set(
-          emails
-            .map(e => e.trim().toLowerCase())
-            .filter(e => e.length > 0)
-        )
-      ];
+      normalizedEmails = [...new Set(
+        raw.map(e => e.trim().toLowerCase()).filter(e => e.length > 0)
+      )];
 
-      // Validar formato de cada email
-      const invalids = normalized.filter(e => !emailRegex.test(e));
+      const invalids = normalizedEmails.filter(e => !emailRegex.test(e));
       if (invalids.length > 0) {
         return res.status(400).json({
           message: `Correos con formato inválido: ${invalids.join(", ")}`
         });
       }
 
-      update["email_settings.to_email"] = normalized;
+      // 🔍 DIFF: cuáles se agregan y cuáles se eliminan
+      emailsToAdd = normalizedEmails.filter(e => !previousEmails.includes(e));
+      emailsToRemove = previousEmails.filter(e => !normalizedEmails.includes(e));
+
+      update["email_settings.to_email"] = normalizedEmails;
     }
     // ─────────────────────────────────────────────────────────────────────────
 
     const chatbot = await Chatbot.findOneAndUpdate(
-      {
-        _id: chatbotId,
-        account_id: req.user.account_id
-      },
+      { _id: chatbotId, account_id: req.user.account_id },
       { $set: update },
-      { new: true }
+      { returnDocument: "after" }
     );
 
-    if (!chatbot) {
-      return res.status(404).json({
-        message: "Chatbot no encontrado"
+    if (emailsToAdd.length > 0 || emailsToRemove.length > 0) {
+      Promise.allSettled([
+        ...emailsToAdd.map(email =>
+          upsertBrevoContact(email, { NOMBRE: chatbot.name }, [BREVO_LIST_ID])
+        ),
+        // ✅ Eliminar completamente en lugar de solo sacar de la lista
+        ...emailsToRemove.map(email =>
+          deleteBrevoContact(email)
+        )
+      ]).then(results => {
+        results.forEach((r, i) => {
+          if (r.status === "rejected") {
+            console.error(`⚠️ Brevo op ${i} falló:`, r.reason?.statusCode, r.reason?.body || r.reason?.message);
+          }
+        });
       });
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+
     res.json({
       message: "Configuración de email actualizada",
-      email_settings: chatbot.email_settings
+      email_settings: chatbot.email_settings,
+      brevo_sync: {
+        added: emailsToAdd,
+        removed: emailsToRemove
+      }
     });
 
   } catch (error) {
-
     console.error("UPDATE EMAIL SETTINGS ERROR:", error);
-
-    res.status(500).json({
-      message: "Error al actualizar configuración de correo"
-    });
-
+    res.status(500).json({ message: "Error al actualizar configuración de correo" });
   }
 };
 
+// ═══════════════════════════════════════════════════════════
+// ACTUALIZAR CONFIGURACIÓN DE  
+// ═══════════════════════════════════════════════════════════
 exports.updatePhoneSettings = async (req, res) => {
   try {
     if (!req.user?.account_id) {

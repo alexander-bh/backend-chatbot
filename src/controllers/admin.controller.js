@@ -18,6 +18,13 @@ const { deleteFromCloudinary } = require("../services/cloudinary.service");
 const { cloneTemplateToFlow, createFallbackFlow } = require("../services/flowNode.service");
 const slugify = require("../helper/slugify");
 const getOrCreateConfig = require("../helper/getOrCreateConfig");
+const {
+  upsertBrevoContact,
+  removeBrevoContactFromList,
+  deleteBrevoContact
+} = require("../utils/brevo");
+
+const BREVO_LIST_ID = parseInt(process.env.BREVO_LIST_ID || "1");
 
 /* ─────────────────────────────────────
    DASHBOAR
@@ -1830,9 +1837,16 @@ exports.updateSystemConfig = async (req, res) => {
     const { bcc_email, whatsapp_notify } = req.body;
 
     const updates = [];
+    let bccEmailToAdd = null;
+    let bccEmailToRemove = null;
 
     // ───────── EMAIL ─────────
     if (bcc_email !== undefined) {
+
+      // ── Obtener el BCC actual para hacer diff ──────────────────────────────
+      const currentBcc = await SystemConfig.findOne({ key: "bcc_email" });
+      const previousBccEmail = currentBcc?.value || null;
+
       if (bcc_email !== null && bcc_email !== "") {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(bcc_email.trim())) {
@@ -1840,15 +1854,37 @@ exports.updateSystemConfig = async (req, res) => {
             message: "Formato de BCC inválido"
           });
         }
-      }
 
-      updates.push(
-        SystemConfig.findOneAndUpdate(
-          { key: "bcc_email" },
-          { $set: { value: bcc_email?.trim() || null } },
-          { upsert: true, new: true }
-        )
-      );
+        const newEmail = bcc_email.trim().toLowerCase();
+
+        // Solo sincronizar si cambió
+        if (newEmail !== previousBccEmail) {
+          bccEmailToAdd = newEmail;
+          bccEmailToRemove = previousBccEmail; // el anterior se elimina de Brevo
+        }
+
+        updates.push(
+          SystemConfig.findOneAndUpdate(
+            { key: "bcc_email" },
+            { $set: { value: newEmail } },
+            { upsert: true, returnDocument: "after" }
+          )
+        );
+
+      } else {
+        // Se está limpiando el BCC → eliminar de Brevo
+        if (previousBccEmail) {
+          bccEmailToRemove = previousBccEmail;
+        }
+
+        updates.push(
+          SystemConfig.findOneAndUpdate(
+            { key: "bcc_email" },
+            { $set: { value: null } },
+            { upsert: true, returnDocument: "after" }
+          )
+        );
+      }
     }
 
     // ───────── WHATSAPP ─────────
@@ -1868,15 +1904,8 @@ exports.updateSystemConfig = async (req, res) => {
         updates.push(
           SystemConfig.findOneAndUpdate(
             { key: "whatsapp_notify" },
-            {
-              $set: {
-                value: {
-                  lada,
-                  phone
-                }
-              }
-            },
-            { upsert: true, new: true }
+            { $set: { value: { lada, phone } } },
+            { upsert: true, returnDocument: "after" }
           )
         );
 
@@ -1886,7 +1915,7 @@ exports.updateSystemConfig = async (req, res) => {
           SystemConfig.findOneAndUpdate(
             { key: "whatsapp_notify" },
             { $set: { value: null } },
-            { upsert: true }
+            { upsert: true, returnDocument: "after" }
           )
         );
 
@@ -1901,8 +1930,44 @@ exports.updateSystemConfig = async (req, res) => {
 
     await Promise.all(updates);
 
+    // ── Sincronizar BCC con Brevo en background ───────────────────────────────
+    const brevoOps = [];
+
+    if (bccEmailToAdd) {
+      brevoOps.push(
+        upsertBrevoContact(
+          bccEmailToAdd,
+          {
+            NOMBRE: "BCC Email"
+          },
+          [BREVO_LIST_ID]
+        )
+      );
+    }
+
+    if (bccEmailToRemove) {
+      brevoOps.push(
+        deleteBrevoContact(bccEmailToRemove)
+      );
+    }
+
+    if (brevoOps.length > 0) {
+      Promise.allSettled(brevoOps).then(results => {
+        results.forEach((r, i) => {
+          if (r.status === "rejected") {
+            console.error(`⚠️ Brevo op ${i} falló:`, r.reason?.response?.body || r.reason?.message || r.reason);
+          }
+        });
+      });
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     res.json({
-      message: "Configuración actualizada correctamente"
+      message: "Configuración actualizada correctamente",
+      brevo_sync: {
+        added: bccEmailToAdd ?? null,
+        removed: bccEmailToRemove ?? null
+      }
     });
 
   } catch (err) {
@@ -1913,13 +1978,34 @@ exports.updateSystemConfig = async (req, res) => {
 
 exports.clearBccEmail = async (req, res) => {
   try {
+    // 1. Obtener el email actual antes de limpiar
+    const current = await SystemConfig.findOne({ key: "bcc_email" });
+    const previousEmail = current?.value || null;
+
+    // 2. Limpiar en BD
     await SystemConfig.findOneAndUpdate(
       { key: "bcc_email" },
       { $set: { value: null } },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: "after" }  // ✅ fix deprecation warning
     );
 
-    res.json({ message: "BCC eliminado correctamente" });
+    // 3. Eliminar de Brevo en background (solo si había un email)
+    if (previousEmail) {
+      deleteBrevoContact(previousEmail)
+        .then(() => console.log(`✅ Brevo: contacto ${previousEmail} eliminado`))
+        .catch(err => {
+          const status = err?.response?.status || err?.statusCode;
+          if (status !== 404) {
+            console.error("⚠️ Brevo clearBcc falló:", err?.response?.body || err?.message);
+          }
+        });
+    }
+
+    res.json({
+      message: "BCC eliminado correctamente",
+      brevo_sync: { removed: previousEmail ?? null }
+    });
+
   } catch (err) {
     console.error("CLEAR BCC EMAIL ERROR:", err);
     res.status(500).json({ message: err.message });

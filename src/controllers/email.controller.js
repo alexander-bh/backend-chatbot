@@ -9,7 +9,7 @@ const sendTestEmail = async (req, res) => {
     });
   }
   const mailOptions = {
-    from: `"Prueba de Correo" <${process.env.SMTP_USER}>`,
+    from: `"ChatbotAnfeta" <info@weblab.com.mx>`,
     to,
     subject,
     text: message,

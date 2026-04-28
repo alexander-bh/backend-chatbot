@@ -11,11 +11,11 @@ const transporter = nodemailer.createTransport({
   pool: true,
   maxConnections: 5,
   maxMessages: 100,
-
-  connectionTimeout: 3000,
-  greetingTimeout:   3000,
-  socketTimeout:     8000,
+  connectionTimeout: 5000, 
+  greetingTimeout:   5000,
+  socketTimeout:     10000,
 });
+
 transporter.verify((err) => {
   if (err) console.error("SMTP no disponible:", err.message);
   else console.log("SMTP listo");
