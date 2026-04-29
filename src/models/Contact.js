@@ -76,13 +76,4 @@ ContactSchema.index(
   { account_id: 1, chatbot_id: 1, session_id: 1 },
   { unique: true, partialFilterExpression: { session_id: { $exists: true } } }
 );
-ContactSchema.index(
-  { account_id: 1, email: 1 },
-  { unique: true, partialFilterExpression: { email: { $exists: true }, is_template: { $eq: false } } }
-);
-ContactSchema.index(
-  { account_id: 1, phone: 1 },
-  { unique: true, partialFilterExpression: { phone: { $exists: true }, is_template: { $eq: false } } }
-);
-
 module.exports = mongoose.model("Contact", ContactSchema);

@@ -104,34 +104,6 @@ exports.finishConversation = async (req, res) => {
     const chatbot = await Chatbot.findOne({ public_id, status: "active" }).lean();
     if (!chatbot) return res.status(404).json({ message: "Chatbot no encontrado" });
 
-    // ── Validar email duplicado ──
-    if (variables.email) {
-      const emailNorm = variables.email.toLowerCase().trim();
-      const exists = await Contact.exists({
-        account_id: chatbot.account_id,
-        email: emailNorm,
-        is_deleted: { $ne: true },
-        is_template: { $ne: true }
-      });
-      if (exists) {
-        return res.status(409).json({ message: "Este correo ya está registrado.", field: "email" });
-      }
-    }
-
-    // ── Validar teléfono duplicado ──
-    if (variables.phone) {
-      const phoneNorm = String(variables.phone).replace(/\D/g, "").trim();
-      const exists = await Contact.exists({
-        account_id: chatbot.account_id,
-        phone: phoneNorm,
-        is_deleted: { $ne: true },
-        is_template: { $ne: true }
-      });
-      if (exists) {
-        return res.status(409).json({ message: "Este teléfono ya está registrado.", field: "phone" });
-      }
-    }
-
     // ── Determinar si fue abandonado ──
     const isAbandoned = variables.data_processing_consent === "rejected";
 
@@ -161,8 +133,7 @@ exports.finishConversation = async (req, res) => {
       return res.json({ completed: true, abandoned: true });
     }
 
-    // ── ✅ Responder al cliente INMEDIATAMENTE ──
-    // No esperamos a que finalizeConversation termine (email, notificaciones, etc.)
+    // ── Responder al cliente INMEDIATAMENTE ──
     res.json({ completed: true, contact_id: null });
 
     // ── Procesar en background (sin bloquear la respuesta) ──
@@ -181,7 +152,6 @@ exports.finishConversation = async (req, res) => {
 
   } catch (err) {
     console.error(`❌ [finish] Error general — ${Date.now() - t0}ms`, err);
-    // Solo responder si no se envió ya la respuesta
     if (!res.headersSent) {
       return res.status(500).json({ message: "Error al finalizar conversación" });
     }

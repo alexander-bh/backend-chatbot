@@ -30,30 +30,11 @@ module.exports = async function upsertContactFromSession(session) {
     /* ── REQUIERE AL MENOS EMAIL O TELÉFONO ── */
     if (!email && !phone) return null;
 
-    /* ── BUSCAR CONTACTO EXISTENTE ── */
+    /* ── BUSCAR CONTACTO EXISTENTE SOLO POR contact_id ── */
     let existingContact = null;
 
-    // 1. Por contact_id de la sesión
     if (session.contact_id) {
       existingContact = await Contact.findById(session.contact_id);
-    }
-
-    // 2. Por email
-    if (!existingContact && email) {
-      existingContact = await Contact.findOne({
-        account_id: session.account_id,
-        email,
-        is_deleted: { $ne: true }
-      });
-    }
-
-    // 3. Por teléfono
-    if (!existingContact && phone) {
-      existingContact = await Contact.findOne({
-        account_id: session.account_id,
-        phone,
-        is_deleted: { $ne: true }
-      });
     }
 
     /* ── MERGE Y LIMPIAR VARIABLES ── */
@@ -98,19 +79,16 @@ module.exports = async function upsertContactFromSession(session) {
     let contact;
 
     if (existingContact) {
-      // Conservar campos existentes si no llegan nuevos
       for (const field of CRM_DEFAULT_FIELDS) {
         if (contactData[field] === undefined && existingContact[field] !== undefined) {
           contactData[field] = existingContact[field];
         }
       }
 
-      // Registrar último chatbot si cambió
       if (String(existingContact.chatbot_id) !== String(session.chatbot_id)) {
         contactData.last_chatbot_id = session.chatbot_id;
       }
 
-      // Preservar visitor_id existente
       if (!contactData.visitor_id && existingContact.visitor_id) {
         contactData.visitor_id = existingContact.visitor_id;
       }
@@ -122,6 +100,7 @@ module.exports = async function upsertContactFromSession(session) {
       );
 
     } else {
+      // ── Siempre crear contacto nuevo ──
       contact = await Contact.create(contactData);
     }
 
