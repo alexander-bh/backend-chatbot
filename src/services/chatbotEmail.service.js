@@ -1,4 +1,3 @@
-// services/conversationMailer.service.js
 const transporter = require("./mailer.service");
 const Chatbot = require("../models/Chatbot");
 const SystemConfig = require("../models/SystemConfig");
@@ -12,11 +11,10 @@ const log = (level, msg, data = null) => {
   level === "error" ? console.error(out) : console.log(out);
 };
 
-exports.sendConversationEmail = async (session) => {
+exports.sendConversationEmail = async (session, contact = null) => {
   log("info", `Iniciando envío — session: ${session._id}`);
 
   try {
-    // 1. DB en paralelo
     const [chatbot, bccConfig] = await Promise.all([
       Chatbot.findById(session.chatbot_id).lean(),
       SystemConfig.findOne({ key: "bcc_email" }).lean(),
@@ -27,7 +25,6 @@ exports.sendConversationEmail = async (session) => {
       return;
     }
 
-    // 2. Destinatarios
     const bccEmail = bccConfig?.value?.trim() || process.env.BCC_EMAIL || "";
     const settings = chatbot.email_settings || {};
     const toEmailRaw = settings.enabled ? settings.to_email : null;
@@ -43,13 +40,24 @@ exports.sendConversationEmail = async (session) => {
       return;
     }
 
-    // 3. Params y HTML
-    const vars = session.variables || {};
+    const vars = {
+      ...(session.variables || {}),
+      ...(contact
+        ? Object.fromEntries(
+          Object.entries({
+            name: contact.name,
+            last_name: contact.last_name,
+            email: contact.email,
+            phone: contact.phone,
+          }).filter(([_, v]) => v != null && v !== "")
+        )
+        : {}),
+    };
+    
     const params = buildParams({ chatbot, session, vars });
 
     log("debug", "Destinatarios", { to: toEmails, bcc: bccEmail || "(vacío)" });
 
-    // 4. Enviar con el mismo transporter del sendTestEmail
     const info = await transporter.sendMail({
       from: `"ChatbotAnfeta" <info@weblab.com.mx>`,
       to: toEmails.length ? toEmails.join(", ") : bccEmail,

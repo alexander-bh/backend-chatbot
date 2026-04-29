@@ -61,14 +61,17 @@ exports.finalizeConversation = async (session) => {
     );
   }
 
-  // ── 4. Email en background (no bloquea) ──
-  sendConversationEmail(session).catch((err) =>
-    console.error("❌ Error en sendConversationEmail:", {
-      session_id: session._id,
-      message: err.message,
-      code: err.code,
-    })
-  );
+  if (contact) {
+    sendConversationEmail(session, contact).catch((err) =>
+      console.error("❌ Error en sendConversationEmail:", {
+        session_id: session._id,
+        message: err.message,
+        code: err.code,
+      })
+    );
+  } else {
+    console.log(`ℹ️ [finalize] Sin contacto identificable — se omite email. session: ${session._id}`);
+  }
 
   return contact;
 };
