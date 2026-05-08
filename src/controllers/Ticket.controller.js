@@ -6,8 +6,9 @@ const { createAndEmitNotification } = require("../controllers/notification.contr
 const { deleteFromCloudinary } = require("../services/cloudinary.service");
 const { CATEGORY_LABELS, PRIORITY_LABELS } = require("../shared/ticket.enums")
 const formatDateAMPM = require("../utils/formatDate");
-const getTransporter = require("../helper/getTransporter");
+const { BrevoClient } = require("@getbrevo/brevo");
 const getSupportConfig = require("../helper/getSupportConfig");
+const brevoClient = new BrevoClient({ apiKey: process.env.BREVO_API_KEY });
 
 /* ─────────────────────────────────────
    CLIENT — CREAR TICKET
@@ -92,66 +93,65 @@ exports.createTicket = async (req, res) => {
 
         if (support_email) {
             try {
-                const transporter = getTransporter();
-                await transporter.sendMail({
-                    from: `"Soporte App" <${process.env.SMTP_USER}>`,
-                    to: support_email,
+                await brevoClient.transactionalEmails.sendTransacEmail({
+                    sender: { name: "Soporte Chatbot", email: "info@weblab.com.mx" },
+                    to: [{ email: support_email }],
                     subject: `[${ticket.ticket_id}] Nuevo ticket: ${ticket.subject}`,
-                    html: `
-            <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 24px;
-                        border: 1px solid #e2e8f0; border-radius: 8px;">
-              <h2 style="color: #10b981; margin-bottom: 4px;">📩 Nuevo Ticket de Soporte</h2>
-              <p style="color: #64748b; margin-top: 0;">
-                Generado el ${new Date().toLocaleString("es-MX")}
-              </p>
-              <hr style="border: none; border-top: 1px solid #e2e8f0;" />
+                    htmlContent: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 24px;
+                    border: 1px solid #e2e8f0; border-radius: 8px;">
+          <h2 style="color: #10b981; margin-bottom: 4px;">📩 Nuevo Ticket de Soporte</h2>
+          <p style="color: #64748b; margin-top: 0;">
+            Generado el ${new Date().toLocaleString("es-MX")}
+          </p>
+          <hr style="border: none; border-top: 1px solid #e2e8f0;" />
 
-              <table style="width:100%; border-collapse: collapse; font-size: 14px; margin-top: 16px;">
-                <tr>
-                  <td style="padding: 6px 0; color:#64748b; width:120px;"><b>Ticket ID</b></td>
-                  <td style="font-family: monospace; color:#10b981;">${ticket.ticket_id}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 6px 0; color:#64748b;"><b>Categoría</b></td>
-                  <td>${CATEGORY_LABELS[ticket.category] || ticket.category}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 6px 0; color:#64748b;"><b>Prioridad</b></td>
-                  <td>${PRIORITY_LABELS[ticket.priority] || ticket.priority}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 6px 0; color:#64748b;"><b>Canal</b></td>
-                  <td>${ticket.channel}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 6px 0; color:#64748b;"><b>Usuario</b></td>
-                  <td>${user?.name ?? "—"} (${user?.email ?? "—"})</td>
-                </tr>
-              </table>
+          <table style="width:100%; border-collapse: collapse; font-size: 14px; margin-top: 16px;">
+            <tr>
+              <td style="padding: 6px 0; color:#64748b; width:120px;"><b>Ticket ID</b></td>
+              <td style="font-family: monospace; color:#10b981;">${ticket.ticket_id}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color:#64748b;"><b>Categoría</b></td>
+              <td>${CATEGORY_LABELS[ticket.category] || ticket.category}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color:#64748b;"><b>Prioridad</b></td>
+              <td>${PRIORITY_LABELS[ticket.priority] || ticket.priority}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color:#64748b;"><b>Canal</b></td>
+              <td>${ticket.channel}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color:#64748b;"><b>Usuario</b></td>
+              <td>${user?.name ?? "—"} (${user?.email ?? "—"})</td>
+            </tr>
+          </table>
 
-              <div style="margin-top: 16px; background: #f8fafc; border-radius: 6px; padding: 12px;">
-                <p style="margin: 0 0 6px; color:#64748b; font-size:13px;"><b>Asunto</b></p>
-                <p style="margin: 0; font-size: 15px;">${ticket.subject}</p>
-              </div>
+          <div style="margin-top: 16px; background: #f8fafc; border-radius: 6px; padding: 12px;">
+            <p style="margin: 0 0 6px; color:#64748b; font-size:13px;"><b>Asunto</b></p>
+            <p style="margin: 0; font-size: 15px;">${ticket.subject}</p>
+          </div>
 
-              <div style="margin-top: 12px; background: #f8fafc; border-radius: 6px; padding: 12px;">
-                <p style="margin: 0 0 6px; color:#64748b; font-size:13px;"><b>Descripción</b></p>
-                <p style="margin: 0; font-size: 14px; line-height: 1.6;">${ticket.description}</p>
-              </div>
+          <div style="margin-top: 12px; background: #f8fafc; border-radius: 6px; padding: 12px;">
+            <p style="margin: 0 0 6px; color:#64748b; font-size:13px;"><b>Descripción</b></p>
+            <p style="margin: 0; font-size: 14px; line-height: 1.6;">${ticket.description}</p>
+          </div>
 
-              ${screenshot_url
+          ${screenshot_url
                             ? `<div style="margin-top:12px;">
-                     <p style="color:#64748b;font-size:13px;"><b>Captura adjunta:</b></p>
-                     <img src="${screenshot_url}" style="max-width:100%;border-radius:6px;" />
-                   </div>`
+                 <p style="color:#64748b;font-size:13px;"><b>Captura adjunta:</b></p>
+                 <img src="${screenshot_url}" style="max-width:100%;border-radius:6px;" />
+               </div>`
                             : ""}
 
-              <hr style="border: none; border-top: 1px solid #e2e8f0; margin-top: 24px;" />
-              <p style="color:#94a3b8; font-size: 12px; text-align: center;">
-                Este correo fue generado automáticamente.
-              </p>
-            </div>
-          `,
+          <hr style="border: none; border-top: 1px solid #e2e8f0; margin-top: 24px;" />
+          <p style="color:#94a3b8; font-size: 12px; text-align: center;">
+            Este correo fue generado automáticamente.
+          </p>
+        </div>
+      `,
                 });
             } catch (mailErr) {
                 console.error("Email error (ticket):", mailErr.message);

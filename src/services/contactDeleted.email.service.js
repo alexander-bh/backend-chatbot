@@ -1,11 +1,12 @@
-const transporter = require("./mailer.service");
+const { BrevoClient } = require("@getbrevo/brevo");
 const Account = require("../models/Account");
 const Notification = require("../models/Notification");
 const { sendToAccount } = require("./pusher.service");
 
+const client = new BrevoClient({ apiKey: process.env.BREVO_API_KEY });
+
 exports.sendContactsDeletedEmail = async ({ accountId, deletedContacts }) => {
   try {
-
     console.log("🔔 sendContactsDeletedEmail llamado:", { accountId, contactsCount: deletedContacts.length });
 
     const account = await Account.findById(accountId).lean();
@@ -15,22 +16,17 @@ exports.sendContactsDeletedEmail = async ({ accountId, deletedContacts }) => {
 
     if (!account) return;
 
-    /* ── Guardar notificación en BD siempre ──────────────────────────────── */
     const notif = await Notification.create({
       account_id: accountId,
       type: "contacts_deleted",
       title: `${deletedContacts.length} contacto(s) eliminado(s)`,
       message: `Se eliminaron automáticamente ${deletedContacts.length} contacto(s) por superar su fecha límite de descarte.`,
       data: { contacts: deletedContacts },
-      is_read: false
+      is_read: false,
     });
 
-    // ← Emitir en tiempo real via Pusher
-    await sendToAccount(accountId, "new-notification", {
-      notification: notif
-    });
+    await sendToAccount(accountId, "new-notification", { notification: notif });
 
-    /* ── Enviar email solo si está habilitado ────────────────────────────── */
     if (!account.notification_emails_enabled) {
       console.log(`⚠️ Notificaciones email deshabilitadas para cuenta ${accountId}`);
       return;
@@ -114,19 +110,24 @@ exports.sendContactsDeletedEmail = async ({ accountId, deletedContacts }) => {
       </body></html>
     `;
 
-    console.log("📧 from:", `"Sistema CRM" <${process.env.SMTP_USER}>`);
+    console.log("📧 sender: info@weblab.com.mx");
 
     try {
-      const info = await transporter.sendMail({
-        from: `"Sistema CRM" <${process.env.SMTP_USER}>`,
-        to: account.notification_emails,
+      // ✅ Brevo requiere to como array de objetos { email }
+      const toList = account.notification_emails.map((e) => ({ email: e }));
+
+      const result = await client.transactionalEmails.sendTransacEmail({
+        sender: { name: "Sistema CRM", email: "info@weblab.com.mx" },
+        to: toList,
         subject: `🗑️ ${deletedContacts.length} contacto(s) eliminado(s) - ${account.name}`,
-        html: htmlContent,
+        htmlContent,
       });
-      console.log("✅ Email enviado:", info.messageId, info.response);
+
+      console.log("✅ Email enviado:", result?.messageId);
     } catch (mailErr) {
-      console.error("❌ Error en sendMail:", mailErr.message);
+      console.error("❌ Error en sendTransacEmail:", mailErr.message);
     }
+
     console.log(`📧 Notificación enviada a ${account.notification_emails.join(", ")}`);
 
   } catch (err) {
