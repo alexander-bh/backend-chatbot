@@ -3,7 +3,6 @@
     var PID = "{{PUBLIC_ID}}";
     var POSITION = "{{POSITION}}";
     var SECONDARYCOLOR = "{{SECONDARY_COLOR}}";
-    // ── Instancia única ──
     var INSTANCE_KEY = "__CHATBOT_INSTALLED__" + PID;
     if (window[INSTANCE_KEY]) {
         var ex = document.getElementById("chatbot_" + PID);
@@ -12,7 +11,6 @@
 
     window[INSTANCE_KEY] = true;
 
-    // ── Registro global de posiciones + cálculo de offset ──
     if (!window.__CHATBOT_REGISTRY__) window.__CHATBOT_REGISTRY__ = {};
 
     var FAB_SIZE = 80;
@@ -47,9 +45,6 @@
         domain += ":" + window.location.port;
     }
 
-    /* ────────────────────────────────────────
-       Helpers de posicionamiento del iframe
-    ──────────────────────────────────────── */
     function getFabInitStyles() {
         if (POSITION === "bottom-left") {
             return "bottom:" + STACK_OFFSET + "px;left:20px";
@@ -153,9 +148,6 @@
         iframe.style.top = topClose + "px";
     }
 
-    /* ────────────────────────────────────────
-   Badge de notificaciones (fuera del iframe)
-──────────────────────────────────────── */
     var badgeEl = null;
 
     function createBadge() {
@@ -166,31 +158,23 @@
         var isMiddle = POSITION === "middle-right";
 
         var BADGE_SIZE = 28;
-
-        // --- AJUSTES PARA ACERCAR EL BADGE AL AVATAR ---
-        // Al aumentar de 16 a 24, lo metemos más hacia el centro del avatar
         var X_OFFSET = 24;
-        // Al disminuir de 56 a 46, lo bajamos para que superponga el borde
         var Y_OFFSET = 46;
 
         var posStyles;
 
         if (isLeft) {
-            // bottom-left: Badge en la esquina SUPERIOR IZQUIERDA del avatar
             posStyles = [
                 "bottom:" + (STACK_OFFSET + Y_OFFSET) + "px",
                 "left:" + X_OFFSET + "px"
             ].join(";");
         } else if (isMiddle) {
-            // middle-right: Badge en la esquina SUPERIOR DERECHA del avatar
-            // Sumamos +8 a la posición top para bajarlo y que solape mejor
             var topPos = (window.innerHeight / 2) - 40 + (sameCount * (FAB_SIZE + FAB_GAP));
             posStyles = [
                 "top:" + (topPos + 8) + "px",
                 "right:" + X_OFFSET + "px"
             ].join(";");
         } else {
-            // bottom-right: Badge en la esquina SUPERIOR DERECHA del avatar
             posStyles = [
                 "bottom:" + (STACK_OFFSET + Y_OFFSET) + "px",
                 "right:" + X_OFFSET + "px"
@@ -236,7 +220,6 @@
         while (badgeEl.firstChild) badgeEl.removeChild(badgeEl.firstChild);
         badgeEl.appendChild(document.createTextNode(count > 9 ? "9+" : String(count)));
 
-        // FIX: forzar re-trigger de la animación de entrada
         badgeEl.style.transition = "none";
         badgeEl.style.opacity = "0";
         badgeEl.style.transform = "scale(0)";
@@ -260,9 +243,6 @@
         badgeEl.style.transform = "scale(0)";
     }
 
-    /* ────────────────────────────────────────
-       Welcome bubble
-    ──────────────────────────────────────── */
     var welcomeEl = null;
     var pendingWelcome = null;
     var welcomeAutoDismissTimer = null;
@@ -273,7 +253,6 @@
         var isMiddle = POSITION === "middle-right";
         var isMobile = window.innerWidth <= 480;
 
-        // ── Posición horizontal ──
         var hPos, maxWidth;
         if (isMobile) {
             if (isLeft) {
@@ -288,7 +267,6 @@
             maxWidth = "260px";
         }
 
-        // ── Posición vertical ──
         var bottomOffset;
         if (isMobile) {
             bottomOffset = STACK_OFFSET + FAB_SIZE + 16;
@@ -318,15 +296,12 @@
             vPos, hPos, transformInit
         ].join(";");
 
-        // ── Flecha ──
-        // MOBILE:  apunta hacia ABAJO → señala el FAB que está debajo de la burbuja
-        // DESKTOP: apunta al LADO   → señala el FAB que está a izquierda/derecha
         var arrow = document.createElement("div");
 
         if (isMobile) {
             var arrowHPos = isLeft
-                ? "left:20px;right:auto"   // alineada bajo el FAB izquierdo
-                : "right:20px;left:auto";  // alineada bajo el FAB derecho
+                ? "left:20px;right:auto"
+                : "right:20px;left:auto";
             arrow.style.cssText = [
                 "position:absolute",
                 "width:14px",
@@ -376,7 +351,6 @@
             });
         });
 
-        // En mobile auto-dismiss a los 4s para no bloquear contenido de terceros
         if (isMobile) {
             welcomeAutoDismissTimer = setTimeout(function () {
                 hideWelcome();
@@ -394,9 +368,6 @@
         setTimeout(function () { if (el.parentNode) el.remove(); }, 400);
     }
 
-    /* ────────────────────────────────────────
-       Freeze / unfreeze + utilidades z-index
-    ──────────────────────────────────────── */
     function sendFreezeUnfreeze(iframe, delay) {
         setTimeout(function () {
             try {
@@ -415,9 +386,6 @@
         });
     }
 
-    /* ────────────────────────────────────────
-       Estado + listener global
-    ──────────────────────────────────────── */
     var _chatOpen = false;
 
     window.addEventListener("__CHATBOT_CLOSE_OTHERS__", function (evt) {
@@ -448,15 +416,11 @@
         } catch (e) { }
     });
 
-    /* ────────────────────────────────────────
-       Challenge → mount iframe
-    ──────────────────────────────────────── */
     var xhr = new XMLHttpRequest();
     var _retries = 0;
     var MAX_RETRIES = 2;
     var _observer = null;
 
-    // ── Reemplaza doChallenge() ──
     function doChallenge() {
         if (_observer) { _observer.disconnect(); _observer = null; }
         var link = document.createElement("link");
@@ -534,7 +498,6 @@
 
         document.body.appendChild(iframe);
 
-        /* ── Viewport fixes (mobile) ── */
         function applyViewportFix() {
             if (!_chatOpen || window.innerWidth > 480 || !window.visualViewport) return;
             iframe.style.height = window.visualViewport.height + "px";
@@ -577,7 +540,6 @@
             }, 100);
         });
 
-        /* ── Message handler ── */
         var _welcomeShownThisLoad = false;
 
         window.addEventListener("message", function (e) {
@@ -668,7 +630,6 @@
                     break;
             }
         });
-        /* ── Observer: evitar que el iframe sea removido del DOM ── */
         _observer = new MutationObserver(function () {
             if (!document.getElementById("chatbot_" + PID)) document.body.appendChild(iframe);
             if (welcomeEl && !document.body.contains(welcomeEl)) document.body.appendChild(welcomeEl);
@@ -676,5 +637,5 @@
         });
         _observer.observe(document.body, { childList: true });
 
-    } /* ── fin mountIframe ── */
+    }
 })();

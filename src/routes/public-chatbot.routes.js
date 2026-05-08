@@ -17,10 +17,5 @@ router.post(
   controller.finishConversation
 );
 
-router.post(
-  "/chatbot-conversation/:public_id/validate-field",
-  publicLimiter,
-  controller.validateField
-);
 
 module.exports = router;

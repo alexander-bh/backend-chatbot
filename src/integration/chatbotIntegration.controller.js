@@ -6,6 +6,7 @@ const crypto = require("crypto");
 
 const Chatbot = require("../models/Chatbot");
 const isDomainAllowed = require("../helper/isDomainAllowed");
+const {UUID_RE} = require("../validators/publicid.validator");
 const { safeCompare } = require("../helper/safeCompare");
 const { normalizeDomain } = require("../utils/normalizeDomain");
 const { isLocalhost } = require("../utils/isLocalhost");
@@ -13,7 +14,7 @@ const { getStore, TTL_MS } = require("../utils/nonceStore");
 const { domainExists } = require("../validators/domain.validator");
 
 /* ─────────────────────────────────────────
-   🔐 VALIDACIÓN DE VARIABLES DE ENTORNO
+    VALIDACIÓN DE VARIABLES DE ENTORNO
 ───────────────────────────────────────── */
 const REQUIRED_ENVS = ["CONFIG_SECRET"];
 
@@ -23,7 +24,6 @@ REQUIRED_ENVS.forEach((env) => {
     }
 });
 
-/* ───────────────────────────────────────── */
 const getBaseUrl = () =>
     process.env.APP_BASE_URL || "http://localhost:3000";
 
@@ -44,6 +44,9 @@ const SCRIPT_TEMPLATE = fs.readFileSync(
 exports.getInstallScript = async (req, res) => {
     try {
         const { public_id } = req.params;
+
+        if (!UUID_RE.test(public_id))
+            return res.status(400).json({ error: "ID inválido" });
 
         const chatbot = await Chatbot.findOne({
             public_id,
@@ -75,6 +78,8 @@ exports.getInstallScript = async (req, res) => {
 exports.renderEmbed = async (req, res) => {
     try {
         const { public_id } = req.params;
+        if (!UUID_RE.test(public_id))
+            return res.status(400).json({ error: "ID inválido" });
         const rawDomain = req.query.d || "";
         const domain = normalizeDomain(rawDomain);
         const challengeB64 = req.query.c || "";
@@ -139,7 +144,6 @@ exports.renderEmbed = async (req, res) => {
             avatar: chatbot.avatar || "",
             primaryColor: chatbot.primary_color || "#2563eb",
             secondaryColor: chatbot.secondary_color || "#111827",
-            // ✅ Campos faltantes
             welcomeMessage: chatbot.welcome_message || "",
             welcomeDelay: chatbot.welcome_delay ?? 2,
             inputPlaceholder: chatbot.input_placeholder || "Escribe tu mensaje...",
@@ -217,7 +221,8 @@ exports.verifyConfigSignature = async (req, res) => {
 exports.getChallenge = async (req, res) => {
     try {
         const { public_id } = req.params;
-
+        if (!UUID_RE.test(public_id))
+            return res.status(400).json({ error: "ID inválido" });
         const chatbot = await Chatbot.findOne({
             public_id,
             status: "active",
@@ -258,6 +263,8 @@ exports.addAllowedDomain = async (req, res) => {
         const { public_id } = req.params;
         const { domain } = req.body;
 
+        if (!UUID_RE.test(public_id))
+            return res.status(400).json({ error: "ID inválido" });
         if (!domain) return res.status(400).json({ error: "Dominio requerido" });
 
         const normalized = normalizeDomain(domain);
@@ -298,6 +305,8 @@ exports.removeAllowedDomain = async (req, res) => {
         const { public_id } = req.params;
         const { domain } = req.body;
 
+        if (!UUID_RE.test(public_id))
+            return res.status(400).json({ error: "ID inválido" });
         if (!domain) return res.status(400).json({ error: "Dominio requerido" });
 
         const normalized = normalizeDomain(domain);
@@ -333,7 +342,8 @@ exports.removeAllowedDomain = async (req, res) => {
 exports.InstallationCode = async (req, res) => {
     try {
         const { public_id } = req.params;
-
+        if (!UUID_RE.test(public_id))
+            return res.status(400).json({ error: "ID inválido" });
         const chatbot = await Chatbot.findOne({
             public_id,
             account_id: req.user.account_id

@@ -4,7 +4,9 @@ const Contact = require("../models/Contact");
 const Flow = require("../models/Flow");
 const FlowNode = require("../models/FlowNode");
 const ConversationSession = require("../models/ConversationSession");
+const { UUID_RE } = require("../validators/publicid.validator");
 const { finalizeConversation } = require("../helper/finalizeConversation");
+
 
 /**
  * GET /api/public-chatbot/chatbot-conversation/:public_id/bundle
@@ -12,6 +14,8 @@ const { finalizeConversation } = require("../helper/finalizeConversation");
 exports.getFlowBundle = async (req, res) => {
   try {
     const { public_id } = req.params;
+    if (!UUID_RE.test(public_id))
+      return res.status(400).json({ error: "ID inválido" });
 
     const chatbot = await Chatbot.findOne({ public_id, status: "active", is_enabled: true }).lean();
     if (!chatbot) return res.status(404).json({ message: "Chatbot no disponible" });
@@ -81,7 +85,8 @@ exports.getFlowBundle = async (req, res) => {
 exports.finishConversation = async (req, res) => {
   const t0 = Date.now();
   const { public_id } = req.params;
-
+  if (!UUID_RE.test(public_id))
+    return res.status(400).json({ error: "ID inválido" });
   try {
     const {
       history = [],
@@ -156,50 +161,4 @@ exports.finishConversation = async (req, res) => {
       return res.status(500).json({ message: "Error al finalizar conversación" });
     }
   }
-};
-
-exports.validateField = async (req, res) => {
-  try {
-    const { public_id } = req.params;
-    const { field, value } = req.body;
-
-    if (!field || !value) {
-      return res.status(400).json({ valid: false, message: "Datos incompletos" });
-    }
-
-    const chatbot = await Chatbot.findOne({ public_id, status: "active" }).lean();
-    if (!chatbot) return res.status(404).json({ valid: false, message: "Chatbot no encontrado" });
-
-    if (field === "email") {
-      const emailNorm = value.toLowerCase().trim();
-      const exists = await Contact.exists({
-        account_id: chatbot.account_id,
-        email: emailNorm,
-        is_deleted: { $ne: true },
-        is_template: { $ne: true }
-      });
-      if (exists) {
-        return res.json({ valid: false, message: "Este correo ya está registrado. Por favor ingresa otro." });
-      }
-    }
-
-    if (field === "phone") {
-      const phoneNorm = String(value).replace(/\D/g, "").trim();
-      const exists = await Contact.exists({
-        account_id: chatbot.account_id,
-        phone: phoneNorm,
-        is_deleted: { $ne: true },
-        is_template: { $ne: true }
-      });
-      if (exists) {
-        return res.json({ valid: false, message: "Este teléfono ya está registrado. Por favor ingresa otro." });
-      }
-    }
-
-    return res.json({ valid: true });
-
-  } catch (err) {
-    console.error("validateField:", err);
-    return res.status(500).json({ valid: false, message: "Error al validar" });
-  }
-};
+}; 
