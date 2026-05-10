@@ -181,38 +181,50 @@ exports.renderEmbed = async (req, res) => {
    3) VERIFY CONFIG
 ======================================================= */
 exports.verifyConfigSignature = async (req, res) => {
-    try {
-        const { payload, signature } = req.body;
+  try {
+    const { payload, signature } = req.body;
 
-        if (!payload || !signature)
-            return res.status(400).json({ error: "Datos incompletos" });
+    if (!payload || !signature)
+      return res.status(400).json({ error: "Datos incompletos" });
 
-        const expected = crypto
-            .createHmac("sha256", process.env.CONFIG_SECRET)
-            .update(payload)
-            .digest("hex");
+    const expected = crypto
+      .createHmac("sha256", process.env.CONFIG_SECRET)
+      .update(payload)
+      .digest("hex");
 
-        if (!safeCompare(signature, expected))
-            return res.status(403).json({ error: "Firma inválida" });
-
-        const config = JSON.parse(payload);
-
-        if (!config.ts || Date.now() - config.ts > 90000)
-            return res.status(403).json({ error: "Expirado" });
-
-        const store = await getStore();
-        const valid = await store.consume(config.nonce);
-
-        if (!valid)
-            return res.status(403).json({ error: "Nonce inválido" });
-
-        const { nonce, ...safeConfig } = config;
-        res.json(safeConfig);
-
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Error interno" });
+    // 🔍 LOG 1: ¿La firma falla?
+    if (!safeCompare(signature, expected)) {
+      console.error("VERIFY: firma inválida", { 
+        receivedSig: signature?.slice(0, 8), 
+        expectedSig: expected?.slice(0, 8) 
+      });
+      return res.status(403).json({ error: "Firma inválida" });
     }
+
+    const config = JSON.parse(payload);
+
+    // 🔍 LOG 2: ¿Expiró?
+    const age = Date.now() - config.ts;
+    if (!config.ts || age > 90000) {
+      console.error("VERIFY: config expirada", { age, ts: config.ts });
+      return res.status(403).json({ error: "Expirado" });
+    }
+
+    // 🔍 LOG 3: ¿Nonce inválido?
+    const store = await getStore();
+    const valid = await store.consume(config.nonce);
+    if (!valid) {
+      console.error("VERIFY: nonce inválido o ya consumido", { nonce: config.nonce?.slice(0, 8) });
+      return res.status(403).json({ error: "Nonce inválido" });
+    }
+
+    const { nonce, ...safeConfig } = config;
+    res.json(safeConfig);
+
+  } catch (err) {
+    console.error("VERIFY ERROR:", err);
+    res.status(500).json({ error: "Error interno" });
+  }
 };
 
 /* =======================================================
