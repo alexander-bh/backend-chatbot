@@ -161,14 +161,13 @@ exports.renderEmbed = async (req, res) => {
             Buffer.from(JSON.stringify({ payload: payloadStr, signature })).toString("base64")
         );
 
-        const widgetUrl = `${WIDGET_BASE_URL}/?config=${encoded}`;
-
-        res.setHeader("Content-Type", "text/html");
+     
+        const widgetUrl = `${WIDGET_BASE_URL}/#config=${encoded}`;
 
         res.send(`
-      <script>
-        window.location.replace(${JSON.stringify(widgetUrl)});
-      </script>
+        <script>
+            window.location.replace(${JSON.stringify(widgetUrl)});
+        </script>
     `);
 
     } catch (err) {
